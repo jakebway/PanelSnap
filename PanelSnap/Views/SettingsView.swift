@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
     @State private var topInset: CGFloat = 0
+    @State private var landscape = false
 
     var body: some View {
         NavigationStack {
@@ -43,11 +44,12 @@ struct SettingsView: View {
                 }
                 .scrollContentBackground(.hidden)
             }
-            .ignoresSafeArea(.container, edges: .top)       // start at the very top, level with the status widget
+            .ignoresSafeArea(.container, edges: landscape ? .top : [])       // wide: start at the very top, level with the status widget
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .readSafeTop($topInset)
+        .readLandscape($landscape)
     }
 
     private func colorBinding(_ keyPath: ReferenceWritableKeyPath<AppSettings, String>) -> Binding<Color> {
@@ -97,7 +99,7 @@ struct SettingsView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, topInset > 20 ? 22 : 30)
+        .padding(.top, topInset > 20 ? (landscape ? 22 : 8) : 30)
         .padding(.bottom, 12)
     }
 }

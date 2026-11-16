@@ -83,12 +83,26 @@ struct FullWidthCentered<Content: View>: View {
             content()
                 .padding(.horizontal, side)
                 .frame(width: geo.size.width, height: geo.size.height)
+                // Only the wide (landscape) layout lets content rise level with the status widget. Upright, the
+                // system status bar sits there and would cover (and swallow taps for) anything in the corner.
+                .ignoresSafeArea(.container, edges: geo.size.width > geo.size.height ? .top : [])
         }
-        .ignoresSafeArea(.container, edges: [.horizontal, .top])
+        .ignoresSafeArea(.container, edges: .horizontal)
     }
 }
 
 extension View {
+    /// Reports whether the screen is currently wider than it is tall.
+    func readLandscape(_ value: Binding<Bool>) -> some View {
+        background(
+            GeometryReader { g in
+                Color.clear
+                    .onAppear { value.wrappedValue = g.size.width > g.size.height }
+                    .onChange(of: g.size) { _, new in value.wrappedValue = new.width > new.height }
+            }
+        )
+    }
+
     /// Reports the top safe-area inset (the Duo's status area) so headers can sit snugly under it.
     func readSafeTop(_ value: Binding<CGFloat>) -> some View {
         background(

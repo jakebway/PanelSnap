@@ -10,6 +10,7 @@ struct LibraryView: View {
     @State private var route: Route?
     @State private var search = ""
     @State private var topInset: CGFloat = 0
+    @State private var landscape = false
     @State private var themeStamp = ""                      // changes after Settings closes, to repaint with new colours
 
     // Organising
@@ -203,6 +204,7 @@ struct LibraryView: View {
         }
         .animation(.easeInOut, value: library.importStatus)
         .readSafeTop($topInset)
+        .readLandscape($landscape)
         .onChange(of: route?.id) { _, id in
             if id == nil { themeStamp = settings.themeKey }
         }
@@ -457,7 +459,8 @@ struct LibraryView: View {
 
     /// On the wide layout the Duo's status widget is a short capsule in the corner (the layout starts below the
     /// system's safe area), so only the header needs to avoid it. On the narrow layout it is a tall box.
-    private var wideStatus: Bool { return topInset > 20 }
+    private var wideStatus: Bool { return topInset > 20 }          // the system already reserves the status area
+    private var headerTop: CGFloat { return wideStatus ? (landscape ? 22 : 8) : 30 }
     private var cameraPad: CGFloat { return wideStatus ? 0 : Theme.cameraWidth }
 
     private var header: some View {
@@ -469,7 +472,7 @@ struct LibraryView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, wideStatus ? 22 : 30)      // wide screen: the camera widget is a short capsule, so the title can sit level with it
+        .padding(.top, headerTop)      // wide screen: the camera widget is a short capsule, so the title can sit level with it
         .padding(.bottom, 14)
     }
 
@@ -555,7 +558,7 @@ struct LibraryView: View {
     /// Several books in progress: cards sized to fit exactly (one per page on the narrow layout, two on the wide one),
     /// snapping into place, so nothing is ever sliced off at the edge.
     private func continueRow(_ list: [ComicEntry]) -> some View {
-        let perPage = wideStatus ? 2 : 1
+        let perPage = (wideStatus && landscape) ? 2 : 1
         return VStack(spacing: 10) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
