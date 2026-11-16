@@ -219,30 +219,6 @@ struct ReaderView: View {
                     }
                 )
 
-            // A small always-there button, so the menu is never more than one tap away
-            if !chromeVisible {
-                VStack {
-                    HStack {
-                        Button {
-                            chromeVisible = true
-                            scheduleHide()
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.85))
-                                .frame(width: 38, height: 38)
-                                .background(Color.black.opacity(0.35), in: Circle())
-                        }
-                        .accessibilityLabel("Show menu")
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(.leading, 14)
-                .padding(.top, 50)
-                .opacity(0.6)
-            }
-
             // Chrome
             VStack(spacing: 0) {
                 if chromeVisible { topBar(size: size).transition(.move(edge: .top).combined(with: .opacity)) }
