@@ -43,7 +43,10 @@ targets:
         CFBundleDisplayName: PanelSnap
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: LaunchBlack
+        UIUserInterfaceStyle: Dark
+        UIRequiresFullScreen: true
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:

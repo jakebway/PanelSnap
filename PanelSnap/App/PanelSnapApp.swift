@@ -11,6 +11,8 @@ struct PanelSnapApp: App {
                 .environmentObject(library)
                 .environmentObject(settings)
                 .tint(Theme.accent)
+                .preferredColorScheme(.dark)
+                .background(Theme.bg.ignoresSafeArea())
                 .onOpenURL { url in
                     Task { await library.importFiles([url]) }
                 }

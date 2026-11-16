@@ -1,0 +1,89 @@
+import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
+
+// MARK: - Buttons
+
+/// The big "confirm" button: comic yellow with black lettering.
+struct YellowButtonStyle: ButtonStyle {
+    var compact = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: compact ? 15 : 17, weight: .heavy, design: .rounded))
+            .foregroundStyle(Color.black)
+            .padding(.horizontal, compact ? 16 : 28)
+            .padding(.vertical, compact ? 9 : 14)
+            .background(Theme.accent, in: Capsule())
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+    }
+}
+
+/// Quiet grey button for secondary actions.
+struct GreyButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 17, weight: .semibold, design: .rounded))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .background(Theme.card2, in: Capsule())
+            .opacity(configuration.isPressed ? 0.78 : 1)
+    }
+}
+
+/// Round grey icon button used in headers.
+struct CircleIcon: View {
+    let systemName: String
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .frame(width: 40, height: 40)
+            .background(Theme.card2, in: Circle())
+    }
+}
+
+// MARK: - File picker
+
+/// Shows the system file browser straight from UIKit (not inside a SwiftUI sheet), so Open/Cancel always work.
+/// Same approach as the picker that works in iOXcode. Full screen, multiple files, opened in place (no double copy).
+enum FilePicker {
+    private static var holder: Delegate?
+
+    static func present(types: [UTType], multiple: Bool, onPick: @escaping ([URL]) -> Void) {
+        // Wait a moment so a closing menu or sheet can't block the presentation.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            let vc = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: false)
+            vc.allowsMultipleSelection = multiple
+            vc.modalPresentationStyle = .fullScreen
+            let d = Delegate(onPick)
+            holder = d
+            vc.delegate = d
+            top()?.present(vc, animated: true)
+        }
+    }
+
+    private static func top() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let windows = scenes.flatMap { $0.windows }
+        var vc = windows.first(where: { $0.isKeyWindow })?.rootViewController ?? windows.first?.rootViewController
+        while let next = vc?.presentedViewController { vc = next }
+        return vc
+    }
+
+    private final class Delegate: NSObject, UIDocumentPickerDelegate {
+        let onPick: ([URL]) -> Void
+        init(_ onPick: @escaping ([URL]) -> Void) { self.onPick = onPick }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            FilePicker.holder = nil
+            if !urls.isEmpty { onPick(urls) }
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            FilePicker.holder = nil
+        }
+    }
+}

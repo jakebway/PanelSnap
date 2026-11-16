@@ -132,7 +132,7 @@ struct CompanionView: View {
                 .foregroundStyle(.secondary)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
@@ -182,7 +182,7 @@ struct CompanionView: View {
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
-                        .background(.regularMaterial, in: Capsule())
+                        .background(Theme.card2, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -264,7 +264,7 @@ struct CompanionView: View {
                         }
                         .font(.subheadline)
                         .padding(12)
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
             }

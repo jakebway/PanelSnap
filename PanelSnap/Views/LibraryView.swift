@@ -6,11 +6,21 @@ struct LibraryView: View {
     @EnvironmentObject var library: LibraryStore
     @EnvironmentObject var settings: AppSettings
 
-    @State private var showImporter = false
-    @State private var showSettings = false
-    @State private var opened: ComicEntry?
+    @State private var route: Route?
     @State private var search = ""
     @State private var sort: SortMode = .recent
+
+    /// One presentation slot for everything (reader + settings) so SwiftUI presentations never fight each other.
+    enum Route: Identifiable {
+        case reader(ComicEntry)
+        case settings
+        var id: String {
+            switch self {
+            case .reader(let e): return "reader-" + e.id.uuidString
+            case .settings: return "settings"
+            }
+        }
+    }
 
     enum SortMode: String, CaseIterable, Identifiable {
         case recent = "Recently added"
@@ -43,160 +53,216 @@ struct LibraryView: View {
             .first
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 18, alignment: .top)]
+    private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)]
+
+    private func addComics() {
+        FilePicker.present(types: [UTType.item], multiple: true) { urls in
+            Task { await library.importFiles(urls) }
+        }
+    }
 
     var body: some View {
-        NavigationStack {
-            Group {
+        ZStack {
+            Theme.bg.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                header
                 if library.comics.isEmpty && !library.isImporting {
                     emptyState
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 26) {
+                        VStack(alignment: .leading, spacing: 24) {
+                            searchField
                             if let c = continueReading, search.isEmpty {
                                 continueCard(c)
                             }
                             LazyVGrid(columns: columns, spacing: 22) {
                                 ForEach(visible) { entry in
                                     ComicCell(entry: entry)
-                                        .onTapGesture { opened = entry }
+                                        .onTapGesture { route = .reader(entry) }
                                         .contextMenu { menu(for: entry) }
                                 }
                             }
                         }
+                        .frame(maxWidth: 900)
+                        .frame(maxWidth: .infinity)
                         .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 40)
-                    }
-                    .searchable(text: $search, prompt: "Search your comics")
-                }
-            }
-            .navigationTitle("Library")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Picker("Sort", selection: $sort) {
-                            ForEach(SortMode.allCases) { m in
-                                Text(m.rawValue).tag(m)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showImporter = true } label: {
-                        Image(systemName: "plus")
-                            .fontWeight(.semibold)
+                        .padding(.top, 6)
+                        .padding(.bottom, 110)
                     }
                 }
             }
-            .overlay(alignment: .bottom) {
-                if let status = library.importStatus {
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // floating yellow "add" button (hidden on the empty screen, which has its own big one)
+            if !(library.comics.isEmpty && !library.isImporting) {
+                VStack {
+                    Spacer()
+                    Button { addComics() } label: {
+                        Label("Add Comics", systemImage: "plus")
+                    }
+                    .buttonStyle(YellowButtonStyle())
+                    .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
+                    .padding(.bottom, 22)
+                }
+            }
+
+            if let status = library.importStatus {
+                VStack {
+                    Spacer()
                     HStack(spacing: 10) {
-                        ProgressView()
-                        Text(status).font(.subheadline)
+                        ProgressView().tint(Theme.accent)
+                        Text(status).font(.subheadline.weight(.medium)).foregroundStyle(.white)
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, 24)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .background(Theme.card2, in: Capsule())
+                    .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+                    .padding(.bottom, 92)
                 }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .animation(.easeInOut, value: library.importStatus)
-        }
-        .fileImporter(
-            isPresented: $showImporter,
-            allowedContentTypes: [UTType.item],
-            allowsMultipleSelection: true
-        ) { result in
-            if case .success(let urls) = result {
-                Task { await library.importFiles(urls) }
+
+            if let message = library.errorMessage {
+                errorCard(message)
             }
         }
-        .fullScreenCover(item: $opened) { entry in
-            ReaderHost(entry: entry)
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
-        .alert("Some files couldn't be added", isPresented: Binding(
-            get: { library.errorMessage != nil },
-            set: { newValue in if !newValue { library.errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(library.errorMessage ?? "")
+        .animation(.easeInOut, value: library.importStatus)
+        .fullScreenCover(item: $route) { r in
+            switch r {
+            case .reader(let entry):
+                ReaderHost(entry: entry)
+            case .settings:
+                SettingsView()
+            }
         }
     }
 
     // MARK: Pieces
 
+    private var header: some View {
+        ZStack {
+            Text("Library")
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+            HStack {
+                Button { route = .settings } label: { CircleIcon(systemName: "gearshape.fill") }
+                Spacer()
+                Menu {
+                    Picker("Sort", selection: $sort) {
+                        ForEach(SortMode.allCases) { m in
+                            Text(m.rawValue).tag(m)
+                        }
+                    }
+                } label: { CircleIcon(systemName: "arrow.up.arrow.down") }
+            }
+        }
+        .frame(maxWidth: 900)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary)
+            TextField("Search your comics", text: $search)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .foregroundStyle(.white)
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
     private var emptyState: some View {
         VStack(spacing: 18) {
+            Spacer()
             ZStack {
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(Theme.accent.opacity(0.14))
-                    .frame(width: 120, height: 120)
+                    .fill(Theme.card)
+                    .frame(width: 112, height: 112)
                 Image(systemName: "books.vertical.fill")
-                    .font(.system(size: 52))
+                    .font(.system(size: 48))
                     .foregroundStyle(Theme.accent)
             }
             Text("Your library is empty")
-                .font(.title2.weight(.bold))
+                .font(.system(size: 24, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
             Text("Add comics from the Files app, iCloud Drive, or anywhere on your iPhone. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 36)
-            Button {
-                showImporter = true
-            } label: {
+                .frame(maxWidth: 420)
+                .padding(.horizontal, 28)
+            Button { addComics() } label: {
                 Label("Add Comics", systemImage: "plus")
-                    .font(.headline)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 12)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
-            .padding(.top, 6)
+            .buttonStyle(YellowButtonStyle())
+            .padding(.top, 8)
+            Spacer()
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func errorCard(_ message: String) -> some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+                .onTapGesture { library.errorMessage = nil }
+            VStack(spacing: 14) {
+                Text("Some files couldn't be added")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.secondary)
+                    .multilineTextAlignment(.center)
+                Button("OK") { library.errorMessage = nil }
+                    .buttonStyle(YellowButtonStyle(compact: true))
+            }
+            .padding(24)
+            .frame(maxWidth: 360)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .padding(30)
+        }
+    }
+
     private func continueCard(_ entry: ComicEntry) -> some View {
         Button {
-            opened = entry
+            route = .reader(entry)
         } label: {
             HStack(spacing: 16) {
                 CoverView(entry: entry)
                     .frame(width: 74, height: 110)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("CONTINUE READING")
-                        .font(.caption.weight(.bold))
+                        .font(.caption.weight(.heavy))
                         .foregroundStyle(Theme.accent)
                     Text(entry.title)
                         .font(.headline)
+                        .foregroundStyle(.white)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Text("Page \(entry.lastPage + 1) of \(entry.pageCount)")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.secondary)
                     ProgressView(value: entry.progress)
                         .tint(Theme.accent)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Theme.secondary)
             }
             .padding(14)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -229,7 +295,7 @@ struct CoverView: View {
 
     var body: some View {
         ZStack {
-            Rectangle().fill(Color(.tertiarySystemFill))
+            Rectangle().fill(Theme.card2)
             if let img = CoverCache.shared.image(for: library.coverURL(for: entry)) {
                 Image(uiImage: img)
                     .resizable()
@@ -237,7 +303,7 @@ struct CoverView: View {
             } else {
                 Image(systemName: "book.closed.fill")
                     .font(.title)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -256,7 +322,7 @@ struct ComicCell: View {
                     if entry.finished {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(.white, Theme.accent)
+                            .foregroundStyle(.black, Theme.accent)
                             .padding(6)
                     }
                 }
@@ -269,11 +335,12 @@ struct ComicCell: View {
                 }
             Text(entry.title)
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
             Text("\(entry.format.label) · \(entry.pageCount) pages")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
         }
         .contentShape(Rectangle())
     }

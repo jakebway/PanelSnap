@@ -29,13 +29,13 @@ struct ReaderHost: View {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 44))
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(Theme.accent)
                     Text(message)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 32)
                     Button("Close") { dismiss() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(YellowButtonStyle())
                 }
             } else {
                 VStack(spacing: 14) {
@@ -109,7 +109,7 @@ struct ReaderView: View {
                     Divider()
                     CompanionView(model: companion, onClose: { toggleCompanion() })
                         .frame(width: min(420, geo.size.width * 0.4))
-                        .background(Color(.systemBackground))
+                        .background(Theme.bg)
                         .transition(.move(edge: .trailing))
                 }
             }
@@ -403,14 +403,13 @@ struct ReaderView: View {
                 .lineLimit(2)
             HStack(spacing: 10) {
                 Button("Keep reading") { model.reachedEnd = false }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(GreyButtonStyle())
                 Button("Done") { close() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.accent)
+                    .buttonStyle(YellowButtonStyle())
             }
         }
         .padding(26)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .padding(40)
     }
 }

@@ -62,12 +62,14 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg.ignoresSafeArea())
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
-                        .fontWeight(.semibold)
+                        .buttonStyle(YellowButtonStyle(compact: true))
                 }
             }
         }

@@ -39,8 +39,13 @@ final class AppSettings: ObservableObject {
 }
 
 enum Theme {
-    static let accent = Color(red: 1.0, green: 0.42, blue: 0.21)
-    static let ink = Color(red: 0.07, green: 0.08, blue: 0.13)
+    /// Comic-book yellow: used for confirm buttons, progress and highlights.
+    static let accent = Color(red: 1.0, green: 0.82, blue: 0.10)
+    static let bg = Color.black                    // true OLED black
+    static let card = Color(white: 0.10)
+    static let card2 = Color(white: 0.16)
+    static let stroke = Color(white: 0.22)
+    static let secondary = Color(white: 0.62)
 }
 
 enum Paths {
