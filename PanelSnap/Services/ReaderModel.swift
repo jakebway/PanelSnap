@@ -77,9 +77,15 @@ final class ReaderModel: ObservableObject {
     }
 
     func updateSettings(snap: Bool, pageFirst: Bool) {
+        let turnedOn = snap && !self.snap
         self.snap = snap
         self.pageFirst = pageFirst
         if !snap { panelIndex = -1 }
+        if turnedOn {
+            // Pages read in regular mode were never scanned: forget them so they get scanned now.
+            panelMemo.removeAll()
+            load(page: pageIndex, target: .overview)
+        }
     }
 
     // MARK: Loading
@@ -100,6 +106,7 @@ final class ReaderModel: ObservableObject {
         let src = source
         let cache = panelCache
         let isRTL = rtl
+        let scan = snap            // regular viewer mode never scans for panels
 
         if let cached = imageCache[page], let memo = panelMemo[page] {
             apply(page: page, image: cached, panels: memo, target: target)
@@ -119,7 +126,7 @@ final class ReaderModel: ObservableObject {
                 return
             }
             var found = cache.panels(for: page)
-            if found == nil {
+            if found == nil && scan {
                 let detected = PanelDetector.detect(image: cg, rtl: isRTL)
                 cache.store(detected, for: page)
                 found = detected

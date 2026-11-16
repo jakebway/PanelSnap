@@ -12,9 +12,18 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 header
                 Form {
-                    Section("Reading") {
-                        Toggle("Snap panel to panel", isOn: $settings.snapToPanels)
-                        Toggle("Show the whole page first", isOn: $settings.showFullPageFirst)
+                    Section(header: Text("Reading"),
+                            footer: Text(settings.snapToPanels
+                                         ? "Zooms from panel to panel. Tap or swipe to move along."
+                                         : "A regular comic viewer: whole pages, swipe to turn, pinch to zoom. No panel detection.")) {
+                        Picker("Reading mode", selection: $settings.snapToPanels) {
+                            Text("Panel by panel").tag(true)
+                            Text("Regular pages").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        if settings.snapToPanels {
+                            Toggle("Show the whole page first", isOn: $settings.showFullPageFirst)
+                        }
                     }
 
                     Section(footer: Text("Characters come from a guide built into the app. Turning this on also fetches story summaries from public sites like Wikipedia. No account or key needed.")) {

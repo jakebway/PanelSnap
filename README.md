@@ -55,3 +55,15 @@ Everything runs on-device, with no third-party code: the page is shrunk, the gut
 - `project.lite.yml` – same, without RAR/7z (automatic fallback)
 - `Scripts/build-ipa.sh` – builds the unsigned IPA
 - `.github/workflows/build.yml` – the one-tap workflow
+
+## Browser and ad blocking
+
+The **+** menu has a **Browser**: a small in-app web browser with ads, trackers and pop-ups blocked. Any comic file
+you download in it (CBZ, CBR, CB7, PDF, EPUB or a zip/rar/7z of pages) is added to your library automatically.
+The filter lists are built from [EasyList](https://github.com/easylist/easylist) (GPLv3 / CC BY-SA 3.0) by
+`Scripts/build_adblock.py` into WebKit content-blocker JSON (`PanelSnap/Resources/shield-*.json`). Re-run that
+script to refresh them.
+
+## Reading mode
+
+Settings › Reading › *Regular pages* turns off panel detection and zooming and gives a plain page viewer.

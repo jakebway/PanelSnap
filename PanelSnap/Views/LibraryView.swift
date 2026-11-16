@@ -34,10 +34,12 @@ struct LibraryView: View {
     enum Route: Identifiable {
         case reader(ComicEntry)
         case settings
+        case browser
         var id: String {
             switch self {
             case .reader(let e): return "reader-" + e.id.uuidString
             case .settings: return "settings"
+            case .browser: return "browser"
             }
         }
     }
@@ -92,6 +94,7 @@ struct LibraryView: View {
         Menu {
             Button { addComics() } label: { Label("Files", systemImage: "doc.on.doc") }
             Button { addFolder() } label: { Label("Folder", systemImage: "folder") }
+            Button { route = .browser } label: { Label("Browser", systemImage: "globe") }
         } label: {
             CircleIcon(systemName: "plus")
         }
@@ -210,6 +213,11 @@ struct LibraryView: View {
         .onAppear {
             Console.logEnvironment(reason: "library appeared")
             Task { await library.scanFolder() }
+            // Compile the browser's ad-block lists quietly in the background, so the browser opens instantly.
+            Task {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                await BrowserShield.shared.prepare()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             Console.log("app state: \(phase)")
@@ -264,6 +272,8 @@ struct LibraryView: View {
                 ReaderHost(entry: entry)
             case .settings:
                 SettingsView()
+            case .browser:
+                BrowserView()
             }
         }
     }
@@ -509,7 +519,7 @@ struct LibraryView: View {
             Text("Your library is empty")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
-            Text("Tap the + at the top and choose files or a whole folder. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
+            Text("Tap the + at the top and choose files, a whole folder, or the ad-free browser. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
