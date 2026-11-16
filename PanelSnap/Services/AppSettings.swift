@@ -13,7 +13,6 @@ final class AppSettings: ObservableObject {
     @Published var keepAwake: Bool { didSet { defaults.set(keepAwake, forKey: "keepAwake") } }
     @Published var onlineLookup: Bool { didSet { defaults.set(onlineLookup, forKey: "onlineLookup") } }
     @Published var spoilerShield: Bool { didSet { defaults.set(spoilerShield, forKey: "spoilerShield") } }
-    @Published var comicVineKey: String { didSet { defaults.set(comicVineKey, forKey: "comicVineKey") } }
 
     init() {
         let d = UserDefaults.standard
@@ -24,8 +23,7 @@ final class AppSettings: ObservableObject {
             "haptics": true,
             "keepAwake": true,
             "onlineLookup": true,
-            "spoilerShield": true,
-            "comicVineKey": ""
+            "spoilerShield": true
         ])
         snapToPanels = d.bool(forKey: "snapToPanels")
         showFullPageFirst = d.bool(forKey: "wholePageFirst")
@@ -34,7 +32,6 @@ final class AppSettings: ObservableObject {
         keepAwake = d.bool(forKey: "keepAwake")
         onlineLookup = d.bool(forKey: "onlineLookup")
         spoilerShield = d.bool(forKey: "spoilerShield")
-        comicVineKey = d.string(forKey: "comicVineKey") ?? ""
     }
 }
 

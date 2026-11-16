@@ -76,13 +76,15 @@ final class CompanionModel: ObservableObject {
 
         if !force, let cached = CompanionCache.read(entry.id, maxAgeDays: 21) {
             data = cached
+            applyGlossary()
             phase = .done
             updateTip()
             return
         }
+        applyGlossary()
         guard settings.onlineLookup else {
             phase = .done
-            tip = "Online lookup is off. Turn it on in Settings to see character guides and series info."
+            tip = "Online lookup is off, so this is the built-in guide only. Turn it on in Settings for story summaries and more."
             return
         }
         if running { return }
@@ -97,6 +99,7 @@ final class CompanionModel: ObservableObject {
         fresh.series = identity.series
         fresh.issue = identity.issue
         data = fresh
+        applyGlossary()
         started = true
         if settings.onlineLookup {
             phase = .loading
@@ -105,11 +108,37 @@ final class CompanionModel: ObservableObject {
     }
 
     private func updateTip() {
-        if settings.comicVineKey.isEmpty {
-            tip = "Tip: add a free Comic Vine key in Settings for much richer character and story info."
-        } else {
-            tip = nil
+        let d = data
+        let empty = d.issueSynopsis == nil && d.seriesSummary == nil && d.issueSummary == nil && d.characters.isEmpty
+        tip = (empty && phase != .loading)
+            ? "I couldn't find anything about this one. Tap “Not the right comic?” to type its real name."
+            : nil
+    }
+
+    /// The built-in guide: no internet, no account. Adds facts to characters we already know about
+    /// and picks out famous characters named in the title or any summary text.
+    private func applyGlossary() {
+        let glossary = CharacterGlossary.shared
+        var d = data
+        for i in d.characters.indices {
+            if let e = glossary.find(name: d.characters[i].name) {
+                d.characters[i] = glossary.enrich(d.characters[i], with: e)
+            }
         }
+        let titles = [d.series, d.title, d.arcs.first].compactMap { $0 }
+        let texts = [d.issueSummary?.text, d.issueSynopsis?.text, d.seriesSummary?.text].compactMap { $0 }
+        let room = max(0, 12 - d.characters.count)
+        if room > 0 {
+            let found = glossary.matches(titles: titles, texts: texts, limit: room)
+            for e in found where !d.characters.contains(where: { CompanionData.same($0.name, e.n) }) {
+                d.characters.append(glossary.card(e))
+            }
+            if d.publisher == nil, let p = glossary.publisherGuess(found) { d.publisher = p }
+        }
+        if !d.characters.isEmpty && !d.sources.contains(CharacterGlossary.sourceName) {
+            d.sources.append(CharacterGlossary.sourceName)
+        }
+        data = d
     }
 
     private func runLookups() async {
@@ -118,7 +147,6 @@ final class CompanionModel: ObservableObject {
         defer { running = false }
 
         let id = identity
-        let key = settings.comicVineKey
         var d = data
         let seriesName = id.series ?? ""
 
@@ -128,16 +156,14 @@ final class CompanionModel: ObservableObject {
             return
         }
 
-        // 1. Comic Vine (best source, needs a free key).
-        if !key.isEmpty {
-            if let cv = try? await ComicVineProvider.lookup(series: seriesName, issue: id.issue, year: id.year, key: key) {
-                d.fill(from: cv)
-                data = d
-            }
+        // 1. Grand Comics Database: credits, cast and sometimes a synopsis.
+        if let gcd = await GCDProvider.lookup(series: seriesName, issue: id.issue, year: id.year, publisher: d.publisher ?? id.publisher) {
+            d.fill(from: gcd)
+            data = d
         }
 
-        // 2. Fan wiki issue synopsis for Marvel / DC.
-        if d.issueSynopsis == nil, let number = id.issue ?? d.issue {
+        // 2. Marvel / DC fan wikis: issue synopsis, creators and who appears.
+        if let number = id.issue ?? d.issue, d.issueSynopsis == nil || d.creators.isEmpty || d.characters.isEmpty {
             if let wiki = await FandomProvider.lookup(publisher: d.publisher ?? id.publisher, series: d.series ?? seriesName, volume: id.volume, issue: number) {
                 d.fill(from: wiki)
                 data = d
@@ -152,7 +178,15 @@ final class CompanionModel: ObservableObject {
             }
         }
 
-        // 4. AniList for manga (or as a last resort with a strict name match).
+        // 4. Open Library, for graphic novels and collected editions.
+        if d.seriesSummary == nil {
+            if let ol = await OpenLibraryProvider.lookup(series: d.series ?? seriesName, publisher: d.publisher) {
+                d.fill(from: ol)
+                data = d
+            }
+        }
+
+        // 5. AniList for manga (or as a last resort with a strict name match).
         if id.isManga || d.seriesSummary == nil {
             if let al = await AniListProvider.lookup(series: seriesName, strict: !id.isManga) {
                 d.fill(from: al)
@@ -160,13 +194,16 @@ final class CompanionModel: ObservableObject {
             }
         }
 
+        // 6. Built-in guide again, now that there's more text to read names from.
+        applyGlossary()
+        d = data
         d.fetchedAt = Date()
         data = d
         phase = .done
         updateTip()
         CompanionCache.write(entry.id, d)
 
-        // 5. Character blurbs (quietly, in the background).
+        // 7. Character blurbs (quietly, in the background).
         await enrichCharacters()
         var finalData = data
         finalData.fetchedAt = Date()
@@ -175,7 +212,7 @@ final class CompanionModel: ObservableObject {
 
     private func enrichCharacters() async {
         let publisher = data.publisher
-        let names = data.characters.prefix(10).filter { $0.blurb == nil }.map { $0.name }
+        let names = data.characters.prefix(8).filter { $0.blurb == nil }.map { $0.name }
         if names.isEmpty { return }
         await withTaskGroup(of: CharacterCard?.self) { group in
             for name in names {
@@ -197,6 +234,10 @@ final class CompanionModel: ObservableObject {
 
     /// Called when someone opens a character that has no description yet.
     func loadCharacter(_ name: String) async {
+        if let i = data.characters.firstIndex(where: { $0.name == name }), data.characters[i].facts == nil,
+           let e = CharacterGlossary.shared.find(name: name) {
+            data.characters[i] = CharacterGlossary.shared.enrich(data.characters[i], with: e)
+        }
         guard settings.onlineLookup else { return }
         guard let i = data.characters.firstIndex(where: { $0.name == name }), data.characters[i].blurb == nil else { return }
         if let card = await WikipediaProvider.character(name: name, publisher: data.publisher) {

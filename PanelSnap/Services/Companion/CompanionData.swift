@@ -6,6 +6,11 @@ struct TextBlock: Codable, Hashable {
     var url: String?
 }
 
+struct Fact: Codable, Hashable {
+    var label: String
+    var value: String
+}
+
 struct CharacterCard: Codable, Hashable, Identifiable {
     var name: String
     var role: String?
@@ -13,6 +18,7 @@ struct CharacterCard: Codable, Hashable, Identifiable {
     var imageURL: String?
     var url: String?
     var source: String?
+    var facts: [Fact]? = nil
 
     var id: String { return name }
 }
@@ -72,6 +78,7 @@ struct CompanionData: Codable, Hashable {
                 if characters[i].imageURL == nil { characters[i].imageURL = c.imageURL }
                 if characters[i].url == nil { characters[i].url = c.url }
                 if characters[i].role == nil { characters[i].role = c.role }
+                if characters[i].facts == nil { characters[i].facts = c.facts }
             } else {
                 characters.append(c)
             }
@@ -108,7 +115,7 @@ struct CompanionData: Codable, Hashable {
 
 enum CompanionCache {
     static func fileURL(for id: UUID) -> URL {
-        return Paths.companionCache.appendingPathComponent(id.uuidString + ".json")
+        return Paths.companionCache.appendingPathComponent(id.uuidString + "-v2.json")
     }
 
     static func read(_ id: UUID, maxAgeDays: Double) -> CompanionData? {

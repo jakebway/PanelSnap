@@ -290,7 +290,7 @@ struct CompanionView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("Wikipedia and fan-wiki text is shared under CC BY-SA. Comic Vine data is used under their terms.")
+            Text("Character guide: Superhero API (MIT) and FiveThirtyEight (CC BY 4.0). Comic data: Grand Comics Database (CC BY-SA 4.0). Wikipedia, Open Library and fan-wiki text under their own open licences.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -410,6 +410,28 @@ struct CharacterSheet: View {
                     Text(name)
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
+                    if let real = card?.role, !real.isEmpty {
+                        Text(real)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let facts = card?.facts, !facts.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(facts.filter { $0.label != "Real name" }, id: \.self) { f in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(f.label.uppercased())
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    Text(f.value)
+                                        .font(.subheadline)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
                     if let blurb = card?.blurb {
                         Text(blurb)
                             .font(.body)
@@ -419,7 +441,7 @@ struct CharacterSheet: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                    } else {
+                    } else if card?.facts == nil {
                         HStack(spacing: 10) {
                             ProgressView()
                             Text("Looking up who this is…")

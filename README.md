@@ -29,11 +29,14 @@ Shortcut link that always points at the newest build:
 
 | Source | Needs a key? | Gives you |
 | --- | --- | --- |
+| Built-in guide (`Resources/Characters.json`, works offline) | no | ~1,700 Marvel/DC characters: real name, aliases, first appearance, teams, family. From the Superhero API (MIT) and FiveThirtyEight's comic-characters data (CC BY 4.0). Rebuild with `Scripts/build_glossary.py` |
 | The comic file itself (`ComicInfo.xml`) | no | series, issue, summary, creators, characters, teams, arc |
-| Wikipedia | no | series background, "who is this character?" |
-| Marvel / DC fan wikis | no | issue synopsis (hidden behind a spoiler shield) |
+| Grand Comics Database | no | credits, cast and synopses for many issues (CC BY-SA 4.0) |
+| Marvel / DC fan wikis | no | issue synopsis (behind a spoiler shield), creators, who appears |
+| Wikipedia, Open Library | no | series background, "who is this character?" |
 | AniList | no | manga info and characters |
-| Comic Vine | free key (Settings) | the richest data: characters, creators, arcs, issue summary |
+
+Nothing in the app needs an account or API key.
 
 ## How panel snapping works
 

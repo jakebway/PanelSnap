@@ -1,125 +1,168 @@
 import Foundation
 
-// MARK: - Comic Vine (needs a free API key)
+// MARK: - Grand Comics Database (no key needed)
 
-enum ComicVineProvider {
-    static let base = "https://comicvine.gamespot.com/api"
+/// The GCD is a volunteer-built catalogue of comics. Its public API works without an account.
+/// Data is shared under CC BY-SA 4.0 (https://www.comics.org).
+enum GCDProvider {
+    static let base = "https://www.comics.org/api"
 
-    static func lookup(series: String, issue: String?, year: Int?, key: String) async throws -> CompanionData? {
+    private static func clean(_ s: Any?) -> String? {
+        guard var t = s as? String else { return nil }
+        t = t.replacingOccurrences(of: "\\(signed\\)|\\(credited\\)|\\(uncredited\\)|\\[[^\\]]*\\]", with: "", options: .regularExpression)
+        t = TextClean.tidy(t)
+        if t.isEmpty || t == "?" || t.lowercased() == "none" || t.lowercased() == "n/a" { return nil }
+        return t
+    }
+
+    private static func names(_ s: Any?) -> [String] {
+        guard let raw = s as? String else { return [] }
+        return raw.split(separator: ";").compactMap { part in
+            var t = String(part)
+            t = t.replacingOccurrences(of: "\\([^)]*\\)|\\[[^\\]]*\\]", with: "", options: .regularExpression)
+            t = TextClean.tidy(t)
+            return (t.isEmpty || t == "?" || t.lowercased() == "none") ? nil : t
+        }
+    }
+
+    /// "Batman [Bruce Wayne]; Joker (flashback)" -> [("Batman", "Bruce Wayne"), ("Joker", nil)]
+    private static func characters(_ raw: String) -> [(String, String?)] {
+        let parts: [String]
+        if raw.contains(";") {
+            parts = raw.split(separator: ";").map(String.init)
+        } else {
+            // A plain comma list, but keep commas that sit inside brackets/parentheses.
+            var out: [String] = []
+            var depth = 0
+            var cur = ""
+            for ch in raw {
+                if ch == "(" || ch == "[" { depth += 1 }
+                if ch == ")" || ch == "]" { depth = max(0, depth - 1) }
+                if ch == "," && depth == 0 { out.append(cur); cur = "" } else { cur.append(ch) }
+            }
+            out.append(cur)
+            parts = out
+        }
+        var result: [(String, String?)] = []
+        for p in parts {
+            var name = p
+            var real: String?
+            if let r = p.range(of: "\\[([^\\]]+)\\]", options: .regularExpression) {
+                real = String(p[r]).trimmingCharacters(in: CharacterSet(charactersIn: "[] "))
+            }
+            name = name.replacingOccurrences(of: "\\([^)]*\\)|\\[[^\\]]*\\]", with: "", options: .regularExpression)
+            name = TextClean.tidy(name)
+            if name.count < 2 || name.lowercased().hasPrefix("plus ") || name.lowercased() == "none" { continue }
+            result.append((name, real))
+        }
+        return result
+    }
+
+    private static func seriesBaseName(_ s: String) -> String {
+        return s.replacingOccurrences(of: "\\s*\\([^)]*\\)\\s*$", with: "", options: .regularExpression)
+    }
+
+    static func lookup(series: String, issue: String?, year: Int?, publisher: String?) async -> CompanionData? {
+        guard let number = issue, !number.isEmpty else { return nil }
+        var path = "/series/name/\(HTTP.encode(series))/issue/\(HTTP.encode(number))"
+        if let y = year { path += "/year/\(y)" }
+        guard let listURL = URL(string: base + path + "/?format=json"),
+              let root = try? await HTTP.json(listURL) as? [String: Any],
+              let results = root["results"] as? [[String: Any]], !results.isEmpty else {
+            Console.log("gcd: nothing for \(series) #\(number)")
+            return nil
+        }
+
+        // The name search matches anywhere in a title, so keep only exact series names, originals first.
+        let want = Similarity.normalize(series)
+        let exact = results.filter {
+            let n = Similarity.normalize(seriesBaseName(($0["series_name"] as? String) ?? ""))
+            return n == want && ($0["variant_of"] == nil || $0["variant_of"] is NSNull)
+        }
+        guard let pick = exact.first(where: { (($0["series_name"] as? String) ?? "").contains("(\(year ?? 0) series)") }) ?? exact.first,
+              let urlString = pick["api_url"] as? String, let url = URL(string: urlString),
+              let d = try? await HTTP.json(url) as? [String: Any] else { return nil }
+
         var out = CompanionData()
+        out.sources.append("Grand Comics Database")
+        if let c = d["cover"] as? String, !c.isEmpty { out.coverURL = c }
+        if let n = d["number"] as? Int { out.issue = String(n) }
+        if let t = clean(d["title"]) { out.title = t }
+        if let p = clean(d["indicia_publisher"]) { out.publisher = out.publisher ?? p }
+        let siteID = urlString.split(separator: "/").dropLast().last.map(String.init) ?? ""
+        let siteURL = "https://www.comics.org/issue/\(siteID)/"
+        out.links.append(LinkItem(title: "This issue on the Grand Comics Database", url: siteURL))
 
-        // 1. Find the series ("volume" in Comic Vine speak).
-        guard let searchURL = HTTP.url(base + "/search/", [
-            ("api_key", key), ("format", "json"), ("resources", "volume"), ("query", series), ("limit", "10"),
-            ("field_list", "id,name,start_year,publisher,count_of_issues,description,deck,image,site_detail_url")
-        ]) else { return nil }
-        guard let root = try await HTTP.json(searchURL) as? [String: Any],
-              let results = root["results"] as? [[String: Any]], !results.isEmpty else { return nil }
+        for n in names(d["editing"]) { out.creators.append(Credit(role: "Editor", name: n)) }
 
-        var best: [String: Any]?
-        var bestScore = -1
-        for r in results {
-            let name = (r["name"] as? String) ?? ""
-            var score = Similarity.score(name, series)
-            if score == 0 { continue }
-            if let y = year, let start = Int((r["start_year"] as? String) ?? "") {
-                if start <= y { score += max(0, 20 - (y - start)) } else { score -= 10 }
-            }
-            if let count = r["count_of_issues"] as? Int { score += min(count / 20, 10) }
-            if score > bestScore {
-                bestScore = score
-                best = r
-            }
-        }
-        guard let volume = best, let volumeID = volume["id"] as? Int else { return nil }
-
-        out.series = volume["name"] as? String
-        if let pub = volume["publisher"] as? [String: Any] { out.publisher = pub["name"] as? String }
-        if let s = volume["start_year"] as? String { out.year = Int(s) }
-        if let desc = volume["description"] as? String, !desc.isEmpty {
-            let text = TextClean.shorten(TextClean.html(desc), limit: 900)
-            if text.count > 30 {
-                out.seriesSummary = TextBlock(text: text, source: "Comic Vine", url: volume["site_detail_url"] as? String)
-            }
-        } else if let deck = volume["deck"] as? String, !deck.isEmpty {
-            out.seriesSummary = TextBlock(text: TextClean.html(deck), source: "Comic Vine", url: volume["site_detail_url"] as? String)
-        }
-        if let url = volume["site_detail_url"] as? String {
-            out.links.append(LinkItem(title: "Series on Comic Vine", url: url))
-        }
-        out.sources.append("Comic Vine")
-
-        // 2. Find the issue.
-        guard let number = issue, !number.isEmpty,
-              let issuesURL = HTTP.url(base + "/issues/", [
-                ("api_key", key), ("format", "json"), ("limit", "1"),
-                ("filter", "volume:\(volumeID),issue_number:\(number)"),
-                ("field_list", "id,name,issue_number,site_detail_url")
-              ]),
-              let issuesRoot = try await HTTP.json(issuesURL) as? [String: Any],
-              let issues = issuesRoot["results"] as? [[String: Any]],
-              let first = issues.first,
-              let issueID = first["id"] as? Int else {
-            return out
-        }
-
-        // 3. Get everything about that issue.
-        guard let detailURL = HTTP.url(base + "/issue/4000-\(issueID)/", [
-            ("api_key", key), ("format", "json"),
-            ("field_list", "name,issue_number,description,deck,cover_date,image,person_credits,character_credits,team_credits,location_credits,story_arc_credits,site_detail_url")
-        ]),
-              let detailRoot = try await HTTP.json(detailURL) as? [String: Any],
-              let d = detailRoot["results"] as? [String: Any] else {
-            return out
-        }
-
-        out.issue = d["issue_number"] as? String
-        if let t = d["name"] as? String, !t.isEmpty { out.title = t }
-        if let image = d["image"] as? [String: Any] {
-            out.coverURL = (image["medium_url"] as? String) ?? (image["small_url"] as? String)
-        }
-        if let cover = d["cover_date"] as? String, cover.count >= 4, let y = Int(cover.prefix(4)) {
-            out.year = out.year ?? y
-        }
-        if let siteURL = d["site_detail_url"] as? String {
-            out.links.append(LinkItem(title: "This issue on Comic Vine", url: siteURL))
-        }
-
-        var blurb = ""
-        if let desc = d["description"] as? String, !desc.isEmpty { blurb = TextClean.html(desc) }
-        if blurb.isEmpty, let deck = d["deck"] as? String { blurb = TextClean.html(deck) }
-        if blurb.count > 30 {
-            // Comic Vine issue descriptions are often full plot summaries, so keep them behind the spoiler shield.
-            out.issueSynopsis = TextBlock(text: TextClean.shorten(blurb, limit: 1800), source: "Comic Vine", url: d["site_detail_url"] as? String)
-        }
-
-        if let people = d["person_credits"] as? [[String: Any]] {
-            for p in people {
-                guard let name = p["name"] as? String else { continue }
-                let roles = ((p["role"] as? String) ?? "Credit").split(separator: ",")
-                for r in roles {
-                    let role = r.trimmingCharacters(in: .whitespaces).capitalized
-                    out.creators.append(Credit(role: role, name: name))
+        var synopses: [String] = []
+        var cast: [(String, String?)] = []
+        if let stories = d["story_set"] as? [[String: Any]] {
+            for st in stories {
+                let type = (st["type"] as? String) ?? ""
+                if type == "cover" {
+                    for n in names(st["pencils"]) { out.creators.append(Credit(role: "Cover", name: n)) }
+                    continue
                 }
+                guard type == "comic story" else { continue }
+                let roles: [(String, String)] = [("script", "Writer"), ("pencils", "Penciller"), ("inks", "Inker"),
+                                                 ("colors", "Colorist"), ("letters", "Letterer")]
+                for (key, role) in roles {
+                    for n in names(st[key]) { out.creators.append(Credit(role: role, name: n)) }
+                }
+                if let g = clean(st["genre"]) {
+                    for part in g.split(separator: ";") {
+                        let t = part.trimmingCharacters(in: .whitespaces).capitalized
+                        if !t.isEmpty && !out.genres.contains(t) { out.genres.append(t) }
+                    }
+                }
+                if let ch = st["characters"] as? String { cast += characters(ch) }
+                if let syn = clean(st["synopsis"]), syn.count > 30 { synopses.append(syn) }
             }
         }
-        if let chars = d["character_credits"] as? [[String: Any]] {
-            for c in chars {
-                guard let name = c["name"] as? String else { continue }
-                out.characters.append(CharacterCard(name: name, role: nil, blurb: nil, imageURL: nil,
-                                                    url: c["site_detail_url"] as? String, source: nil))
-            }
+        if !synopses.isEmpty {
+            out.issueSynopsis = TextBlock(text: TextClean.shorten(synopses.joined(separator: "\n\n"), limit: 1800),
+                                          source: "Grand Comics Database", url: siteURL)
         }
-        if let teams = d["team_credits"] as? [[String: Any]] {
-            out.teams = teams.compactMap { $0["name"] as? String }
-        }
-        if let places = d["location_credits"] as? [[String: Any]] {
-            out.locations = places.compactMap { $0["name"] as? String }
-        }
-        if let arcs = d["story_arc_credits"] as? [[String: Any]] {
-            out.arcs = arcs.compactMap { $0["name"] as? String }
+        var seen = Set<String>()
+        for (name, real) in cast where seen.insert(Similarity.normalize(name)).inserted {
+            out.characters.append(CharacterCard(name: name, role: real, blurb: nil, imageURL: nil, url: nil, source: nil))
+            if out.characters.count >= 24 { break }
         }
         return out
+    }
+}
+
+// MARK: - Open Library (books and graphic novels, no key needed)
+
+enum OpenLibraryProvider {
+    /// A description for collected editions / graphic novels that Wikipedia may not cover.
+    static func lookup(series: String, publisher: String?) async -> CompanionData? {
+        guard let url = HTTP.url("https://openlibrary.org/search.json", [
+            ("q", series + " graphic novel"), ("limit", "5"), ("fields", "key,title,first_publish_year")
+        ]), let root = try? await HTTP.json(url) as? [String: Any],
+              let docs = root["docs"] as? [[String: Any]] else { return nil }
+        let want = Similarity.normalize(series)
+        for doc in docs {
+            guard let key = doc["key"] as? String, let title = doc["title"] as? String,
+                  Similarity.score(title, series) >= 55, !want.isEmpty,
+                  let workURL = URL(string: "https://openlibrary.org\(key).json"),
+                  let work = try? await HTTP.json(workURL) as? [String: Any] else { continue }
+            var text: String?
+            if let d = work["description"] as? String { text = d }
+            else if let o = work["description"] as? [String: Any] { text = o["value"] as? String }
+            guard var t = text else { continue }
+            t = t.components(separatedBy: "\n----").first ?? t
+            t = TextClean.shorten(TextClean.html(t), limit: 900)
+            if t.count < 60 { continue }
+            var out = CompanionData()
+            let page = "https://openlibrary.org\(key)"
+            out.seriesSummary = TextBlock(text: t, source: "Open Library", url: page)
+            out.links.append(LinkItem(title: "Open Library: " + title, url: page))
+            out.sources.append("Open Library")
+            return out
+        }
+        return nil
     }
 }
 
@@ -252,9 +295,64 @@ enum FandomProvider {
                 out.issueSynopsis = TextBlock(text: TextClean.shorten(s, limit: 2200), source: site.name, url: pageURL)
             }
             out.sources.append(site.name)
+            out.creators = credits(in: text)
+            out.characters = appearances(in: text, host: site.host)
             return out
         }
         return nil
+    }
+
+    private static func linkNames(_ raw: String) -> [String] {
+        var names: [String] = []
+        let ns = raw as NSString
+        if let re = try? NSRegularExpression(pattern: "\\[\\[([^\\]|#]+)(?:\\|([^\\]]*))?\\]\\]") {
+            for m in re.matches(in: raw, range: NSRange(location: 0, length: ns.length)) {
+                var shown = m.range(at: 2).location != NSNotFound ? ns.substring(with: m.range(at: 2)) : ns.substring(with: m.range(at: 1))
+                shown = shown.replacingOccurrences(of: "\\s*\\(.*\\)$", with: "", options: .regularExpression)
+                shown = TextClean.tidy(shown)
+                if !shown.isEmpty { names.append(shown) }
+            }
+        }
+        return names
+    }
+
+    /// | Writer1_1 = [[Name]] style infobox fields.
+    static func credits(in wikitext: String) -> [Credit] {
+        let fields: [(String, String)] = [("Writer", "Writer"), ("Penciler", "Penciller"), ("Inker", "Inker"),
+                                          ("Colourist", "Colorist"), ("Letterer", "Letterer"), ("Editor", "Editor"),
+                                          ("CoverArtist", "Cover")]
+        var out: [Credit] = []
+        for (field, role) in fields {
+            let pattern = "\\|\\s*" + field + "\\d*(?:_\\d+)?\\s*=\\s*([^\\n]*)"
+            guard let re = try? NSRegularExpression(pattern: pattern) else { continue }
+            let ns = wikitext as NSString
+            for m in re.matches(in: wikitext, range: NSRange(location: 0, length: ns.length)) where m.numberOfRanges > 1 {
+                let raw = ns.substring(with: m.range(at: 1))
+                var found = linkNames(raw)
+                if found.isEmpty {
+                    let plain = TextClean.wiki(raw)
+                    if plain.count > 1 && plain.count < 40 && plain != "?" { found = [plain] }
+                }
+                for n in found where !out.contains(where: { $0.name == n && $0.role == role }) {
+                    out.append(Credit(role: role, name: n))
+                }
+            }
+        }
+        return out
+    }
+
+    /// The "Appearing in" lists: featured characters first, then supporting, then villains.
+    static func appearances(in wikitext: String, host: String) -> [CharacterCard] {
+        var out: [CharacterCard] = []
+        let pattern = "(?:Featured|Supporting|Antagonists|Villains)\\s*Characters?:?\\s*\\n(.*?)(?=\\n\\s*(?:Featured|Supporting|Antagonists|Villains|Other|Races|Locations|Items|Vehicles|Synopsis|Solicit|Notes|Trivia|\\|)|\\n==|\\z)"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators, .caseInsensitive]) else { return [] }
+        let ns = wikitext as NSString
+        for m in re.matches(in: wikitext, range: NSRange(location: 0, length: ns.length)) where m.numberOfRanges > 1 {
+            for name in linkNames(ns.substring(with: m.range(at: 1))) where !out.contains(where: { CompanionData.same($0.name, name) }) {
+                out.append(CharacterCard(name: name, role: nil, blurb: nil, imageURL: nil, url: nil, source: nil))
+            }
+        }
+        return Array(out.prefix(20))
     }
 
     /// Pulls the "Synopsis" parts out of the wiki page's source.
