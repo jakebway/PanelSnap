@@ -93,6 +93,7 @@ struct ReaderView: View {
 
     @State private var chromeVisible = true
     @State private var showCompanion = false
+    @State private var showPanelEditor = false
     @State private var scrub: Double = 0
     @State private var scrubbing = false
     @State private var hideTask: Task<Void, Never>?
@@ -125,6 +126,7 @@ struct ReaderView: View {
             }
         }
         .ignoresSafeArea()
+        .fullScreenCover(isPresented: $showPanelEditor) { PanelEditorView(model: model) }
         .statusBarHidden(!chromeVisible)
         .persistentSystemOverlays(chromeVisible ? .automatic : .hidden)
         .onAppear {
@@ -372,6 +374,9 @@ struct ReaderView: View {
                 Button { model.toggleOverview() } label: {
                     Label(model.panelIndex < 0 ? "Zoom to first panel" : "Show whole page", systemImage: "viewfinder")
                 }
+            }
+            if settings.snapToPanels {
+                Button { showPanelEditor = true } label: { Label("Fix panels on this page", systemImage: "rectangle.dashed") }
             }
             Button { toggleCompanion() } label: { Label("Companion", systemImage: "sparkles") }
             Button { model.reachedEnd = true; close() } label: { Label("Mark as read and close", systemImage: "checkmark.circle") }
