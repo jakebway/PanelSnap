@@ -39,8 +39,7 @@ struct SettingsView: View {
     /// Our own header, so iOS can't wrap the button in a glass bubble and clip it.
     private var header: some View {
         ZStack {
-            Text("Settings")
-                .font(.headline)
+            ComicTitle(text: "Settings")
             HStack {
                 Button("Done") { dismiss() }
                     .buttonStyle(YellowButtonStyle(compact: true))

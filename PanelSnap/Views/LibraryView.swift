@@ -48,9 +48,37 @@ struct LibraryView: View {
         }
     }
 
+    private func addFolder() {
+        FilePicker.presentFolder { url in
+            Task { await library.importFolder(url) }
+        }
+    }
+
+    /// Add button plus two small buttons: pick several files at once, or import a whole folder.
+    private var addRow: some View {
+        HStack(spacing: 12) {
+            Button { addComics() } label: {
+                Label("Add Comics", systemImage: "plus")
+            }
+            .buttonStyle(YellowButtonStyle())
+            Button { addComics(multiple: true) } label: { CircleIcon(systemName: "checklist") }
+                .accessibilityLabel("Select several files")
+            Button { addFolder() } label: { CircleIcon(systemName: "folder.fill") }
+                .accessibilityLabel("Add a whole folder")
+        }
+    }
+
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
+            // A soft red glow at the top, like the speed-line background of the icon.
+            VStack {
+                LinearGradient(colors: [Theme.red.opacity(0.34), Theme.red.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 260)
+                Spacer()
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             FullWidthCentered {
                 ZStack {
@@ -97,15 +125,7 @@ struct LibraryView: View {
                 if !(library.comics.isEmpty && !library.isImporting) {
                     VStack {
                         Spacer()
-                        Button { addComics() } label: {
-                            Label("Add Comics", systemImage: "plus")
-                        }
-                        .buttonStyle(YellowButtonStyle())
-                        .contextMenu {
-                            Button { addComics(multiple: true) } label: {
-                                Label("Select several files", systemImage: "checklist")
-                            }
-                        }
+                        addRow
                         .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
                         .padding(.bottom, 22)
                     }
@@ -158,9 +178,7 @@ struct LibraryView: View {
 
     private var header: some View {
         ZStack {
-            Text("Library")
-                .font(.system(size: 20, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
+            ComicTitle(text: "Library")
             HStack {
                 Button { route = .settings } label: { CircleIcon(systemName: "gearshape.fill") }
                 Spacer()
@@ -204,22 +222,14 @@ struct LibraryView: View {
             Text("Your library is empty")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
-            Text("Tap Add Comics and choose a file. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
+            Text("Tap Add Comics and choose a file, tap the list button for several at once, or the folder button for a whole folder. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
                 .padding(.horizontal, 28)
-            Button { addComics() } label: {
-                Label("Add Comics", systemImage: "plus")
-            }
-            .buttonStyle(YellowButtonStyle())
-            .contextMenu {
-                Button { addComics(multiple: true) } label: {
-                    Label("Select several files", systemImage: "checklist")
-                }
-            }
-            .padding(.top, 8)
+            addRow
+                .padding(.top, 8)
             Button { Task { await library.scanFolder() } } label: {
                 Label("Scan Comics folder", systemImage: "arrow.clockwise")
             }
@@ -278,7 +288,7 @@ struct LibraryView: View {
                         .font(.caption)
                         .foregroundStyle(Theme.secondary)
                     ProgressView(value: entry.progress)
-                        .tint(Theme.accent)
+                        .tint(Theme.red)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")

@@ -72,6 +72,19 @@ enum PanelDetector {
         let minH = Int(Double(h) * 0.04)
         rects = rects.filter { $0.area >= minArea && $0.w >= minW && $0.h >= minH }
 
+        // Title lettering ("Vision & Scarlet Witch" in big white type on black) splits into one little box per
+        // letter or word. Those boxes are mostly empty (thin strokes) while real panels are filled with art.
+        // Three or more small, sparse boxes means lettering, so they are not panels.
+        let darkPage = bg < 60
+        let lettering = rects.filter { r in
+            let fill = inkFill(grid, r)
+            let small = Double(r.area) < Double(pageArea) * (darkPage ? 0.15 : 0.05)
+            return small && fill < (darkPage ? 0.70 : 0.28)
+        }
+        if lettering.count >= 3 {
+            rects = rects.filter { r in !lettering.contains(r) }
+        }
+
         if rects.isEmpty {
             if let t = trim(grid, page, eps: 0.004) {
                 rects = [t]
@@ -95,6 +108,17 @@ enum PanelDetector {
             out.append(CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0))
         }
         return out
+    }
+
+    /// Share of pixels in the rectangle that are ink / artwork rather than gutter colour.
+    private static func inkFill(_ g: Grid, _ r: IRect) -> Double {
+        if r.area == 0 { return 0 }
+        var sum = 0
+        for y in r.y0..<r.y1 {
+            let row = y * g.width
+            for x in r.x0..<r.x1 { sum += Int(g.mask[row + x]) }
+        }
+        return Double(sum) / Double(r.area)
     }
 
     // MARK: - Image -> grayscale

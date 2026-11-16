@@ -91,6 +91,27 @@ final class LibraryStore: ObservableObject {
         await importFiles(found)
     }
 
+    /// Adds every comic found inside a folder the person picked (including sub-folders).
+    func importFolder(_ folder: URL) async {
+        let scoped = folder.startAccessingSecurityScopedResource()
+        Console.log("import: folder \(folder.lastPathComponent) scoped=\(scoped)")
+        var found: [URL] = []
+        if let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isRegularFileKey],
+                                                       options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+            for case let u as URL in walker where LibraryStore.comicExtensions.contains(u.pathExtension.lowercased()) {
+                found.append(u)
+            }
+        }
+        found.sort { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        Console.log("import: found \(found.count) comic(s) in the folder")
+        if found.isEmpty {
+            errorMessage = "No comics (CBZ, CBR, CB7, PDF or EPUB) were found in that folder."
+        } else {
+            await importFiles(found)
+        }
+        if scoped { folder.stopAccessingSecurityScopedResource() }
+    }
+
     func importFiles(_ urls: [URL]) async {
         if urls.isEmpty { return }
         isImporting = true

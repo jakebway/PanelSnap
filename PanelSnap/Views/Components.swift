@@ -15,8 +15,33 @@ struct YellowButtonStyle: ButtonStyle {
             .padding(.horizontal, compact ? 16 : 28)
             .padding(.vertical, compact ? 9 : 14)
             .background(Theme.accent, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.black, lineWidth: 2))
+            .background(Capsule().fill(Theme.red).offset(x: 3, y: 3))   // hard comic drop-shadow
             .opacity(configuration.isPressed ? 0.78 : 1)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+    }
+}
+
+/// A comic caption-box title: slanted red label, yellow offset shadow, heavy italic white lettering.
+struct ComicTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 19, weight: .black, design: .rounded))
+            .italic()
+            .tracking(1.5)
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 6)
+            .background(Theme.red.skew(-0.2))
+            .background(Theme.accent.skew(-0.2).offset(x: 3, y: 3))
+    }
+}
+
+private extension View {
+    func skew(_ amount: CGFloat) -> some View {
+        return self.transformEffect(CGAffineTransform(a: 1, b: 0, c: amount, d: 1, tx: 0, ty: 0))
     }
 }
 
@@ -82,6 +107,23 @@ enum FilePicker {
             if let host = top() {
                 Console.log("picker: presenting from \(type(of: host)), multiple=\(multiple)")
                 host.present(vc, animated: true) { Console.log("picker: on screen") }
+            } else {
+                Console.log("picker: ERROR no view controller to present from")
+            }
+        }
+    }
+
+    /// Pick a whole folder (every comic inside gets added). Folders can't be copied by the picker, so this one opens in place.
+    static func presentFolder(onPick: @escaping (URL) -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let vc = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
+            vc.allowsMultipleSelection = false
+            let d = Delegate({ urls in if let u = urls.first { onPick(u) } })
+            holder = d
+            vc.delegate = d
+            if let host = top() {
+                Console.log("picker: presenting folder picker")
+                host.present(vc, animated: true) { Console.log("picker: folder picker on screen") }
             } else {
                 Console.log("picker: ERROR no view controller to present from")
             }

@@ -38,6 +38,8 @@ final class AppSettings: ObservableObject {
 enum Theme {
     /// Comic-book yellow: used for confirm buttons, progress and highlights.
     static let accent = Color(red: 1.0, green: 0.82, blue: 0.10)
+    /// Manga / comic red: the second brand colour, used for headers, shadows and glow.
+    static let red = Color(red: 0.93, green: 0.11, blue: 0.14)
     static let bg = Color.black                    // true OLED black
     static let card = Color(white: 0.10)
     static let card2 = Color(white: 0.16)
