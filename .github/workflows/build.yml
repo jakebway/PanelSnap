@@ -1,0 +1,85 @@
+name: Build IPA
+
+# HOW TO USE (from your phone):
+#   GitHub app/website -> this repo -> Actions -> "Build IPA" -> Run workflow.
+#   When it finishes (about 6-10 min) open "Releases" and tap PanelSnap.ipa.
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: "Name for this build (optional, e.g. 'test 2')"
+        required: false
+        default: ""
+      publish:
+        description: "Publish to Releases so you can download the IPA right on your iPhone"
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-ipa
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build the app
+        id: build
+        run: bash Scripts/build-ipa.sh
+
+      - name: Save the IPA (Actions artifact)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PanelSnap-IPA
+          path: PanelSnap.ipa
+          if-no-files-found: error
+
+      - name: Save the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build-*.log
+          if-no-files-found: ignore
+
+      - name: Publish to Releases
+        if: success() && (github.event_name == 'push' || inputs.publish == true)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_NAME: ${{ inputs.build_name }}
+          MODE: ${{ steps.build.outputs.mode }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          TITLE="PanelSnap build ${{ github.run_number }}"
+          if [ -n "$BUILD_NAME" ]; then TITLE="$TITLE - $BUILD_NAME"; fi
+          NOTES="Unsigned IPA. Open it with FlareStore (or any sideloader) to sign and install."
+          if [ "$MODE" = "lite" ]; then
+            NOTES="$NOTES  NOTE: this is the LITE build (CBZ/PDF/EPUB only; RAR/7z library failed to compile)."
+          fi
+          gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG" PanelSnap.ipa \
+            --title "$TITLE" --notes "$NOTES" --target "$GITHUB_SHA" --latest
+          {
+            echo "## PanelSnap is ready"
+            echo ""
+            echo "Download on your iPhone: https://github.com/${{ github.repository }}/releases/tag/$TAG"
+            echo ""
+            echo "Always-newest direct link: https://github.com/${{ github.repository }}/releases/latest/download/PanelSnap.ipa"
+            echo ""
+            echo "Build type: **$MODE**"
+          } >> "$GITHUB_STEP_SUMMARY"
