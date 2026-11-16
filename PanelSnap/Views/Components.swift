@@ -45,6 +45,24 @@ struct CircleIcon: View {
     }
 }
 
+// MARK: - Layout
+
+/// Lays content out across the WHOLE screen and keeps it centered on the screen itself, even when the system
+/// reserves more room on one side (e.g. the iPhone Duo's status area): both sides get the larger inset.
+struct FullWidthCentered<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = max(geo.safeAreaInsets.leading, geo.safeAreaInsets.trailing)
+            content()
+                .padding(.horizontal, side)
+                .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .ignoresSafeArea(.container, edges: .horizontal)
+    }
+}
+
 // MARK: - File picker
 
 /// Shows the system file browser straight from UIKit (not inside a SwiftUI sheet), so Open/Cancel always work.

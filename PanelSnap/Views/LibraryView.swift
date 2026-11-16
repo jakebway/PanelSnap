@@ -66,66 +66,70 @@ struct LibraryView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                if library.comics.isEmpty && !library.isImporting {
-                    emptyState
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 24) {
-                            searchField
-                            if let c = continueReading, search.isEmpty {
-                                continueCard(c)
-                            }
-                            LazyVGrid(columns: columns, spacing: 22) {
-                                ForEach(visible) { entry in
-                                    ComicCell(entry: entry)
-                                        .onTapGesture { route = .reader(entry) }
-                                        .contextMenu { menu(for: entry) }
+            FullWidthCentered {
+                ZStack {
+                VStack(spacing: 0) {
+                    header
+                    if library.comics.isEmpty && !library.isImporting {
+                        emptyState
+                    } else {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 24) {
+                                searchField
+                                if let c = continueReading, search.isEmpty {
+                                    continueCard(c)
+                                }
+                                LazyVGrid(columns: columns, spacing: 22) {
+                                    ForEach(visible) { entry in
+                                        ComicCell(entry: entry)
+                                            .onTapGesture { route = .reader(entry) }
+                                            .contextMenu { menu(for: entry) }
+                                    }
                                 }
                             }
+                            .frame(maxWidth: 900)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 6)
+                            .padding(.bottom, 110)
                         }
-                        .frame(maxWidth: 900)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 6)
-                        .padding(.bottom, 110)
                     }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // floating yellow "add" button (hidden on the empty screen, which has its own big one)
-            if !(library.comics.isEmpty && !library.isImporting) {
-                VStack {
-                    Spacer()
-                    Button { addComics() } label: {
-                        Label("Add Comics", systemImage: "plus")
+                // floating yellow "add" button (hidden on the empty screen, which has its own big one)
+                if !(library.comics.isEmpty && !library.isImporting) {
+                    VStack {
+                        Spacer()
+                        Button { addComics() } label: {
+                            Label("Add Comics", systemImage: "plus")
+                        }
+                        .buttonStyle(YellowButtonStyle())
+                        .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
+                        .padding(.bottom, 22)
                     }
-                    .buttonStyle(YellowButtonStyle())
-                    .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
-                    .padding(.bottom, 22)
                 }
-            }
 
-            if let status = library.importStatus {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 10) {
-                        ProgressView().tint(Theme.accent)
-                        Text(status).font(.subheadline.weight(.medium)).foregroundStyle(.white)
+                if let status = library.importStatus {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 10) {
+                            ProgressView().tint(Theme.accent)
+                            Text(status).font(.subheadline.weight(.medium)).foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .background(Theme.card2, in: Capsule())
+                        .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+                        .padding(.bottom, 92)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .background(Theme.card2, in: Capsule())
-                    .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
-                    .padding(.bottom, 92)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
 
-            if let message = library.errorMessage {
-                errorCard(message)
+                if let message = library.errorMessage {
+                    errorCard(message)
+                }
+                }
             }
         }
         .animation(.easeInOut, value: library.importStatus)
