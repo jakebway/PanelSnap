@@ -72,8 +72,15 @@ jobs:
             NOTES="$NOTES  NOTE: this is the LITE build (CBZ/PDF/EPUB only; RAR/7z library failed to compile)."
           fi
           gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "$TAG" PanelSnap.ipa \
-            --title "$TITLE" --notes "$NOTES" --target "$GITHUB_SHA" --latest
+          ok=0
+          for attempt in 1 2 3; do
+            if gh release create "$TAG" PanelSnap.ipa \
+                 --title "$TITLE" --notes "$NOTES" --target "$GITHUB_SHA" --latest; then ok=1; break; fi
+            echo "Release attempt $attempt failed, retrying..."
+            gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
+            sleep 10
+          done
+          [ "$ok" = 1 ] || { echo "Could not publish the release" >&2; exit 1; }
           # keep ONLY the newest release: delete every other release and its tag
           gh release list --limit 200 --json tagName --jq '.[].tagName' | while read -r old; do
             if [ "$old" != "$TAG" ]; then
