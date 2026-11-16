@@ -51,6 +51,17 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    NavigationLink {
+                        ConsoleView()
+                    } label: {
+                        Label("Console", systemImage: "terminal")
+                            .foregroundStyle(Theme.secondary)
+                    }
+                } footer: {
+                    Text("Technical log. Handy if something doesn't import or look right.")
+                }
+
                 Section("About") {
                     HStack {
                         Text("PanelSnap")

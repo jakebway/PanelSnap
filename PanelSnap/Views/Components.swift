@@ -61,7 +61,12 @@ enum FilePicker {
             let d = Delegate(onPick)
             holder = d
             vc.delegate = d
-            top()?.present(vc, animated: true)
+            if let host = top() {
+                Console.log("picker: presenting from \(type(of: host)), multiple=\(multiple)")
+                host.present(vc, animated: true) { Console.log("picker: on screen") }
+            } else {
+                Console.log("picker: ERROR no view controller to present from")
+            }
         }
     }
 
@@ -79,11 +84,13 @@ enum FilePicker {
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             FilePicker.holder = nil
+            Console.log("picker: Open pressed, \(urls.count) file(s): " + urls.map { $0.lastPathComponent }.joined(separator: ", "))
             if !urls.isEmpty { onPick(urls) }
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
             FilePicker.holder = nil
+            Console.log("picker: cancelled")
         }
     }
 }

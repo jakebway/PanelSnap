@@ -6,6 +6,7 @@ struct LibraryView: View {
     @EnvironmentObject var library: LibraryStore
     @EnvironmentObject var settings: AppSettings
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var route: Route?
     @State private var search = ""
     @State private var sort: SortMode = .recent
@@ -128,6 +129,14 @@ struct LibraryView: View {
             }
         }
         .animation(.easeInOut, value: library.importStatus)
+        .onAppear {
+            Console.logEnvironment(reason: "library appeared")
+            Task { await library.scanFolder() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            Console.log("app state: \(phase)")
+            if phase == .active { Task { await library.scanFolder() } }
+        }
         .fullScreenCover(item: $route) { r in
             switch r {
             case .reader(let entry):
@@ -207,6 +216,16 @@ struct LibraryView: View {
             }
             .buttonStyle(YellowButtonStyle())
             .padding(.top, 8)
+            Button { Task { await library.scanFolder() } } label: {
+                Label("Scan Comics folder", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(GreyButtonStyle())
+            Text("Tip: files you put in Files › On My iPhone › PanelSnap › Comics show up here automatically.")
+                .font(.footnote)
+                .foregroundStyle(Theme.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+                .padding(.horizontal, 28)
             Spacer()
             Spacer()
         }

@@ -53,8 +53,7 @@ targets:
         CFBundleDisplayName: PanelSnap
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UILaunchScreen:
-          UIColorName: LaunchBlack
+        UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

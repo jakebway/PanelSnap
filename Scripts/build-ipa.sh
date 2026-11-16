@@ -69,6 +69,16 @@ else
   echo "::warning::Could not stamp the SDK version (layout may show a strip on iPhone Duo)"
 fi
 
+# Also stamp the Info.plist the same way (iOXcode does both): the Duo layout check looks at the SDK the app claims.
+PL="$APP/Info.plist"
+for kv in "DTPlatformVersion:27.1" "DTSDKName:iphoneos27.1"; do
+  k="${kv%%:*}"; v="${kv#*:}"
+  /usr/libexec/PlistBuddy -c "Set :$k $v" "$PL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$k string $v" "$PL" || true
+done
+/usr/libexec/PlistBuddy -c "Print :DTSDKName" "$PL" || true
+/usr/libexec/PlistBuddy -c "Print :UIFileSharingEnabled" "$PL" || true
+/usr/libexec/PlistBuddy -c "Print :UILaunchScreen" "$PL" || true
+
 rm -rf Payload PanelSnap.ipa
 mkdir Payload
 cp -R "$APP" Payload/

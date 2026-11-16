@@ -56,53 +56,110 @@ final class LibraryStore: ObservableObject {
 
     // MARK: import
 
+    nonisolated static let comicExtensions: Set<String> = ["cbz", "cbr", "cb7", "cbt", "zip", "rar", "7z", "pdf", "epub"]
+
+    /// The path of a file relative to the Comics folder, or nil if the file lives somewhere else.
+    nonisolated static func relativeName(_ url: URL) -> String? {
+        let base = Paths.comics.resolvingSymlinksInPath().path + "/"
+        let p = url.resolvingSymlinksInPath().path
+        return p.hasPrefix(base) ? String(p.dropFirst(base.count)) : nil
+    }
+
+    private var failedScan = Set<String>()
+
+    /// Finds comics that were dropped straight into Files > PanelSnap > Comics and adds them in place (no copy).
+    func scanFolder() async {
+        if isImporting { return }
+        let known = Set(comics.map { $0.fileName })
+        let skip = failedScan
+        let folder = Paths.comics
+        let found: [URL] = await Task.detached(priority: .utility) {
+            var out: [URL] = []
+            let fm = FileManager.default
+            guard let en = fm.enumerator(at: folder, includingPropertiesForKeys: [.isRegularFileKey],
+                                         options: [.skipsHiddenFiles]) else { return out }
+            while let u = en.nextObject() as? URL {
+                guard LibraryStore.comicExtensions.contains(u.pathExtension.lowercased()),
+                      let rel = LibraryStore.relativeName(u),
+                      !known.contains(rel), !skip.contains(rel) else { continue }
+                out.append(u)
+            }
+            return out
+        }.value
+        Console.log("scan Comics folder: \(found.count) new file(s)")
+        if found.isEmpty { return }
+        await importFiles(found)
+    }
+
     func importFiles(_ urls: [URL]) async {
         if urls.isEmpty { return }
         isImporting = true
         var added = 0
         var failed: [String] = []
+        Console.log("import: \(urls.count) file(s) requested")
         for (i, url) in urls.enumerated() {
             importStatus = "Adding \(i + 1) of \(urls.count)…"
+            let rel = LibraryStore.relativeName(url)
+            if let rel = rel, comics.contains(where: { $0.fileName == rel }) {
+                Console.log("import: \(url.lastPathComponent) is already in the library")
+                continue
+            }
             let scoped = url.startAccessingSecurityScopedResource()
+            Console.log("import: \(url.lastPathComponent) scoped=\(scoped) inPlace=\(rel != nil)")
             let result = await Task.detached(priority: .userInitiated) {
-                return LibraryStore.importOne(url: url)
+                return LibraryStore.importOne(url: url, inPlaceName: rel)
             }.value
             if scoped { url.stopAccessingSecurityScopedResource() }
             switch result {
             case .success(let entry):
                 comics.insert(entry, at: 0)
                 added += 1
+                Console.log("import: added \(entry.title) (\(entry.pageCount) pages)")
             case .failure(let err):
                 failed.append("\(url.lastPathComponent): \(err.localizedDescription)")
+                if let rel = rel { failedScan.insert(rel) }
+                Console.log("import: ERROR \(url.lastPathComponent): \(err)")
             }
         }
         save()
         isImporting = false
         importStatus = nil
+        Console.log("import: done, added \(added), failed \(failed.count)")
         if !failed.isEmpty {
             errorMessage = failed.joined(separator: "\n")
         }
     }
 
-    /// Runs off the main thread: copies the file, reads page count, makes a cover, reads the ComicInfo.
-    nonisolated private static func importOne(url: URL) -> Result<ComicEntry, Error> {
+    /// Runs off the main thread: copies the file (unless it is already in Comics), reads page count, makes a cover, reads the ComicInfo.
+    nonisolated private static func importOne(url: URL, inPlaceName: String?) -> Result<ComicEntry, Error> {
         let fm = FileManager.default
+        let t0 = Date()
         let id = UUID()
-        let ext = url.pathExtension.isEmpty ? "cbz" : url.pathExtension.lowercased()
-        let storedName = id.uuidString + "." + ext
-        let dest = Paths.comics.appendingPathComponent(storedName)
-        do {
-            if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-            try fm.copyItem(at: url, to: dest)
-        } catch {
-            return .failure(error)
+        let storedName: String
+        let dest: URL
+        var copied = false
+        if let name = inPlaceName {
+            storedName = name
+            dest = url
+        } else {
+            let ext = url.pathExtension.isEmpty ? "cbz" : url.pathExtension.lowercased()
+            storedName = id.uuidString + "." + ext
+            dest = Paths.comics.appendingPathComponent(storedName)
+            do {
+                if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+                try fm.copyItem(at: url, to: dest)
+                copied = true
+                Console.log("import: copied \(url.lastPathComponent) in \(String(format: "%.1f", Date().timeIntervalSince(t0)))s")
+            } catch {
+                return .failure(error)
+            }
         }
 
         let source: ComicSource
         do {
             source = try ComicOpener.open(url: dest)
         } catch {
-            try? fm.removeItem(at: dest)
+            if copied { try? fm.removeItem(at: dest) }
             return .failure(error)
         }
 
