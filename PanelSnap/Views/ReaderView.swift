@@ -354,7 +354,7 @@ struct ReaderView: View {
         }
         .foregroundStyle(.white)
         .padding(.leading, 16)
-        .padding(.trailing, Theme.cameraWidth)      // keep clear of the Duo's corner camera
+        .padding(.trailing, Theme.cameraWidth + 30)      // keep the menu button clear of the Duo status widget
         .padding(.top, 54)
         .padding(.bottom, 22)
         .background(
