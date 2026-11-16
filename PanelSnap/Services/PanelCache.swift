@@ -15,7 +15,7 @@ final class PanelCache {
     private let lock = NSLock()
 
     static func fileURL(for id: UUID) -> URL {
-        return Paths.panelCache.appendingPathComponent(id.uuidString + ".json")
+        return Paths.panelCache.appendingPathComponent(id.uuidString + "-d3.json")
     }
 
     init(comicID: UUID, rtl: Bool) {

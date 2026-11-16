@@ -26,6 +26,7 @@ enum PanelDetector {
         let width: Int
         let height: Int
         let mask: [UInt8]   // 1 = ink / artwork, 0 = background (gutter colour)
+        var gray: [UInt8] = []
     }
 
     // MARK: - Public
@@ -40,7 +41,7 @@ enum PanelDetector {
             let d = Int(gray[i]) - bg
             if d > 34 || d < -34 { mask[i] = 1 }
         }
-        let grid = Grid(width: w, height: h, mask: mask)
+        let grid = Grid(width: w, height: h, mask: mask, gray: gray)
         let page = IRect(x0: 0, y0: 0, x1: w, y1: h)
         let pageArea = w * h
 
@@ -72,17 +73,18 @@ enum PanelDetector {
         let minH = Int(Double(h) * 0.04)
         rects = rects.filter { $0.area >= minArea && $0.w >= minW && $0.h >= minH }
 
-        // Title lettering ("Vision & Scarlet Witch" in big white type on black) splits into one little box per
-        // letter or word. Those boxes are mostly empty (thin strokes) while real panels are filled with art.
-        // Three or more small, sparse boxes means lettering, so they are not panels.
+        // Title lettering ("Vision & Scarlet Witch" in big white type on black) is not a panel. Type is flat:
+        // pure white on pure black with almost no in-between tones, while real artwork is full of mid-tones.
         let darkPage = bg < 60
-        let lettering = rects.filter { r in
-            let fill = inkFill(grid, r)
-            let small = Double(r.area) < Double(pageArea) * (darkPage ? 0.15 : 0.05)
-            return small && fill < (darkPage ? 0.70 : 0.28)
-        }
-        if lettering.count >= 3 {
-            rects = rects.filter { r in !lettering.contains(r) }
+        if darkPage {
+            rects = rects.filter { r in
+                let flat = midToneShare(grid, r) < 0.12 && inkFill(grid, r) < 0.85
+                return !(flat && Double(r.area) < Double(pageArea) * 0.35)
+            }
+        } else {
+            // On a light page, three or more small, sparse boxes in a row are lettering.
+            let lettering = rects.filter { Double($0.area) < Double(pageArea) * 0.05 && inkFill(grid, $0) < 0.28 }
+            if lettering.count >= 3 { rects = rects.filter { r in !lettering.contains(r) } }
         }
 
         if rects.isEmpty {
@@ -117,6 +119,20 @@ enum PanelDetector {
         for y in r.y0..<r.y1 {
             let row = y * g.width
             for x in r.x0..<r.x1 { sum += Int(g.mask[row + x]) }
+        }
+        return Double(sum) / Double(r.area)
+    }
+
+    /// Share of pixels that are neither near-black nor near-white. Artwork has plenty; flat lettering has almost none.
+    private static func midToneShare(_ g: Grid, _ r: IRect) -> Double {
+        if r.area == 0 || g.gray.isEmpty { return 1 }
+        var sum = 0
+        for y in r.y0..<r.y1 {
+            let row = y * g.width
+            for x in r.x0..<r.x1 {
+                let v = Int(g.gray[row + x])
+                if v > 60 && v < 195 { sum += 1 }
+            }
         }
         return Double(sum) / Double(r.area)
     }

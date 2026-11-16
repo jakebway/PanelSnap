@@ -42,7 +42,7 @@ struct LibraryView: View {
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)]
 
     /// Tap a file and it is added straight away (like iOXcode). Long-press the button to pick several at once.
-    private func addComics(multiple: Bool = false) {
+    private func addComics(multiple: Bool = true) {
         FilePicker.present(types: [UTType.item], multiple: multiple) { urls in
             Task { await library.importFiles(urls) }
         }
@@ -54,15 +54,13 @@ struct LibraryView: View {
         }
     }
 
-    /// Add button plus two small buttons: pick several files at once, or import a whole folder.
+    /// Add button (pick one or many files at once) plus a small button to import a whole folder.
     private var addRow: some View {
         HStack(spacing: 12) {
             Button { addComics() } label: {
                 Label("Add Comics", systemImage: "plus")
             }
             .buttonStyle(YellowButtonStyle())
-            Button { addComics(multiple: true) } label: { CircleIcon(systemName: "checklist") }
-                .accessibilityLabel("Select several files")
             Button { addFolder() } label: { CircleIcon(systemName: "folder.fill") }
                 .accessibilityLabel("Add a whole folder")
         }
@@ -185,8 +183,8 @@ struct LibraryView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        .padding(.top, 30)
+        .padding(.bottom, 14)
     }
 
     private var searchField: some View {
@@ -222,7 +220,7 @@ struct LibraryView: View {
             Text("Your library is empty")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
-            Text("Tap Add Comics and choose a file, tap the list button for several at once, or the folder button for a whole folder. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
+            Text("Tap Add Comics and choose one or more files, or use the folder button for a whole folder. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
