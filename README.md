@@ -25,6 +25,13 @@ Shortcut link that always points at the newest build:
 - **Swipe up** (or tap ✨) to open the **Companion**.
 - Manga: long-press a comic in the library → *Read right-to-left*. (Files tagged as manga in ComicInfo.xml switch automatically.)
 
+## Organising your library
+
+- **Shelves**: the chips under the top band. Tap `+` to make one; long-press a chip to rename or delete it (comics stay in your library).
+- **Sort**: Recently read, Newest added, Title A–Z, or My order.
+- **Organize**: select several comics, then move them to a shelf, mark read/unread or delete. Drag a comic onto another to set My order.
+- Long-press any comic to rename it, move it to a shelf, mark it read, flip manga direction or delete it.
+
 ## Companion: where the info comes from
 
 | Source | Needs a key? | Gives you |

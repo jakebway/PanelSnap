@@ -10,6 +10,22 @@ struct LibraryView: View {
     @State private var route: Route?
     @State private var search = ""
 
+    // Organising
+    @State private var shelf: String?                       // nil = every comic
+    @State private var organizing = false
+    @State private var selection = Set<UUID>()
+    @State private var showRename = false
+    @State private var renameID: UUID?
+    @State private var renameText = ""
+    @State private var showShelfAlert = false
+    @State private var shelfRenaming: String?               // nil = creating a new shelf
+    @State private var shelfMoveIDs = Set<UUID>()           // comics to move into a shelf that is being created
+    @State private var shelfText = ""
+    @State private var showDeleteShelf = false
+    @State private var shelfToDelete = ""
+    @State private var showDeleteComics = false
+    @State private var deleteIDs = Set<UUID>()
+
     /// One presentation slot for everything (reader + settings) so SwiftUI presentations never fight each other.
     enum Route: Identifiable {
         case reader(ComicEntry)
@@ -22,35 +38,47 @@ struct LibraryView: View {
         }
     }
 
+    private func sorted(_ list: [ComicEntry], by sort: LibrarySort) -> [ComicEntry] {
+        var out = list
+        switch sort {
+        case .recent: out.sort { ($0.lastOpenedAt ?? $0.addedAt) > ($1.lastOpenedAt ?? $1.addedAt) }
+        case .added: out.sort { $0.addedAt > $1.addedAt }
+        case .title: out.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .custom: break
+        }
+        return out
+    }
+
     private var visible: [ComicEntry] {
         var list = library.comics
+        if let s = shelf { list = list.filter { $0.shelf == s } }
         let q = search.trimmingCharacters(in: .whitespaces)
         if !q.isEmpty {
             list = list.filter { $0.title.localizedCaseInsensitiveContains(q) }
         }
-        list.sort { $0.addedAt > $1.addedAt }
-        return list
+        return sorted(list, by: settings.librarySort)
     }
 
     private var continueReading: ComicEntry? {
         return library.comics
             .filter { $0.hasStarted && !$0.finished }
-            .sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
-            .first
+            .max { ($0.lastOpenedAt ?? .distantPast) < ($1.lastOpenedAt ?? .distantPast) }
     }
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)]
 
-    /// Tap a file and it is added straight away (like iOXcode). Long-press the button to pick several at once.
-    private func addComics(multiple: Bool = true) {
-        FilePicker.present(types: [UTType.item], multiple: multiple) { urls in
-            Task { await library.importFiles(urls) }
+    /// One picker for everything: choose a single comic or as many as you like.
+    private func addComics() {
+        let target = shelf
+        FilePicker.present(types: [UTType.item], multiple: true) { urls in
+            Task { await library.importFiles(urls, shelf: target) }
         }
     }
 
     private func addFolder() {
+        let target = shelf
         FilePicker.presentFolder { url in
-            Task { await library.importFolder(url) }
+            Task { await library.importFolder(url, shelf: target) }
         }
     }
 
@@ -86,13 +114,13 @@ struct LibraryView: View {
                         emptyState
                     } else {
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 24) {
+                            VStack(alignment: .leading, spacing: 18) {
                                 // This top band sits beside the Duo's corner camera, so it holds the useful stuff.
                                 VStack(alignment: .leading, spacing: 14) {
                                     if showSearch {
                                         searchField
                                     }
-                                    if search.isEmpty {
+                                    if search.isEmpty && !organizing {
                                         if let c = continueReading {
                                             continueCard(c)
                                         } else {
@@ -101,11 +129,22 @@ struct LibraryView: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, minHeight: Theme.cameraHeight - 64, alignment: .top)
-                                LazyVGrid(columns: columns, spacing: 22) {
-                                    ForEach(visible) { entry in
-                                        ComicCell(entry: entry)
-                                            .onTapGesture { route = .reader(entry) }
-                                            .contextMenu { menu(for: entry) }
+
+                                shelfBar
+                                sortRow
+
+                                let items = visible
+                                if items.isEmpty {
+                                    Text(shelf == nil ? "No comics match your search." : "Nothing on this shelf yet. Tap Organize, select comics and choose Shelf.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(Theme.secondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.top, 30)
+                                } else {
+                                    LazyVGrid(columns: columns, spacing: 22) {
+                                        ForEach(items) { entry in
+                                            cell(entry)
+                                        }
                                     }
                                 }
                             }
@@ -119,11 +158,13 @@ struct LibraryView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // floating yellow "add" button (hidden on the empty screen, which has its own big one)
+                // floating bottom bar: the yellow "add" button, or the actions while organising
                 if !(library.comics.isEmpty && !library.isImporting) {
                     VStack {
                         Spacer()
-                        addRow
+                        Group {
+                            if organizing { organizeBar } else { addRow }
+                        }
                         .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
                         .padding(.bottom, 22)
                     }
@@ -158,7 +199,50 @@ struct LibraryView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             Console.log("app state: \(phase)")
-            if phase == .active { Task { await library.scanFolder() } }
+            if phase == .active {
+                Task { await library.scanFolder() }
+            } else {
+                library.flush()          // don't lose progress if iOS closes the app
+            }
+        }
+        .onChange(of: library.shelves) { _, list in
+            if let s = shelf, !list.contains(s) { shelf = nil }
+        }
+        .alert("Rename comic", isPresented: $showRename) {
+            TextField("Title", text: $renameText)
+            Button("Save") {
+                if let id = renameID { library.rename(id: id, to: renameText) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert(shelfRenaming == nil ? "New shelf" : "Rename shelf", isPresented: $showShelfAlert) {
+            TextField("Shelf name", text: $shelfText)
+            Button(shelfRenaming == nil ? "Create" : "Save") { commitShelfName() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if shelfRenaming == nil && !shelfMoveIDs.isEmpty {
+                Text("The selected comics move onto it.")
+            }
+        }
+        .confirmationDialog("Delete this shelf?", isPresented: $showDeleteShelf, titleVisibility: .visible) {
+            Button("Delete shelf", role: .destructive) {
+                library.deleteShelf(shelfToDelete)
+                if shelf == shelfToDelete { shelf = nil }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The comics stay in your library.")
+        }
+        .confirmationDialog(deleteIDs.count == 1 ? "Delete this comic?" : "Delete \(deleteIDs.count) comics?",
+                            isPresented: $showDeleteComics, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                library.delete(ids: deleteIDs)
+                selection.subtract(deleteIDs)
+                deleteIDs = []
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The files are removed from PanelSnap.")
         }
         .fullScreenCover(item: $route) { r in
             switch r {
@@ -168,6 +252,190 @@ struct LibraryView: View {
                 SettingsView()
             }
         }
+    }
+
+    // MARK: Organising
+
+    private func cell(_ entry: ComicEntry) -> some View {
+        ComicCell(entry: entry, organizing: organizing, selected: selection.contains(entry.id))
+            .onTapGesture {
+                if organizing {
+                    if selection.contains(entry.id) { selection.remove(entry.id) } else { selection.insert(entry.id) }
+                } else {
+                    route = .reader(entry)
+                }
+            }
+            .contextMenu {
+                if !organizing { menu(for: entry) }
+            }
+            .modifier(ReorderModifier(enabled: organizing, id: entry.id) { dragged, target in
+                reorder(dragged, onto: target)
+            })
+    }
+
+    private func reorder(_ dragged: UUID, onto target: UUID) {
+        if settings.librarySort != .custom {
+            // Freeze what is on screen as "my order", then move the comic within it.
+            library.applyOrder(sorted(library.comics, by: settings.librarySort).map { $0.id })
+            settings.librarySort = .custom
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            library.moveComic(dragged, onto: target)
+        }
+    }
+
+    private func commitShelfName() {
+        if let old = shelfRenaming {
+            library.renameShelf(old, to: shelfText)
+            if shelf == old { shelf = library.shelves.first(where: { $0.caseInsensitiveCompare(shelfText.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame }) ?? old }
+        } else if let name = library.addShelf(shelfText) {
+            if !shelfMoveIDs.isEmpty {
+                library.move(shelfMoveIDs, toShelf: name)
+                shelfMoveIDs = []
+            } else {
+                shelf = name
+            }
+        }
+    }
+
+    private func newShelf(moving ids: Set<UUID>) {
+        shelfRenaming = nil
+        shelfMoveIDs = ids
+        shelfText = ""
+        showShelfAlert = true
+    }
+
+    private func endOrganizing() {
+        organizing = false
+        selection = []
+    }
+
+    private func shelfChip(_ title: String, count: Int, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text("\(count)").font(.caption.weight(.bold)).opacity(0.6)
+            }
+            .foregroundStyle(selected ? Color.black : Color.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(selected ? Theme.accent : Theme.card2, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var shelfBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                shelfChip("All", count: library.comics.count, selected: shelf == nil) { shelf = nil }
+                ForEach(library.shelves, id: \.self) { name in
+                    shelfChip(name, count: library.comics.filter { $0.shelf == name }.count, selected: shelf == name) { shelf = name }
+                        .contextMenu {
+                            Button {
+                                shelfRenaming = name
+                                shelfText = name
+                                shelfMoveIDs = []
+                                showShelfAlert = true
+                            } label: { Label("Rename shelf", systemImage: "pencil") }
+                            Button(role: .destructive) {
+                                shelfToDelete = name
+                                showDeleteShelf = true
+                            } label: { Label("Delete shelf", systemImage: "trash") }
+                        }
+                }
+                Button { newShelf(moving: []) } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 34, height: 34)
+                        .background(Theme.card2, in: Circle())
+                }
+                .accessibilityLabel("New shelf")
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var sortRow: some View {
+        HStack {
+            Menu {
+                Picker("Sort", selection: $settings.librarySort) {
+                    ForEach(LibrarySort.allCases) { sort in
+                        Label(sort.label, systemImage: sort.icon).tag(sort)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.arrow.down")
+                    Text(settings.librarySort.label)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.secondary)
+            }
+            Spacer()
+            if organizing {
+                Button(selection.count == visible.count && !selection.isEmpty ? "Select none" : "Select all") {
+                    if selection.count == visible.count { selection = [] } else { selection = Set(visible.map { $0.id }) }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .padding(.trailing, 6)
+                Button("Done") { endOrganizing() }
+                    .buttonStyle(YellowButtonStyle(compact: true))
+            } else {
+                Button { organizing = true } label: {
+                    Label("Organize", systemImage: "square.grid.2x2")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+        }
+    }
+
+    private func barPill(_ icon: String, _ text: String, tint: Color = .white) -> some View {
+        Label(text, systemImage: icon)
+            .font(.system(size: 15, weight: .bold, design: .rounded))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Theme.card2, in: Capsule())
+            .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+    }
+
+    /// Actions for the comics that are selected while organising.
+    private var organizeBar: some View {
+        HStack(spacing: 10) {
+            Menu {
+                shelfItems(for: selection)
+            } label: { barPill("folder", "Shelf") }
+            Menu {
+                Button { library.markRead(ids: selection, true) } label: { Label("Mark as read", systemImage: "checkmark.circle") }
+                Button { library.markRead(ids: selection, false) } label: { Label("Mark as unread", systemImage: "arrow.uturn.backward") }
+            } label: { barPill("checkmark.circle", "Read") }
+            Button {
+                deleteIDs = selection
+                showDeleteComics = true
+            } label: { barPill("trash", "Delete", tint: Theme.red) }
+            .buttonStyle(.plain)
+        }
+        .opacity(selection.isEmpty ? 0.45 : 1)
+        .disabled(selection.isEmpty)
+        .overlay(alignment: .top) {
+            Text(selection.isEmpty ? "Tap comics to select them" : "\(selection.count) selected")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.secondary)
+                .offset(y: -22)
+        }
+    }
+
+    @ViewBuilder
+    private func shelfItems(for ids: Set<UUID>) -> some View {
+        Button { library.move(ids, toShelf: nil) } label: { Label("No shelf", systemImage: "tray") }
+        ForEach(library.shelves, id: \.self) { name in
+            Button { library.move(ids, toShelf: name) } label: { Label(name, systemImage: "folder") }
+        }
+        Button { newShelf(moving: ids) } label: { Label("New shelf…", systemImage: "plus") }
     }
 
     // MARK: Pieces
@@ -329,6 +597,14 @@ struct LibraryView: View {
     @ViewBuilder
     private func menu(for entry: ComicEntry) -> some View {
         Button {
+            renameID = entry.id
+            renameText = entry.title
+            showRename = true
+        } label: { Label("Rename", systemImage: "pencil") }
+        Menu {
+            shelfItems(for: [entry.id])
+        } label: { Label("Move to shelf", systemImage: "folder") }
+        Button {
             library.markRead(id: entry.id, !entry.finished)
         } label: {
             Label(entry.finished ? "Mark as unread" : "Mark as read",
@@ -340,10 +616,35 @@ struct LibraryView: View {
             Label(entry.isManga ? "Read left-to-right" : "Read right-to-left (manga)",
                   systemImage: "arrow.left.arrow.right")
         }
+        Button {
+            organizing = true
+            selection = [entry.id]
+        } label: { Label("Select…", systemImage: "checkmark.circle.badge.plus") }
         Button(role: .destructive) {
-            library.delete(entry)
-        } label: {
-            Label("Delete", systemImage: "trash")
+            deleteIDs = [entry.id]
+            showDeleteComics = true
+        } label: { Label("Delete", systemImage: "trash") }
+    }
+}
+
+/// Lets a cell be dragged onto another one (only while organising).
+private struct ReorderModifier: ViewModifier {
+    let enabled: Bool
+    let id: UUID
+    let onDrop: (UUID, UUID) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .draggable(id.uuidString)
+                .dropDestination(for: String.self) { items, _ in
+                    guard let first = items.first, let dragged = UUID(uuidString: first) else { return false }
+                    onDrop(dragged, id)
+                    return true
+                }
+        } else {
+            content
         }
     }
 }
@@ -351,11 +652,12 @@ struct LibraryView: View {
 struct CoverView: View {
     @EnvironmentObject var library: LibraryStore
     let entry: ComicEntry
+    @State private var image: UIImage?
 
     var body: some View {
         ZStack {
             Rectangle().fill(Theme.card2)
-            if let img = CoverCache.shared.image(for: library.coverURL(for: entry)) {
+            if let img = image {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
@@ -367,16 +669,39 @@ struct CoverView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .shadow(color: .black.opacity(0.22), radius: 7, y: 4)
+        .task(id: entry.id) {
+            let url = library.coverURL(for: entry)
+            if let hit = CoverCache.shared.cached(url) {
+                image = hit
+            } else {
+                image = await CoverCache.shared.load(url)
+            }
+        }
     }
 }
 
 struct ComicCell: View {
     let entry: ComicEntry
+    var organizing = false
+    var selected = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CoverView(entry: entry)
                 .aspectRatio(2.0 / 3.0, contentMode: .fit)
+                .overlay {
+                    if organizing && selected {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: 3)
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if organizing {
+                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(selected ? Color.black : Color.white, selected ? Theme.accent : Color.black.opacity(0.35))
+                            .padding(6)
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
                     if entry.finished {
                         Image(systemName: "checkmark.circle.fill")

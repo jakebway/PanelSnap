@@ -35,8 +35,14 @@ enum FilenameParser {
             issue = m.number
             seriesPart = String(cleaned[cleaned.startIndex..<m.start])
         } else if let m = firstMatchRange("(?:^|[\\s-])(\\d{1,4}(?:\\.\\d)?)\\s*$", in: cleaned) {
-            issue = m.number
-            seriesPart = String(cleaned[cleaned.startIndex..<m.start])
+            // A trailing 4-digit number that looks like a year ("Batman 2016") is the year, not issue #2016.
+            if let n = Int(m.number), m.number.count == 4, (1900...2099).contains(n) {
+                if identity.year == nil { identity.year = n }
+                seriesPart = String(cleaned[cleaned.startIndex..<m.start])
+            } else {
+                issue = m.number
+                seriesPart = String(cleaned[cleaned.startIndex..<m.start])
+            }
         }
 
         if let i = issue {

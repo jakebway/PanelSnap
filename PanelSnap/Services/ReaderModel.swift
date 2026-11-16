@@ -33,6 +33,7 @@ final class ReaderModel: ObservableObject {
     private var panelMemo: [Int: [CGRect]] = [:]
     private var snap: Bool
     private var pageFirst: Bool
+    private var observers: [NSObjectProtocol] = []
 
     init(entry: ComicEntry, source: ComicSource, identity: ComicIdentity, snap: Bool, pageFirst: Bool) {
         self.entry = entry
@@ -52,6 +53,27 @@ final class ReaderModel: ObservableObject {
         }
         self.pageIndex = max(0, min(startPage, source.pageCount - 1))
         self.panelIndex = startPanel
+
+        // Save detected panels if iOS is about to close the app, and shed memory when it asks us to.
+        let cache = panelCache
+        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
+            cache.flush()
+        })
+        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.dropFarPages(keeping: self?.pageIndex ?? 0, window: 0) }
+        })
+    }
+
+    deinit {
+        for o in observers { NotificationCenter.default.removeObserver(o) }
+    }
+
+    /// Forget decoded pages that are more than `window` pages away from `page`.
+    private func dropFarPages(keeping page: Int, window: Int) {
+        for key in Array(imageCache.keys) where abs(key - page) > window {
+            imageCache.removeValue(forKey: key)
+            panelMemo.removeValue(forKey: key)
+        }
     }
 
     func updateSettings(snap: Bool, pageFirst: Bool) {
@@ -141,11 +163,8 @@ final class ReaderModel: ObservableObject {
     }
 
     private func prefetch(around page: Int) {
-        // Keep only a small window in memory.
-        for key in Array(imageCache.keys) where abs(key - page) > 2 {
-            imageCache.removeValue(forKey: key)
-            panelMemo.removeValue(forKey: key)
-        }
+        // Keep only the current page and its two neighbours in memory (each decoded page is tens of MB).
+        dropFarPages(keeping: page, window: 1)
         for next in [page + 1, page - 1] where next >= 0 && next < pageCount {
             if imageCache[next] != nil { continue }
             let src = source
@@ -163,7 +182,7 @@ final class ReaderModel: ObservableObject {
                 let ui = UIImage(cgImage: cg)
                 await MainActor.run {
                     guard let self = self else { return }
-                    if abs(next - self.pageIndex) <= 2 {
+                    if abs(next - self.pageIndex) <= 1 {
                         self.imageCache[next] = ui
                         self.panelMemo[next] = rects
                     }

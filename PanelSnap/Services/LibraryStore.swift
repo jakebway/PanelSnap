@@ -1,11 +1,14 @@
 import Foundation
 import SwiftUI
 import UIKit
+import ImageIO
 
 @MainActor
 final class LibraryStore: ObservableObject {
 
     @Published private(set) var comics: [ComicEntry] = []
+    /// Shelf names, in the order they are shown. Comics point at a shelf by name.
+    @Published private(set) var shelves: [String] = UserDefaults.standard.stringArray(forKey: "shelves") ?? []
     @Published var isImporting = false
     @Published var importStatus: String?
     @Published var errorMessage: String?
@@ -25,6 +28,23 @@ final class LibraryStore: ObservableObject {
         if let list = try? decoder.decode([ComicEntry].self, from: data) {
             // Drop entries whose file vanished.
             comics = list.filter { FileManager.default.fileExists(atPath: fileURL(for: $0).path) }
+            // A shelf that comics point at must exist, even if the list of shelves was lost.
+            for name in comics.compactMap({ $0.shelf }) where !shelves.contains(name) { shelves.append(name) }
+        }
+    }
+
+    private func saveShelves() {
+        UserDefaults.standard.set(shelves, forKey: "shelves")
+    }
+
+    /// Writes the library right now (used when the app goes to the background).
+    func flush() {
+        saveWork?.cancel()
+        saveWork = nil
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(comics) {
+            try? data.write(to: Paths.libraryFile, options: .atomic)
         }
     }
 
@@ -67,9 +87,20 @@ final class LibraryStore: ObservableObject {
 
     private var failedScan = Set<String>()
 
+    /// Forgets comics whose file was deleted from Files behind our back.
+    func pruneMissing() {
+        let before = comics.count
+        comics.removeAll { !FileManager.default.fileExists(atPath: fileURL(for: $0).path) }
+        if comics.count != before {
+            Console.log("library: removed \(before - comics.count) comic(s) whose file is gone")
+            save()
+        }
+    }
+
     /// Finds comics that were dropped straight into Files > PanelSnap > Comics and adds them in place (no copy).
     func scanFolder() async {
         if isImporting { return }
+        pruneMissing()
         let known = Set(comics.map { $0.fileName })
         let skip = failedScan
         let folder = Paths.comics
@@ -92,7 +123,7 @@ final class LibraryStore: ObservableObject {
     }
 
     /// Adds every comic found inside a folder the person picked (including sub-folders).
-    func importFolder(_ folder: URL) async {
+    func importFolder(_ folder: URL, shelf: String? = nil) async {
         let scoped = folder.startAccessingSecurityScopedResource()
         Console.log("import: folder \(folder.lastPathComponent) scoped=\(scoped)")
         var found: [URL] = []
@@ -107,12 +138,12 @@ final class LibraryStore: ObservableObject {
         if found.isEmpty {
             errorMessage = "No comics (CBZ, CBR, CB7, PDF or EPUB) were found in that folder."
         } else {
-            await importFiles(found)
+            await importFiles(found, shelf: shelf)
         }
         if scoped { folder.stopAccessingSecurityScopedResource() }
     }
 
-    func importFiles(_ urls: [URL]) async {
+    func importFiles(_ urls: [URL], shelf: String? = nil) async {
         if urls.isEmpty { return }
         isImporting = true
         var added = 0
@@ -126,13 +157,20 @@ final class LibraryStore: ObservableObject {
                 continue
             }
             let scoped = url.startAccessingSecurityScopedResource()
+            // Same name and same size as something already in the library: it is the same comic, skip it.
+            if rel == nil, isDuplicate(url) {
+                Console.log("import: \(url.lastPathComponent) is already in the library (same name and size)")
+                if scoped { url.stopAccessingSecurityScopedResource() }
+                continue
+            }
             Console.log("import: \(url.lastPathComponent) scoped=\(scoped) inPlace=\(rel != nil)")
             let result = await Task.detached(priority: .userInitiated) {
                 return LibraryStore.importOne(url: url, inPlaceName: rel)
             }.value
             if scoped { url.stopAccessingSecurityScopedResource() }
             switch result {
-            case .success(let entry):
+            case .success(var entry):
+                entry.shelf = shelf
                 comics.insert(entry, at: 0)
                 added += 1
                 Console.log("import: added \(entry.title) (\(entry.pageCount) pages)")
@@ -149,6 +187,19 @@ final class LibraryStore: ObservableObject {
         if !failed.isEmpty {
             errorMessage = failed.joined(separator: "\n")
         }
+    }
+
+    private func fileSize(_ url: URL) -> Int64? {
+        let v = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return v?.fileSize.map { Int64($0) }
+    }
+
+    private func isDuplicate(_ url: URL) -> Bool {
+        guard let size = fileSize(url) else { return false }
+        for c in comics where c.originalName == url.lastPathComponent {
+            if fileSize(fileURL(for: c)) == size { return true }
+        }
+        return false
     }
 
     nonisolated private static func uniqueDestination(for name: String) -> URL {
@@ -268,26 +319,136 @@ final class LibraryStore: ObservableObject {
         save()
     }
 
+    func markRead(ids: Set<UUID>, _ read: Bool) {
+        for i in comics.indices where ids.contains(comics[i].id) {
+            comics[i].finished = read
+            if !read {
+                comics[i].lastPage = 0
+                comics[i].lastPanel = 0
+            }
+        }
+        save()
+    }
+
     func delete(_ entry: ComicEntry) {
-        try? FileManager.default.removeItem(at: fileURL(for: entry))
-        try? FileManager.default.removeItem(at: coverURL(for: entry))
-        try? FileManager.default.removeItem(at: PanelCache.fileURL(for: entry.id))
-        try? FileManager.default.removeItem(at: CompanionCache.fileURL(for: entry.id))
-        comics.removeAll(where: { $0.id == entry.id })
+        delete(ids: [entry.id])
+    }
+
+    func delete(ids: Set<UUID>) {
+        let fm = FileManager.default
+        for entry in comics where ids.contains(entry.id) {
+            try? fm.removeItem(at: fileURL(for: entry))
+            try? fm.removeItem(at: coverURL(for: entry))
+            try? fm.removeItem(at: PanelCache.fileURL(for: entry.id))
+            try? fm.removeItem(at: CompanionCache.fileURL(for: entry.id))
+        }
+        comics.removeAll(where: { ids.contains($0.id) })
+        save()
+    }
+
+    // MARK: organising
+
+    func rename(id: UUID, to title: String) {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, let i = comics.firstIndex(where: { $0.id == id }) else { return }
+        comics[i].title = t
+        save()
+    }
+
+    /// Creates a shelf (names are unique, ignoring case). Returns the name actually used.
+    @discardableResult
+    func addShelf(_ name: String) -> String? {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if n.isEmpty { return nil }
+        if let existing = shelves.first(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) { return existing }
+        shelves.append(n)
+        saveShelves()
+        return n
+    }
+
+    func renameShelf(_ old: String, to new: String) {
+        let n = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, let i = shelves.firstIndex(of: old) else { return }
+        if n != old, shelves.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) { return }
+        shelves[i] = n
+        for j in comics.indices where comics[j].shelf == old { comics[j].shelf = n }
+        saveShelves()
+        save()
+    }
+
+    /// Removes the shelf only; its comics stay in the library, just off any shelf.
+    func deleteShelf(_ name: String) {
+        shelves.removeAll { $0 == name }
+        for j in comics.indices where comics[j].shelf == name { comics[j].shelf = nil }
+        saveShelves()
+        save()
+    }
+
+    func move(_ ids: Set<UUID>, toShelf name: String?) {
+        for i in comics.indices where ids.contains(comics[i].id) { comics[i].shelf = name }
+        save()
+    }
+
+    /// Makes the stored order match `ids` (used the first time someone drags a comic while another sort is active).
+    func applyOrder(_ ids: [UUID]) {
+        let byID = Dictionary(uniqueKeysWithValues: comics.map { ($0.id, $0) })
+        let ordered = ids.compactMap { byID[$0] }
+        if ordered.count == comics.count {
+            comics = ordered
+            save()
+        }
+    }
+
+    /// Drag and drop: put `id` where `target` is (the "My order" sort).
+    func moveComic(_ id: UUID, onto target: UUID) {
+        guard id != target,
+              let from = comics.firstIndex(where: { $0.id == id }),
+              let to = comics.firstIndex(where: { $0.id == target }) else { return }
+        let item = comics.remove(at: from)
+        let dest = comics.firstIndex(where: { $0.id == target }) ?? to
+        comics.insert(item, at: from < to ? dest + 1 : dest)
         save()
     }
 }
 
-/// Loads cover thumbnails from disk, with a small memory cache.
+/// Cover thumbnails: decoded off the main thread, shrunk, and kept in a size-limited memory cache.
 final class CoverCache {
     static let shared = CoverCache()
-    private let cache = NSCache<NSString, UIImage>()
+    private let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.totalCostLimit = 64 * 1024 * 1024
+        return c
+    }()
 
+    /// Instant lookup: only what is already in memory.
+    func cached(_ url: URL) -> UIImage? {
+        return cache.object(forKey: url.path as NSString)
+    }
+
+    func load(_ url: URL) async -> UIImage? {
+        if let hit = cached(url) { return hit }
+        let img: UIImage? = await Task.detached(priority: .utility) {
+            let opts: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: 520
+            ]
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+            return UIImage(cgImage: cg)
+        }.value
+        if let img = img {
+            cache.setObject(img, forKey: url.path as NSString, cost: Int(img.size.width * img.size.height * 4))
+        }
+        return img
+    }
+
+    /// Synchronous version for one-off places (the Companion header).
     func image(for url: URL) -> UIImage? {
-        let key = url.path as NSString
-        if let hit = cache.object(forKey: key) { return hit }
+        if let hit = cached(url) { return hit }
         guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return nil }
-        cache.setObject(img, forKey: key)
+        cache.setObject(img, forKey: url.path as NSString, cost: Int(img.size.width * img.size.height * 4))
         return img
     }
 }

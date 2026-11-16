@@ -49,7 +49,14 @@ final class Console: ObservableObject {
         return "no build-version command"
     }
 
+    private static var loggedOnce = false
+
+    /// The automatic run happens once per launch; "Run diagnostics" in the Console always runs it again.
     static func logEnvironment(reason: String) {
+        if reason == "library appeared" {
+            if loggedOnce { return }
+            loggedOnce = true
+        }
         log("---- diagnostics (\(reason)) ----")
         let dev = UIDevice.current
         log("device: \(dev.model), iOS \(ProcessInfo.processInfo.operatingSystemVersionString)")

@@ -8,30 +8,45 @@ final class AppSettings: ObservableObject {
 
     @Published var snapToPanels: Bool { didSet { defaults.set(snapToPanels, forKey: "snapToPanels") } }
     @Published var showFullPageFirst: Bool { didSet { defaults.set(showFullPageFirst, forKey: "wholePageFirst") } }
-    @Published var panelFill: Double { didSet { defaults.set(panelFill, forKey: "panelFill") } }
-    @Published var haptics: Bool { didSet { defaults.set(haptics, forKey: "haptics") } }
-    @Published var keepAwake: Bool { didSet { defaults.set(keepAwake, forKey: "keepAwake") } }
     @Published var onlineLookup: Bool { didSet { defaults.set(onlineLookup, forKey: "onlineLookup") } }
     @Published var spoilerShield: Bool { didSet { defaults.set(spoilerShield, forKey: "spoilerShield") } }
+    @Published var librarySort: LibrarySort { didSet { defaults.set(librarySort.rawValue, forKey: "librarySort") } }
 
     init() {
         let d = UserDefaults.standard
         d.register(defaults: [
             "snapToPanels": true,
             "wholePageFirst": true,
-            "panelFill": 0.96,
-            "haptics": true,
-            "keepAwake": true,
             "onlineLookup": true,
             "spoilerShield": true
         ])
         snapToPanels = d.bool(forKey: "snapToPanels")
         showFullPageFirst = d.bool(forKey: "wholePageFirst")
-        panelFill = d.double(forKey: "panelFill")
-        haptics = d.bool(forKey: "haptics")
-        keepAwake = d.bool(forKey: "keepAwake")
         onlineLookup = d.bool(forKey: "onlineLookup")
         spoilerShield = d.bool(forKey: "spoilerShield")
+        librarySort = LibrarySort(rawValue: d.string(forKey: "librarySort") ?? "") ?? .recent
+    }
+}
+
+/// How the library grid is ordered.
+enum LibrarySort: String, CaseIterable, Identifiable {
+    case recent, added, title, custom
+    var id: String { return rawValue }
+    var label: String {
+        switch self {
+        case .recent: return "Recently read"
+        case .added: return "Newest added"
+        case .title: return "Title A–Z"
+        case .custom: return "My order"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .recent: return "clock"
+        case .added: return "plus.circle"
+        case .title: return "textformat.abc"
+        case .custom: return "hand.draw"
+        }
     }
 }
 

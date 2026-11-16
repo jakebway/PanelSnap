@@ -10,7 +10,7 @@ import Foundation
 /// Output rectangles are normalised (0...1) with a TOP-LEFT origin.
 enum PanelDetector {
 
-    static let version = 1
+    static let version = 2
 
     private struct IRect: Equatable {
         var x0: Int

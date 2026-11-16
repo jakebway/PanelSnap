@@ -42,6 +42,7 @@ struct ComicEntry: Identifiable, Codable, Hashable {
     var lastPanel: Int            // -1 = whole-page view
     var finished: Bool
     var isManga: Bool
+    var shelf: String? = nil      // name of the shelf this comic sits on, if any
 
     var progress: Double {
         if finished { return 1 }
