@@ -15,6 +15,7 @@ struct LibraryView: View {
     // Organising
     @State private var shelf: String?                       // nil = every comic
     @State private var organizing = false
+    @State private var continueID: UUID?                    // which Continue Reading card leads the row
     @State private var selection = Set<UUID>()
     @State private var showRename = false
     @State private var renameID: UUID?
@@ -551,13 +552,29 @@ struct LibraryView: View {
         }
     }
 
-    /// Several books in progress: a row of cards you can swipe sideways.
+    /// Several books in progress: cards sized to fit exactly (one per page on the narrow layout, two on the wide one),
+    /// snapping into place, so nothing is ever sliced off at the edge.
     private func continueRow(_ list: [ComicEntry]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(list) { entry in
-                    continueCard(entry)
-                        .frame(width: 310)
+        let perPage = wideStatus ? 2 : 1
+        return VStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(list) { entry in
+                        continueCard(entry)
+                            .containerRelativeFrame(.horizontal, count: perPage, spacing: 12)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $continueID)
+            if list.count > perPage {
+                HStack(spacing: 6) {
+                    ForEach(list) { entry in
+                        Circle()
+                            .fill(entry.id == (continueID ?? list.first?.id) ? Theme.accent : Theme.secondary.opacity(0.35))
+                            .frame(width: 6, height: 6)
+                    }
                 }
             }
         }
