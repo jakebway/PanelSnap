@@ -52,9 +52,7 @@ d = ImageDraw.Draw(img)
 for (x0, y0, x1, y1) in [(250, 330, 400, 250), (1650, 250, 1800, 330), (270, 1760, 420, 1830), (1630, 1830, 1780, 1760)]:
     d.line((x0, y0, x1, y1), fill=INK, width=34)
 
-# Full-bleed square ink edge: iOS's own rounded mask supplies the curve, so nothing is inset
-# and nothing can look misaligned with the icon corners.
-d.rectangle((0, 0, S - 1, S - 1), outline=INK, width=70)
+# No border at all: the artwork runs edge to edge and iOS's own mask rounds the corners.
 
 img.resize((1024, 1024), Image.LANCZOS).save(OUT)
 print("wrote", OUT)

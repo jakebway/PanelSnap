@@ -58,6 +58,17 @@ if [ -z "$APP" ]; then
   exit 1
 fi
 
+# iPhone Duo (iOS 27) lays out apps linked against an older SDK with a blank strip on the right.
+# Stamping the binary as linked against SDK 27.1 turns on the native full-screen layout (same trick as iOXcode).
+BIN="$APP/PanelSnap"
+MINOS=$(xcrun vtool -show-build "$BIN" 2>/dev/null | awk '/minos/{print $2; exit}')
+if xcrun vtool -set-build-version ios "${MINOS:-17.0}" 27.1 -replace -output "$BIN.new" "$BIN"; then
+  mv "$BIN.new" "$BIN" && chmod +x "$BIN"
+  echo "Stamped SDK 27.1:"; xcrun vtool -show-build "$BIN" | grep -E "platform|minos|sdk" || true
+else
+  echo "::warning::Could not stamp the SDK version (layout may show a strip on iPhone Duo)"
+fi
+
 rm -rf Payload PanelSnap.ipa
 mkdir Payload
 cp -R "$APP" Payload/
