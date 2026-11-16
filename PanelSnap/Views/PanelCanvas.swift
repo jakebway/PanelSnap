@@ -46,7 +46,7 @@ struct PanelCanvas: View {
             .frame(width: cam.width, height: cam.height)
             .scaleEffect(cam.zoom)
             .offset(x: cam.dx, y: cam.dy)
-            .animation(.spring(response: 0.5, dampingFraction: 0.86), value: panelIndex)
+            .animation(.spring(response: 0.46, dampingFraction: 0.9), value: panelIndex)
             .frame(width: size.width, height: size.height)
             .clipped()
     }

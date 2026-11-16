@@ -52,7 +52,7 @@ struct CompanionView: View {
             .navigationTitle("Companion")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { onClose() }
                         .fontWeight(.semibold)
                 }
@@ -439,7 +439,7 @@ struct CharacterSheet: View {
             .navigationTitle("Character")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
                 }
             }

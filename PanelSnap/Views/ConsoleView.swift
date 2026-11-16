@@ -34,7 +34,7 @@ struct ConsoleView: View {
         .navigationTitle("Console")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .bottomBar) {
                 Menu {
                     Button { Console.logEnvironment(reason: "manual") } label: {
                         Label("Run diagnostics", systemImage: "stethoscope")
@@ -44,6 +44,13 @@ struct ConsoleView: View {
                     }
                     ShareLink(item: console.text) {
                         Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        try? FileManager.default.removeItem(at: Paths.companionCache)
+                        try? FileManager.default.removeItem(at: Paths.panelCache)
+                        Console.log("cleared cached panels and comic info")
+                    } label: {
+                        Label("Clear cached panels & info", systemImage: "arrow.triangle.2.circlepath")
                     }
                     Button(role: .destructive) { console.clear() } label: {
                         Label("Clear", systemImage: "trash")

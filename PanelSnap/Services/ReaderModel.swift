@@ -63,7 +63,8 @@ final class ReaderModel: ObservableObject {
     // MARK: Loading
 
     func start() {
-        load(page: pageIndex, target: .index(panelIndex))
+        // A comic you have never opened starts on the whole first page; otherwise resume where you stopped.
+        load(page: pageIndex, target: entry.hasStarted ? .index(panelIndex) : .first)
     }
 
     func finish() {
@@ -116,12 +117,14 @@ final class ReaderModel: ObservableObject {
     }
 
     private func apply(page: Int, image: UIImage, panels: [CGRect], target: Target) {
+        // Covers, credits and splash pages have nothing to snap to: show them whole instead of guessing.
+        let usable = panels.count >= 2 ? panels : []
         pageIndex = page
         self.image = image
-        self.panels = panels
+        self.panels = usable
         isLoading = false
         loadError = nil
-        if !snap || panels.isEmpty {
+        if !snap || usable.isEmpty {
             panelIndex = -1
             return
         }
@@ -129,11 +132,11 @@ final class ReaderModel: ObservableObject {
         case .first:
             panelIndex = pageFirst ? -1 : 0
         case .last:
-            panelIndex = panels.count - 1
+            panelIndex = usable.count - 1
         case .overview:
             panelIndex = -1
         case .index(let i):
-            panelIndex = max(-1, min(i, panels.count - 1))
+            panelIndex = max(-1, min(i, usable.count - 1))
         }
     }
 
@@ -194,6 +197,16 @@ final class ReaderModel: ObservableObject {
             panelIndex = -1
         } else {
             previousPage()
+        }
+    }
+
+    /// Swipe: turn the page (like the Kindle / Amazon comics reader). The new page opens whole.
+    func turnPage(forward: Bool) {
+        if isLoading { return }
+        if forward {
+            nextPage()
+        } else if pageIndex > 0 {
+            load(page: pageIndex - 1, target: .first)
         }
     }
 

@@ -133,7 +133,7 @@ struct ReaderView: View {
                 model.start()
                 companion.load()
             }
-            UIApplication.shared.isIdleTimerDisabled = settings.keepAwake
+            UIApplication.shared.isIdleTimerDisabled = true
             haptic.prepare()
             scheduleHide()
         }
@@ -143,7 +143,7 @@ struct ReaderView: View {
             model.finish()
         }
         .onChange(of: model.panelIndex) { _, _ in
-            if settings.haptics { haptic.impactOccurred(intensity: 0.5) }
+            haptic.impactOccurred(intensity: 0.5)
             saveProgress()
         }
         .onChange(of: model.pageIndex) { _, newValue in
@@ -177,11 +177,11 @@ struct ReaderView: View {
                     panels: model.panels,
                     panelIndex: model.panelIndex,
                     size: size,
-                    fill: settings.panelFill
+                    fill: 0.96
                 )
                 .id(model.pageIndex)
                 .transition(.opacity)
-                .animation(.easeInOut(duration: 0.25), value: model.pageIndex)
+                .animation(.easeInOut(duration: 0.3), value: model.pageIndex)
             }
 
             if model.isLoading && model.image == nil {
@@ -249,16 +249,15 @@ struct ReaderView: View {
         }
     }
 
+    /// Swipe left/right turns the page, swipe up opens the Companion, swipe down closes it.
     private func handleDrag(_ t: CGSize) {
         let dx = t.width
         let dy = t.height
-        if abs(dx) > 40 && abs(dx) > abs(dy) * 1.3 {
+        if abs(dx) > 50 && abs(dx) > abs(dy) * 1.3 {
             let swipedLeft = dx < 0
-            if swipedLeft {
-                if model.rtl { back() } else { forward() }
-            } else {
-                if model.rtl { forward() } else { back() }
-            }
+            hideChrome()
+            // Swiping left brings the next page (right-to-left comics swipe the other way).
+            model.turnPage(forward: model.rtl ? !swipedLeft : swipedLeft)
         } else if dy < -80 && abs(dx) < 70 {
             if !showCompanion { toggleCompanion() }
         } else if dy > 90 && abs(dx) < 70 {
@@ -329,22 +328,11 @@ struct ReaderView: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.7))
             }
-            Spacer(minLength: 8)
-            Button(action: { model.toggleOverview() }) {
-                Image(systemName: model.panelIndex < 0 ? "viewfinder" : "rectangle.expand.vertical")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            Button(action: { toggleCompanion() }) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .background(Theme.accent, in: Circle())
-            }
+            Spacer(minLength: 0)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 16)
+        .padding(.leading, 16)
+        .padding(.trailing, Theme.cameraWidth)      // keep clear of the Duo's corner camera
         .padding(.top, 54)
         .padding(.bottom, 22)
         .background(
@@ -361,18 +349,36 @@ struct ReaderView: View {
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 6) {
-            if model.pageCount > 1 {
-                Slider(
-                    value: $scrub,
-                    in: 0...Double(max(1, model.pageCount - 1)),
-                    step: 1,
-                    onEditingChanged: { editing in
-                        scrubbing = editing
-                        if !editing { model.jump(toPage: Int(scrub)) }
-                    }
-                )
-                .tint(Theme.accent)
+        VStack(spacing: 4) {
+            HStack(spacing: 12) {
+                Button(action: { model.toggleOverview() }) {
+                    Image(systemName: model.panelIndex < 0 ? "viewfinder" : "rectangle.expand.vertical")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                if model.pageCount > 1 {
+                    Slider(
+                        value: $scrub,
+                        in: 0...Double(max(1, model.pageCount - 1)),
+                        step: 1,
+                        onEditingChanged: { editing in
+                            scrubbing = editing
+                            if !editing { model.jump(toPage: Int(scrub)) }
+                        }
+                    )
+                    .tint(Theme.accent)
+                } else {
+                    Spacer()
+                }
+                Button(action: { toggleCompanion() }) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .frame(width: 40, height: 40)
+                        .background(Theme.accent, in: Circle())
+                }
             }
             HStack {
                 Text("\(Int(scrub) + 1)")
@@ -381,10 +387,11 @@ struct ReaderView: View {
             }
             .font(.caption2.monospacedDigit())
             .foregroundStyle(.white.opacity(0.65))
+            .padding(.horizontal, 62)
         }
-        .padding(.horizontal, 22)
+        .padding(.horizontal, 16)
         .padding(.top, 14)
-        .padding(.bottom, 30)
+        .padding(.bottom, 26)
         .background(
             LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
         )

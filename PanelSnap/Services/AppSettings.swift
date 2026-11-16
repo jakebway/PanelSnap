@@ -7,7 +7,7 @@ final class AppSettings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     @Published var snapToPanels: Bool { didSet { defaults.set(snapToPanels, forKey: "snapToPanels") } }
-    @Published var showFullPageFirst: Bool { didSet { defaults.set(showFullPageFirst, forKey: "showFullPageFirst") } }
+    @Published var showFullPageFirst: Bool { didSet { defaults.set(showFullPageFirst, forKey: "wholePageFirst") } }
     @Published var panelFill: Double { didSet { defaults.set(panelFill, forKey: "panelFill") } }
     @Published var haptics: Bool { didSet { defaults.set(haptics, forKey: "haptics") } }
     @Published var keepAwake: Bool { didSet { defaults.set(keepAwake, forKey: "keepAwake") } }
@@ -19,7 +19,7 @@ final class AppSettings: ObservableObject {
         let d = UserDefaults.standard
         d.register(defaults: [
             "snapToPanels": true,
-            "showFullPageFirst": false,
+            "wholePageFirst": true,
             "panelFill": 0.96,
             "haptics": true,
             "keepAwake": true,
@@ -28,7 +28,7 @@ final class AppSettings: ObservableObject {
             "comicVineKey": ""
         ])
         snapToPanels = d.bool(forKey: "snapToPanels")
-        showFullPageFirst = d.bool(forKey: "showFullPageFirst")
+        showFullPageFirst = d.bool(forKey: "wholePageFirst")
         panelFill = d.double(forKey: "panelFill")
         haptics = d.bool(forKey: "haptics")
         keepAwake = d.bool(forKey: "keepAwake")
@@ -46,6 +46,9 @@ enum Theme {
     static let card2 = Color(white: 0.16)
     static let stroke = Color(white: 0.22)
     static let secondary = Color(white: 0.62)
+    /// The iPhone Duo's corner camera + status widget: keep controls out of this top-right box (points).
+    static let cameraWidth: CGFloat = 92
+    static let cameraHeight: CGFloat = 164
 }
 
 enum Paths {

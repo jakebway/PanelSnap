@@ -9,7 +9,6 @@ struct LibraryView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var route: Route?
     @State private var search = ""
-    @State private var sort: SortMode = .recent
 
     /// One presentation slot for everything (reader + settings) so SwiftUI presentations never fight each other.
     enum Route: Identifiable {
@@ -23,27 +22,13 @@ struct LibraryView: View {
         }
     }
 
-    enum SortMode: String, CaseIterable, Identifiable {
-        case recent = "Recently added"
-        case title = "Title"
-        case progress = "Reading progress"
-        var id: String { return rawValue }
-    }
-
     private var visible: [ComicEntry] {
         var list = library.comics
         let q = search.trimmingCharacters(in: .whitespaces)
         if !q.isEmpty {
             list = list.filter { $0.title.localizedCaseInsensitiveContains(q) }
         }
-        switch sort {
-        case .recent:
-            list.sort { $0.addedAt > $1.addedAt }
-        case .title:
-            list.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-        case .progress:
-            list.sort { $0.progress > $1.progress }
-        }
+        list.sort { $0.addedAt > $1.addedAt }
         return list
     }
 
@@ -56,8 +41,9 @@ struct LibraryView: View {
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)]
 
-    private func addComics() {
-        FilePicker.present(types: [UTType.item], multiple: true) { urls in
+    /// Tap a file and it is added straight away (like iOXcode). Long-press the button to pick several at once.
+    private func addComics(multiple: Bool = false) {
+        FilePicker.present(types: [UTType.item], multiple: multiple) { urls in
             Task { await library.importFiles(urls) }
         }
     }
@@ -75,7 +61,11 @@ struct LibraryView: View {
                     } else {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 24) {
-                                searchField
+                                if showSearch {
+                                    searchField
+                                }
+                                // the first row starts below the camera zone
+                                Color.clear.frame(height: max(0, Theme.cameraHeight - 64 - (showSearch ? 70 : 0)))
                                 if let c = continueReading, search.isEmpty {
                                     continueCard(c)
                                 }
@@ -90,7 +80,7 @@ struct LibraryView: View {
                             .frame(maxWidth: 900)
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 20)
-                            .padding(.top, 6)
+                            .padding(.top, 0)
                             .padding(.bottom, 110)
                         }
                     }
@@ -105,6 +95,11 @@ struct LibraryView: View {
                             Label("Add Comics", systemImage: "plus")
                         }
                         .buttonStyle(YellowButtonStyle())
+                        .contextMenu {
+                            Button { addComics(multiple: true) } label: {
+                                Label("Select several files", systemImage: "checklist")
+                            }
+                        }
                         .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
                         .padding(.bottom, 22)
                     }
@@ -153,6 +148,8 @@ struct LibraryView: View {
 
     // MARK: Pieces
 
+    private var showSearch: Bool { return library.comics.count > 6 }
+
     private var header: some View {
         ZStack {
             Text("Library")
@@ -161,17 +158,8 @@ struct LibraryView: View {
             HStack {
                 Button { route = .settings } label: { CircleIcon(systemName: "gearshape.fill") }
                 Spacer()
-                Menu {
-                    Picker("Sort", selection: $sort) {
-                        ForEach(SortMode.allCases) { m in
-                            Text(m.rawValue).tag(m)
-                        }
-                    }
-                } label: { CircleIcon(systemName: "arrow.up.arrow.down") }
             }
         }
-        .frame(maxWidth: 900)
-        .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 12)
@@ -180,7 +168,7 @@ struct LibraryView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary)
-            TextField("Search your comics", text: $search)
+            TextField("Search", text: $search)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .foregroundStyle(.white)
@@ -193,6 +181,7 @@ struct LibraryView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.trailing, Theme.cameraWidth)      // stay clear of the Duo's corner camera
     }
 
     private var emptyState: some View {
@@ -209,7 +198,7 @@ struct LibraryView: View {
             Text("Your library is empty")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
-            Text("Add comics from the Files app, iCloud Drive, or anywhere on your iPhone. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
+            Text("Tap Add Comics and choose a file. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
@@ -219,12 +208,17 @@ struct LibraryView: View {
                 Label("Add Comics", systemImage: "plus")
             }
             .buttonStyle(YellowButtonStyle())
+            .contextMenu {
+                Button { addComics(multiple: true) } label: {
+                    Label("Select several files", systemImage: "checklist")
+                }
+            }
             .padding(.top, 8)
             Button { Task { await library.scanFolder() } } label: {
                 Label("Scan Comics folder", systemImage: "arrow.clockwise")
             }
             .buttonStyle(GreyButtonStyle())
-            Text("Tip: files you put in Files › On My iPhone › PanelSnap › Comics show up here automatically.")
+            Text("Or drop files into Files › On My iPhone › PanelSnap › Comics. They appear here by themselves.")
                 .font(.footnote)
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)

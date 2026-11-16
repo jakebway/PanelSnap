@@ -75,7 +75,6 @@ enum FilePicker {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             let vc = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: false)
             vc.allowsMultipleSelection = multiple
-            vc.modalPresentationStyle = .fullScreen
             let d = Delegate(onPick)
             holder = d
             vc.delegate = d

@@ -130,6 +130,20 @@ final class LibraryStore: ObservableObject {
         }
     }
 
+    nonisolated private static func uniqueDestination(for name: String) -> URL {
+        let fm = FileManager.default
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = Paths.comics.appendingPathComponent(name)
+        var n = 2
+        while fm.fileExists(atPath: candidate.path) {
+            let next = ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)"
+            candidate = Paths.comics.appendingPathComponent(next)
+            n += 1
+        }
+        return candidate
+    }
+
     /// Runs off the main thread: copies the file (unless it is already in Comics), reads page count, makes a cover, reads the ComicInfo.
     nonisolated private static func importOne(url: URL, inPlaceName: String?) -> Result<ComicEntry, Error> {
         let fm = FileManager.default
@@ -142,14 +156,13 @@ final class LibraryStore: ObservableObject {
             storedName = name
             dest = url
         } else {
-            let ext = url.pathExtension.isEmpty ? "cbz" : url.pathExtension.lowercased()
-            storedName = id.uuidString + "." + ext
-            dest = Paths.comics.appendingPathComponent(storedName)
+            dest = uniqueDestination(for: url.lastPathComponent)
+            storedName = dest.lastPathComponent
             do {
-                if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
                 try fm.copyItem(at: url, to: dest)
                 copied = true
-                Console.log("import: copied \(url.lastPathComponent) in \(String(format: "%.1f", Date().timeIntervalSince(t0)))s")
+                if url.path.contains("/Inbox/") { try? fm.removeItem(at: url) }
+                Console.log("import: copied \(url.lastPathComponent) to Comics in \(String(format: "%.1f", Date().timeIntervalSince(t0)))s")
             } catch {
                 return .failure(error)
             }
