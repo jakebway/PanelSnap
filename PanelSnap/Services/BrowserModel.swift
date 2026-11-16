@@ -6,6 +6,10 @@ struct BrowserDownload: Identifiable {
     var id = UUID()
     var name: String
     var progress: Double = 0
+    var bytes: Int64 = 0
+    var total: Int64 = 0
+    var speed: Double = 0              // bytes per second
+    var fast = false                   // using several connections at once
     var state: State = .downloading
 }
 
@@ -37,6 +41,9 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     private var downloadIDs: [ObjectIdentifier: UUID] = [:]
     private var destinations: [UUID: URL] = [:]
     private var progressObservers: [UUID: NSKeyValueObservation] = [:]
+    private var samples: [UUID: (time: Date, bytes: Int64)] = [:]
+    private var fastDownloads: [UUID: SegmentedDownloader] = [:]
+    private var noFast = Set<String>()                  // URLs that must use a single connection
     private(set) var isEditing = false
 
     private static let comicMIME: Set<String> = [
@@ -208,7 +215,28 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         downloadIDs[ObjectIdentifier(download)] = id
         downloads.insert(BrowserDownload(id: id, name: "Starting download…"), at: 0)
         progressObservers[id] = download.progress.observe(\.fractionCompleted) { [weak self] p, _ in
-            DispatchQueue.main.async { self?.update(id) { $0.progress = p.fractionCompleted } }
+            let done = p.completedUnitCount, all = p.totalUnitCount
+            DispatchQueue.main.async { self?.report(id, bytes: done, total: all) }
+        }
+    }
+
+    /// Records progress and works out the speed (smoothed over the last second or so).
+    private func report(_ id: UUID, bytes: Int64, total: Int64) {
+        let now = Date()
+        var speed: Double? = nil
+        if let last = samples[id] {
+            let dt = now.timeIntervalSince(last.time)
+            if dt >= 0.8 {
+                speed = Double(bytes - last.bytes) / dt
+                samples[id] = (now, bytes)
+            }
+        } else {
+            samples[id] = (now, bytes)
+        }
+        update(id) {
+            $0.bytes = bytes
+            if total > 0 { $0.total = total; $0.progress = min(1, Double(bytes) / Double(total)) }
+            if let s = speed { $0.speed = $0.speed == 0 ? s : ($0.speed * 0.5 + s * 0.5) }
         }
     }
 
@@ -237,13 +265,100 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         destinations[id] = dest
         update(id) { $0.name = name }
         completionHandler(dest)
+        if let url = response.url, response.expectedContentLength >= 3_000_000, !noFast.contains(url.absoluteString) {
+            accelerate(id: id, download: download, url: url, length: response.expectedContentLength, name: name)
+        }
+    }
+
+    // MARK: Fast downloads: the same file over several connections
+
+    private func requestHeaders(for url: URL) async -> [String: String] {
+        var h: [String: String] = ["Accept-Encoding": "identity"]
+        if let wv = webView {
+            if let ua = try? await wv.evaluateJavaScript("navigator.userAgent") as? String { h["User-Agent"] = ua }
+            if let page = wv.url { h["Referer"] = page.absoluteString }
+            let host = url.host ?? ""
+            let cookies = await wv.configuration.websiteDataStore.httpCookieStore.allCookies().filter {
+                let d = $0.domain.hasPrefix(".") ? String($0.domain.dropFirst()) : $0.domain
+                return host == d || host.hasSuffix("." + d)
+            }
+            for (k, v) in HTTPCookie.requestHeaderFields(with: cookies) { h[k] = v }
+        }
+        return h
+    }
+
+    /// Asks the server for the first byte only. If it answers with a proper partial response, the file is split up.
+    private func probe(_ url: URL, headers: [String: String], length: Int64) async -> Bool {
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 10
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
+        req.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, http.statusCode == 206,
+              let range = http.value(forHTTPHeaderField: "Content-Range"),
+              range.hasSuffix("/\(length)") else { return false }
+        return true
+    }
+
+    private func accelerate(id: UUID, download: WKDownload, url: URL, length: Int64, name: String) {
+        Task {
+            let headers = await requestHeaders(for: url)
+            guard await probe(url, headers: headers, length: length) else {
+                Console.log("browser: \(name) stays on one connection")
+                return
+            }
+            // The server supports ranges: stop the single-connection download and fetch it in pieces instead.
+            if let old = destinations[id] { try? FileManager.default.removeItem(at: old.deletingLastPathComponent()) }
+            fastDownloads[id] = nil
+            progressObservers[id] = nil
+            downloadIDs[ObjectIdentifier(download)] = nil
+            download.cancel { _ in }
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PanelSnapDownload-\(UUID().uuidString)")
+            let dest = dir.appendingPathComponent(name)
+            destinations[id] = dest
+            update(id) { $0.fast = true; $0.total = length }
+            Console.log("browser: \(name) downloading over 8 connections")
+            let fast = SegmentedDownloader(url: url, headers: headers, total: length, dest: dest, connections: 8)
+            fast.onProgress = { [weak self] bytes in
+                DispatchQueue.main.async { self?.report(id, bytes: bytes, total: length) }
+            }
+            fast.onFinish = { [weak self] error in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.fastDownloads[id] = nil
+                    if error == nil {
+                        self.completed(id: id, dest: dest)
+                    } else {
+                        Console.log("browser: fast download failed (\(error?.localizedDescription ?? "")), retrying on one connection")
+                        self.fallBack(id: id, url: url)
+                    }
+                }
+            }
+            fastDownloads[id] = fast
+            fast.start()
+        }
+    }
+
+    /// The pieces would not come through: run the whole download again the ordinary way.
+    private func fallBack(id: UUID, url: URL) {
+        noFast.insert(url.absoluteString)
+        dismissDownload(id)
+        guard let wv = webView else { return }
+        var req = URLRequest(url: url)
+        if let page = wv.url { req.setValue(page.absoluteString, forHTTPHeaderField: "Referer") }
+        wv.startDownload(using: req) { [weak self] dl in self?.track(dl) }
     }
 
     func downloadDidFinish(_ download: WKDownload) {
         let key = ObjectIdentifier(download)
-        guard let id = downloadIDs[key], var dest = destinations[id] else { return }
+        guard let id = downloadIDs[key], let dest = destinations[id] else { return }
         downloadIDs[key] = nil
         progressObservers[id] = nil
+        completed(id: id, dest: dest)
+    }
+
+    private func completed(id: UUID, dest destination: URL) {
+        var dest = destination
         var ext = dest.pathExtension.lowercased()
         if !LibraryStore.comicExtensions.contains(ext) {
             // No usable extension: look inside the file to see what it is.
@@ -276,7 +391,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         let key = ObjectIdentifier(download)
-        guard let id = downloadIDs[key] else { return }
+        guard let id = downloadIDs[key] else { return }          // one we replaced with a faster download
         downloadIDs[key] = nil
         progressObservers[id] = nil
         let cancelled = (error as NSError).code == NSURLErrorCancelled

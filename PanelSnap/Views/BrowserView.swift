@@ -188,6 +188,7 @@ struct BrowserView: View {
                 switch item.state {
                 case .downloading:
                     ProgressView(value: item.progress).tint(Theme.accent)
+                    Text(detail(item)).font(.caption2).foregroundStyle(Theme.secondary)
                 case .adding:
                     Text("Adding to your library…").font(.caption).foregroundStyle(Theme.secondary)
                 case .done(let s):
@@ -205,6 +206,16 @@ struct BrowserView: View {
         }
         .padding(12)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func detail(_ d: BrowserDownload) -> String {
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        var parts: [String] = []
+        if d.total > 0 { parts.append("\(f.string(fromByteCount: d.bytes)) of \(f.string(fromByteCount: d.total))") }
+        if d.speed > 1000 { parts.append("\(f.string(fromByteCount: Int64(d.speed)))/s") }
+        if d.fast { parts.append("fast mode") }
+        return parts.joined(separator: " · ")
     }
 
     private func icon(for s: BrowserDownload.State) -> String {
