@@ -87,16 +87,15 @@ struct LibraryView: View {
         }
     }
 
-    /// Add button (pick one or many files at once) plus a small button to import a whole folder.
-    private var addRow: some View {
-        HStack(spacing: 12) {
-            Button { addComics() } label: {
-                Label("Add Comics", systemImage: "plus")
-            }
-            .buttonStyle(YellowButtonStyle())
-            Button { addFolder() } label: { CircleIcon(systemName: "folder.fill") }
-                .accessibilityLabel("Add a whole folder")
+    /// A discreet "+" that offers files or a whole folder.
+    private var addMenu: some View {
+        Menu {
+            Button { addComics() } label: { Label("Files", systemImage: "doc.on.doc") }
+            Button { addFolder() } label: { Label("Folder", systemImage: "folder") }
+        } label: {
+            CircleIcon(systemName: "plus")
         }
+        .accessibilityLabel("Add comics")
     }
 
     var body: some View {
@@ -161,18 +160,18 @@ struct LibraryView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 20)
                             .padding(.top, 0)
-                            .padding(.bottom, 110)
+                            .padding(.bottom, organizing ? 110 : 40)
                         }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // floating bottom bar: the yellow "add" button, or the actions while organising
-                if !(library.comics.isEmpty && !library.isImporting) {
+                if organizing {
                     VStack {
                         Spacer()
                         Group {
-                            if organizing { organizeBar } else { addRow }
+                            if organizing { organizeBar }
                         }
                         .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
                         .padding(.bottom, 22)
@@ -466,8 +465,9 @@ struct LibraryView: View {
     private var header: some View {
         ZStack {
             ComicTitle(text: "Library")
-            HStack {
+            HStack(spacing: 10) {
                 Button { route = .settings } label: { CircleIcon(systemName: "gearshape.fill") }
+                addMenu
                 Spacer()
             }
         }
@@ -509,14 +509,12 @@ struct LibraryView: View {
             Text("Your library is empty")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
-            Text("Tap Add Comics and choose one or more files, or use the folder button for a whole folder. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
+            Text("Tap the + at the top and choose files or a whole folder. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
                 .padding(.horizontal, 28)
-            addRow
-                .padding(.top, 8)
             Button { Task { await library.scanFolder() } } label: {
                 Label("Scan Comics folder", systemImage: "arrow.clockwise")
             }
