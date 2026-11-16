@@ -201,7 +201,7 @@ struct ReaderView: View {
                 .contentShape(Rectangle())
                 .gesture(
                     SpatialTapGesture().onEnded { value in
-                        handleTap(x: value.location.x, width: size.width)
+                        handleTap(at: value.location, size: size)
                     }
                 )
                 .simultaneousGesture(
@@ -237,16 +237,32 @@ struct ReaderView: View {
 
     // MARK: Gestures
 
-    private func handleTap(x: CGFloat, width: CGFloat) {
-        let f = width > 0 ? x / width : 0.5
-        if f < 0.3 {
+    /// Tap rules:
+    ///  - the outer edges step to the previous / next panel (and onto the next page),
+    ///  - a tap on a panel inside the middle area jumps straight to that panel,
+    ///  - anywhere else in the middle shows or hides the controls.
+    private func handleTap(at point: CGPoint, size: CGSize) {
+        let width = max(size.width, 1)
+        let f = point.x / width
+        let edge: CGFloat = model.panelIndex < 0 ? 0.12 : 0.25    // whole page: slim edges so panels near them stay tappable
+        if f < edge {
             if model.rtl { forward() } else { back() }
-        } else if f > 0.7 {
-            if model.rtl { back() } else { forward() }
-        } else {
-            chromeVisible.toggle()
-            if chromeVisible { scheduleHide() }
+            return
         }
+        if f > 1 - edge {
+            if model.rtl { back() } else { forward() }
+            return
+        }
+        if let img = model.image,
+           let hit = PanelCanvas.panel(at: point, image: img, panels: model.panels,
+                                       panelIndex: model.panelIndex, size: size, fill: 0.96),
+           hit != model.panelIndex {
+            hideChrome()
+            model.focus(panel: hit)
+            return
+        }
+        chromeVisible.toggle()
+        if chromeVisible { scheduleHide() }
     }
 
     /// Swipe left/right turns the page, swipe up opens the Companion, swipe down closes it.

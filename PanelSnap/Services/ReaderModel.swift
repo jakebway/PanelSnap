@@ -239,6 +239,12 @@ final class ReaderModel: ObservableObject {
         }
     }
 
+    /// Tap on a specific panel: fly straight to it.
+    func focus(panel index: Int) {
+        if isLoading || index < 0 || index >= panels.count { return }
+        panelIndex = index
+    }
+
     func showOverview() {
         if panelIndex >= 0 { panelIndex = -1 }
     }

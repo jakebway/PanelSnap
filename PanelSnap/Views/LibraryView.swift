@@ -61,14 +61,20 @@ struct LibraryView: View {
                     } else {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 24) {
-                                if showSearch {
-                                    searchField
+                                // This top band sits beside the Duo's corner camera, so it holds the useful stuff.
+                                VStack(alignment: .leading, spacing: 14) {
+                                    if showSearch {
+                                        searchField
+                                    }
+                                    if search.isEmpty {
+                                        if let c = continueReading {
+                                            continueCard(c)
+                                        } else {
+                                            statsTile
+                                        }
+                                    }
                                 }
-                                // the first row starts below the camera zone
-                                Color.clear.frame(height: max(0, Theme.cameraHeight - 64 - (showSearch ? 70 : 0)))
-                                if let c = continueReading, search.isEmpty {
-                                    continueCard(c)
-                                }
+                                .frame(maxWidth: .infinity, minHeight: Theme.cameraHeight - 64, alignment: .top)
                                 LazyVGrid(columns: columns, spacing: 22) {
                                     ForEach(visible) { entry in
                                         ComicCell(entry: entry)
@@ -256,32 +262,60 @@ struct LibraryView: View {
         Button {
             route = .reader(entry)
         } label: {
-            HStack(spacing: 16) {
+            HStack(spacing: 14) {
                 CoverView(entry: entry)
-                    .frame(width: 74, height: 110)
-                VStack(alignment: .leading, spacing: 6) {
+                    .frame(width: 58, height: 86)
+                VStack(alignment: .leading, spacing: 5) {
                     Text("CONTINUE READING")
-                        .font(.caption.weight(.heavy))
+                        .font(.caption2.weight(.heavy))
                         .foregroundStyle(Theme.accent)
                     Text(entry.title)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Text("Page \(entry.lastPage + 1) of \(entry.pageCount)")
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(Theme.secondary)
                     ProgressView(value: entry.progress)
                         .tint(Theme.accent)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(Theme.secondary)
             }
-            .padding(14)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(12)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
+        .padding(.trailing, Theme.cameraWidth)      // stay clear of the Duo's corner camera
+    }
+
+    /// Shown in the top band when nothing is in progress.
+    private var statsTile: some View {
+        let finished = library.comics.filter { $0.finished }.count
+        let reading = library.comics.filter { $0.hasStarted && !$0.finished }.count
+        return HStack(spacing: 0) {
+            stat(library.comics.count, "Comics")
+            stat(reading, "Reading")
+            stat(finished, "Finished")
+        }
+        .padding(.vertical, 18)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.trailing, Theme.cameraWidth)
+    }
+
+    private func stat(_ value: Int, _ label: String) -> some View {
+        VStack(spacing: 3) {
+            Text("\(value)")
+                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.accent)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(Theme.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder

@@ -9,7 +9,7 @@ struct PanelCanvas: View {
     let size: CGSize
     let fill: Double
 
-    private struct Camera {
+    struct Camera {
         var zoom: CGFloat
         var dx: CGFloat
         var dy: CGFloat
@@ -17,7 +17,7 @@ struct PanelCanvas: View {
         var height: CGFloat
     }
 
-    private func camera() -> Camera {
+    static func camera(image: UIImage, panels: [CGRect], panelIndex: Int, size: CGSize, fill: Double) -> Camera {
         let iw = max(image.size.width, 1)
         let ih = max(image.size.height, 1)
         let fit = min(size.width / iw, size.height / ih)
@@ -36,6 +36,31 @@ struct PanelCanvas: View {
             dy = -(p.midY - 0.5) * dh * zoom
         }
         return Camera(zoom: zoom, dx: dx, dy: dy, width: dw, height: dh)
+    }
+
+    /// Which panel is under a tap? Converts the screen point to page coordinates (0...1) and hit-tests the panels.
+    static func panel(at point: CGPoint, image: UIImage, panels: [CGRect], panelIndex: Int, size: CGSize, fill: Double) -> Int? {
+        if panels.isEmpty { return nil }
+        let cam = camera(image: image, panels: panels, panelIndex: panelIndex, size: size, fill: fill)
+        let vx = (point.x - size.width / 2 - cam.dx) / cam.zoom
+        let vy = (point.y - size.height / 2 - cam.dy) / cam.zoom
+        let nx = 0.5 + vx / max(cam.width, 1)
+        let ny = 0.5 + vy / max(cam.height, 1)
+        let p = CGPoint(x: nx, y: ny)
+        var best: Int?
+        var bestArea = CGFloat.greatestFiniteMagnitude
+        for (i, r) in panels.enumerated() where r.insetBy(dx: -0.01, dy: -0.01).contains(p) {
+            let area = r.width * r.height
+            if area < bestArea {
+                bestArea = area
+                best = i
+            }
+        }
+        return best
+    }
+
+    private func camera() -> Camera {
+        return PanelCanvas.camera(image: image, panels: panels, panelIndex: panelIndex, size: size, fill: fill)
     }
 
     var body: some View {
