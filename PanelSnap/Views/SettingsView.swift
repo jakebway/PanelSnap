@@ -43,6 +43,7 @@ struct SettingsView: View {
                 }
                 .scrollContentBackground(.hidden)
             }
+            .ignoresSafeArea(.container, edges: .top)       // start at the very top, level with the status widget
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -96,7 +97,7 @@ struct SettingsView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, topInset > 20 ? 6 : 30)
+        .padding(.top, topInset > 20 ? 22 : 30)
         .padding(.bottom, 12)
     }
 }

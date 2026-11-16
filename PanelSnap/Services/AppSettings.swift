@@ -118,7 +118,7 @@ enum Theme {
     static let stroke = Color(white: 0.22)
     static let secondary = Color(white: 0.62)
     /// The iPhone Duo's corner camera + status widget: keep controls out of this top-right box (points).
-    static let cameraWidth: CGFloat = 92
+    static let cameraWidth: CGFloat = 112
     static let cameraHeight: CGFloat = 164
 }
 

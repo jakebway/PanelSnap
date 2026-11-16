@@ -84,7 +84,7 @@ struct FullWidthCentered<Content: View>: View {
                 .padding(.horizontal, side)
                 .frame(width: geo.size.width, height: geo.size.height)
         }
-        .ignoresSafeArea(.container, edges: .horizontal)
+        .ignoresSafeArea(.container, edges: [.horizontal, .top])
     }
 }
 

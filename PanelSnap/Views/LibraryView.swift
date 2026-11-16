@@ -127,7 +127,7 @@ struct LibraryView: View {
                                         let list = continueList
                                         if list.count == 1 {
                                             continueCard(list[0])
-                                                .padding(.trailing, Theme.cameraWidth)      // stay clear of the Duo's corner camera
+                                                .padding(.trailing, cameraPad)      // stay clear of the Duo's corner camera
                                         } else if list.count > 1 {
                                             continueRow(list)
                                         } else {
@@ -135,7 +135,7 @@ struct LibraryView: View {
                                         }
                                     }
                                 }
-                                .frame(maxWidth: .infinity, minHeight: Theme.cameraHeight - 64, alignment: .top)
+                                .frame(maxWidth: .infinity, minHeight: wideStatus ? 0 : Theme.cameraHeight - 64, alignment: .top)
 
                                 shelfBar
                                 sortRow
@@ -454,6 +454,11 @@ struct LibraryView: View {
 
     private var showSearch: Bool { return library.comics.count > 6 }
 
+    /// On the wide layout the Duo's status widget is a short capsule in the corner (the layout starts below the
+    /// system's safe area), so only the header needs to avoid it. On the narrow layout it is a tall box.
+    private var wideStatus: Bool { return topInset > 20 }
+    private var cameraPad: CGFloat { return wideStatus ? 0 : Theme.cameraWidth }
+
     private var header: some View {
         ZStack {
             ComicTitle(text: "Library")
@@ -463,7 +468,7 @@ struct LibraryView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, topInset > 20 ? 6 : 30)      // the Duo's status area already pushes content down when the screen is wide
+        .padding(.top, wideStatus ? 22 : 30)      // wide screen: the camera widget is a short capsule, so the title can sit level with it
         .padding(.bottom, 14)
     }
 
@@ -483,7 +488,7 @@ struct LibraryView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .padding(.trailing, Theme.cameraWidth)      // stay clear of the Duo's corner camera
+        .padding(.trailing, cameraPad)      // stay clear of the Duo's corner camera
     }
 
     private var emptyState: some View {
@@ -556,7 +561,7 @@ struct LibraryView: View {
                 }
             }
         }
-        .padding(.trailing, Theme.cameraWidth)
+        .padding(.trailing, cameraPad)
     }
 
     private func continueCard(_ entry: ComicEntry) -> some View {
@@ -603,7 +608,7 @@ struct LibraryView: View {
         }
         .padding(.vertical, 18)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .padding(.trailing, Theme.cameraWidth)
+        .padding(.trailing, cameraPad)
     }
 
     private func stat(_ value: Int, _ label: String) -> some View {
