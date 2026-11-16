@@ -74,6 +74,13 @@ jobs:
           gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
           gh release create "$TAG" PanelSnap.ipa \
             --title "$TITLE" --notes "$NOTES" --target "$GITHUB_SHA" --latest
+          # keep ONLY the newest release: delete every other release and its tag
+          gh release list --limit 200 --json tagName --jq '.[].tagName' | while read -r old; do
+            if [ "$old" != "$TAG" ]; then
+              echo "Removing old release $old"
+              gh release delete "$old" --yes --cleanup-tag || true
+            fi
+          done
           {
             echo "## PanelSnap is ready"
             echo ""
