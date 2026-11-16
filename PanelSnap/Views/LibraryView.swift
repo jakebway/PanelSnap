@@ -9,6 +9,8 @@ struct LibraryView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var route: Route?
     @State private var search = ""
+    @State private var topInset: CGFloat = 0
+    @State private var themeStamp = ""                      // changes after Settings closes, to repaint with new colours
 
     // Organising
     @State private var shelf: String?                       // nil = every comic
@@ -59,10 +61,11 @@ struct LibraryView: View {
         return sorted(list, by: settings.librarySort)
     }
 
-    private var continueReading: ComicEntry? {
-        return library.comics
-            .filter { $0.hasStarted && !$0.finished }
-            .max { ($0.lastOpenedAt ?? .distantPast) < ($1.lastOpenedAt ?? .distantPast) }
+    /// Everything you have started and not finished, most recently read first.
+    private var continueList: [ComicEntry] {
+        let started = library.comics.filter { $0.hasStarted && !$0.finished }
+        let ordered = started.sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
+        return Array(ordered.prefix(8))
     }
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)]
@@ -121,8 +124,12 @@ struct LibraryView: View {
                                         searchField
                                     }
                                     if search.isEmpty && !organizing {
-                                        if let c = continueReading {
-                                            continueCard(c)
+                                        let list = continueList
+                                        if list.count == 1 {
+                                            continueCard(list[0])
+                                                .padding(.trailing, Theme.cameraWidth)      // stay clear of the Duo's corner camera
+                                        } else if list.count > 1 {
+                                            continueRow(list)
                                         } else {
                                             statsTile
                                         }
@@ -191,8 +198,13 @@ struct LibraryView: View {
                 }
                 }
             }
+            .id(themeStamp)
         }
         .animation(.easeInOut, value: library.importStatus)
+        .readSafeTop($topInset)
+        .onChange(of: route?.id) { _, id in
+            if id == nil { themeStamp = settings.themeKey }
+        }
         .onAppear {
             Console.logEnvironment(reason: "library appeared")
             Task { await library.scanFolder() }
@@ -316,7 +328,7 @@ struct LibraryView: View {
                 Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
                 Text("\(count)").font(.caption.weight(.bold)).opacity(0.6)
             }
-            .foregroundStyle(selected ? Color.black : Color.white)
+            .foregroundStyle(selected ? Theme.onAccent : Color.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(selected ? Theme.accent : Theme.card2, in: Capsule())
@@ -451,7 +463,7 @@ struct LibraryView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 30)
+        .padding(.top, topInset > 20 ? 6 : 30)      // the Duo's status area already pushes content down when the screen is wide
         .padding(.bottom, 14)
     }
 
@@ -534,6 +546,19 @@ struct LibraryView: View {
         }
     }
 
+    /// Several books in progress: a row of cards you can swipe sideways.
+    private func continueRow(_ list: [ComicEntry]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(list) { entry in
+                    continueCard(entry)
+                        .frame(width: 310)
+                }
+            }
+        }
+        .padding(.trailing, Theme.cameraWidth)
+    }
+
     private func continueCard(_ entry: ComicEntry) -> some View {
         Button {
             route = .reader(entry)
@@ -565,7 +590,6 @@ struct LibraryView: View {
             .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
-        .padding(.trailing, Theme.cameraWidth)      // stay clear of the Duo's corner camera
     }
 
     /// Shown in the top band when nothing is in progress.
@@ -698,7 +722,7 @@ struct ComicCell: View {
                     if organizing {
                         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                             .font(.title3)
-                            .foregroundStyle(selected ? Color.black : Color.white, selected ? Theme.accent : Color.black.opacity(0.35))
+                            .foregroundStyle(selected ? Theme.onAccent : Color.white, selected ? Theme.accent : Color.black.opacity(0.35))
                             .padding(6)
                     }
                 }
@@ -706,7 +730,7 @@ struct ComicCell: View {
                     if entry.finished {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(.black, Theme.accent)
+                            .foregroundStyle(Theme.onAccent, Theme.accent)
                             .padding(6)
                     }
                 }

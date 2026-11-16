@@ -219,6 +219,30 @@ struct ReaderView: View {
                     }
                 )
 
+            // A small always-there button, so the menu is never more than one tap away
+            if !chromeVisible {
+                VStack {
+                    HStack {
+                        Button {
+                            chromeVisible = true
+                            scheduleHide()
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .frame(width: 38, height: 38)
+                                .background(Color.black.opacity(0.35), in: Circle())
+                        }
+                        .accessibilityLabel("Show menu")
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.leading, 14)
+                .padding(.top, 50)
+                .opacity(0.6)
+            }
+
             // Chrome
             VStack(spacing: 0) {
                 if chromeVisible { topBar(size: size).transition(.move(edge: .top).combined(with: .opacity)) }
@@ -265,7 +289,7 @@ struct ReaderView: View {
         if chromeVisible { scheduleHide() }
     }
 
-    /// Swipe left/right turns the page, swipe up opens the Companion, swipe down closes it.
+    /// Swipe left/right turns the page, swipe up opens the Companion, swipe down shows the menu (or closes the Companion).
     private func handleDrag(_ t: CGSize) {
         let dx = t.width
         let dy = t.height
@@ -277,7 +301,12 @@ struct ReaderView: View {
         } else if dy < -80 && abs(dx) < 70 {
             if !showCompanion { toggleCompanion() }
         } else if dy > 90 && abs(dx) < 70 {
-            if showCompanion { showCompanion = false }
+            if showCompanion {
+                showCompanion = false
+            } else {
+                chromeVisible = true          // swipe down = bring up the menu
+                scheduleHide()
+            }
         }
     }
 
@@ -298,7 +327,7 @@ struct ReaderView: View {
     private func scheduleHide() {
         hideTask?.cancel()
         hideTask = Task {
-            try? await Task.sleep(nanoseconds: 2_800_000_000)
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             if Task.isCancelled { return }
             chromeVisible = false
         }
@@ -345,6 +374,7 @@ struct ReaderView: View {
                     .foregroundStyle(.white.opacity(0.7))
             }
             Spacer(minLength: 0)
+            readerMenu
         }
         .foregroundStyle(.white)
         .padding(.leading, 16)
@@ -354,6 +384,29 @@ struct ReaderView: View {
         .background(
             LinearGradient(colors: [Color.black.opacity(0.65), Color.black.opacity(0)], startPoint: .top, endPoint: .bottom)
         )
+    }
+
+    /// Everything you might want while reading, in one place.
+    private var readerMenu: some View {
+        Menu {
+            Toggle(isOn: $settings.snapToPanels) { Label("Snap panel to panel", systemImage: "rectangle.split.2x2") }
+            Toggle(isOn: $settings.showFullPageFirst) { Label("Whole page first", systemImage: "doc") }
+            Divider()
+            if !model.panels.isEmpty {
+                Button { model.toggleOverview() } label: {
+                    Label(model.panelIndex < 0 ? "Zoom to first panel" : "Show whole page", systemImage: "viewfinder")
+                }
+            }
+            Button { toggleCompanion() } label: { Label("Companion", systemImage: "sparkles") }
+            Button { model.reachedEnd = true; close() } label: { Label("Mark as read and close", systemImage: "checkmark.circle") }
+            Divider()
+            Button { close() } label: { Label("Back to library", systemImage: "chevron.down") }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .bold))
+                .frame(width: 40, height: 40)
+                .background(.ultraThinMaterial, in: Circle())
+        }
     }
 
     private var positionText: String {
@@ -391,7 +444,7 @@ struct ReaderView: View {
                 Button(action: { toggleCompanion() }) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(Theme.onAccent)
                         .frame(width: 40, height: 40)
                         .background(Theme.accent, in: Circle())
                 }

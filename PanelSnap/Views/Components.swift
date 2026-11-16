@@ -11,7 +11,7 @@ struct YellowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: compact ? 15 : 17, weight: .heavy, design: .rounded))
-            .foregroundStyle(Color.black)
+            .foregroundStyle(Theme.onAccent)
             .padding(.horizontal, compact ? 16 : 28)
             .padding(.vertical, compact ? 9 : 14)
             .background(Theme.accent, in: Capsule())
@@ -85,6 +85,19 @@ struct FullWidthCentered<Content: View>: View {
                 .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea(.container, edges: .horizontal)
+    }
+}
+
+extension View {
+    /// Reports the top safe-area inset (the Duo's status area) so headers can sit snugly under it.
+    func readSafeTop(_ value: Binding<CGFloat>) -> some View {
+        background(
+            GeometryReader { g in
+                Color.clear
+                    .onAppear { value.wrappedValue = g.safeAreaInsets.top }
+                    .onChange(of: g.safeAreaInsets.top) { _, new in value.wrappedValue = new }
+            }
+        )
     }
 }
 

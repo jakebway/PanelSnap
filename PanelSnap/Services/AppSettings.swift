@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 /// Simple, UserDefaults-backed app settings.
 final class AppSettings: ObservableObject {
@@ -11,6 +12,11 @@ final class AppSettings: ObservableObject {
     @Published var onlineLookup: Bool { didSet { defaults.set(onlineLookup, forKey: "onlineLookup") } }
     @Published var spoilerShield: Bool { didSet { defaults.set(spoilerShield, forKey: "spoilerShield") } }
     @Published var librarySort: LibrarySort { didSet { defaults.set(librarySort.rawValue, forKey: "librarySort") } }
+    /// Theme colours, stored as hex ("FFD11A"). Changing them updates `Theme` straight away.
+    @Published var accentHex: String { didSet { defaults.set(accentHex, forKey: "accentHex"); Theme.apply(accent: accentHex, highlight: highlightHex) } }
+    @Published var highlightHex: String { didSet { defaults.set(highlightHex, forKey: "highlightHex"); Theme.apply(accent: accentHex, highlight: highlightHex) } }
+
+    var themeKey: String { return accentHex + highlightHex }
 
     init() {
         let d = UserDefaults.standard
@@ -25,6 +31,49 @@ final class AppSettings: ObservableObject {
         onlineLookup = d.bool(forKey: "onlineLookup")
         spoilerShield = d.bool(forKey: "spoilerShield")
         librarySort = LibrarySort(rawValue: d.string(forKey: "librarySort") ?? "") ?? .recent
+        accentHex = d.string(forKey: "accentHex") ?? ThemePreset.comic.accent
+        highlightHex = d.string(forKey: "highlightHex") ?? ThemePreset.comic.highlight
+        Theme.apply(accent: accentHex, highlight: highlightHex)
+    }
+}
+
+/// Ready-made colour pairs: a main colour (buttons, highlights) and a second colour (title bar, glow, progress).
+struct ThemePreset: Identifiable {
+    let name: String
+    let accent: String
+    let highlight: String
+    var id: String { return name }
+
+    static let comic = ThemePreset(name: "Comic", accent: "FFD11A", highlight: "ED1C24")
+    static let all: [ThemePreset] = [
+        comic,
+        ThemePreset(name: "Sakura", accent: "FF7FB6", highlight: "8E44FF"),
+        ThemePreset(name: "Ocean", accent: "3DD6FF", highlight: "2F6BFF"),
+        ThemePreset(name: "Toxic", accent: "8CFF4F", highlight: "7A2CFF"),
+        ThemePreset(name: "Sunset", accent: "FF9F1C", highlight: "E6007A"),
+        ThemePreset(name: "Mono", accent: "F2F2F2", highlight: "7A7A7A")
+    ]
+}
+
+extension Color {
+    init(hex: String) {
+        var v: UInt64 = 0
+        Scanner(string: hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))).scanHexInt64(&v)
+        self.init(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255)
+    }
+
+    var hexString: String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return String(format: "%02X%02X%02X", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+    }
+
+    /// Black or white, whichever reads better on top of this colour.
+    var readableOn: Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        let luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        return luminance > 0.58 ? Color.black : Color.white
     }
 }
 
@@ -51,10 +100,18 @@ enum LibrarySort: String, CaseIterable, Identifiable {
 }
 
 enum Theme {
-    /// Comic-book yellow: used for confirm buttons, progress and highlights.
-    static let accent = Color(red: 1.0, green: 0.82, blue: 0.10)
+    /// Main colour (comic yellow by default): confirm buttons, progress and highlights. Changeable in Settings.
+    static var accent = Color(hex: ThemePreset.comic.accent)
+    /// Text / icons that sit on top of the main colour.
+    static var onAccent = Color.black
+
+    static func apply(accent a: String, highlight h: String) {
+        accent = Color(hex: a)
+        onAccent = accent.readableOn
+        red = Color(hex: h)
+    }
     /// Manga / comic red: the second brand colour, used for headers, shadows and glow.
-    static let red = Color(red: 0.93, green: 0.11, blue: 0.14)
+    static var red = Color(hex: ThemePreset.comic.highlight)
     static let bg = Color.black                    // true OLED black
     static let card = Color(white: 0.10)
     static let card2 = Color(white: 0.16)
