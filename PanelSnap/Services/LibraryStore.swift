@@ -159,9 +159,13 @@ final class LibraryStore: ObservableObject {
             dest = uniqueDestination(for: url.lastPathComponent)
             storedName = dest.lastPathComponent
             do {
-                try fm.copyItem(at: url, to: dest)
+                // The picker hands us a private temporary copy, so just move it into place (instant, no double copy).
+                if url.path.hasPrefix(NSTemporaryDirectory()) || url.path.contains("/tmp/") || url.path.contains("/Inbox/") {
+                    do { try fm.moveItem(at: url, to: dest) } catch { try fm.copyItem(at: url, to: dest) }
+                } else {
+                    try fm.copyItem(at: url, to: dest)
+                }
                 copied = true
-                if url.path.contains("/Inbox/") { try? fm.removeItem(at: url) }
                 Console.log("import: copied \(url.lastPathComponent) to Comics in \(String(format: "%.1f", Date().timeIntervalSince(t0)))s")
             } catch {
                 return .failure(error)

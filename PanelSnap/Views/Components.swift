@@ -66,14 +66,15 @@ struct FullWidthCentered<Content: View>: View {
 // MARK: - File picker
 
 /// Shows the system file browser straight from UIKit (not inside a SwiftUI sheet), so Open/Cancel always work.
-/// Same approach as the picker that works in iOXcode. Full screen, multiple files, opened in place (no double copy).
+/// Identical to the picker that works in iOXcode: asCopy true, so iOS hands us a private copy and no security-scoped
+/// access is involved. That is the most reliable setup for sideloaded apps on the newest iOS.
 enum FilePicker {
     private static var holder: Delegate?
 
     static func present(types: [UTType], multiple: Bool, onPick: @escaping ([URL]) -> Void) {
         // Wait a moment so a closing menu or sheet can't block the presentation.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            let vc = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let vc = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
             vc.allowsMultipleSelection = multiple
             let d = Delegate(onPick)
             holder = d
