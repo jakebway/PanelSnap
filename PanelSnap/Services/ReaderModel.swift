@@ -88,44 +88,6 @@ final class ReaderModel: ObservableObject {
         }
     }
 
-    // MARK: Editing panels by hand
-
-    var hasManualPanels: Bool { return panelCache.hasManual(for: pageIndex) }
-
-    /// Reading order for rects drawn by hand: row by row, left to right (right to left for manga).
-    private func inReadingOrder(_ rects: [CGRect]) -> [CGRect] {
-        var rows: [[CGRect]] = []
-        for r in rects.sorted(by: { $0.minY < $1.minY }) {
-            if let i = rows.firstIndex(where: { row in
-                guard let a = row.first else { return false }
-                return r.midY >= a.minY && r.midY <= a.maxY
-            }) {
-                rows[i].append(r)
-            } else {
-                rows.append([r])
-            }
-        }
-        let rtl = self.rtl
-        return rows.flatMap { $0.sorted { rtl ? $0.minX > $1.minX : $0.minX < $1.minX } }
-    }
-
-    /// Keeps the panels the reader drew for this page, and remembers them for good.
-    func savePanels(_ rects: [CGRect]) {
-        let ordered = inReadingOrder(rects)
-        panelCache.setManual(ordered, for: pageIndex)
-        panelCache.flush()
-        panelMemo[pageIndex] = ordered
-        panels = ordered.count >= 2 ? ordered : []
-        panelIndex = -1
-    }
-
-    /// Forgets the hand-drawn panels and detects them again.
-    func resetPanels() {
-        panelCache.clearManual(for: pageIndex)
-        panelMemo.removeValue(forKey: pageIndex)
-        load(page: pageIndex, target: .overview)
-    }
-
     // MARK: Loading
 
     func start() {

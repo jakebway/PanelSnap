@@ -93,7 +93,13 @@ struct ReaderView: View {
 
     @State private var chromeVisible = true
     @State private var showCompanion = false
-    @State private var showPanelEditor = false
+    // Manual zoom (pinch or double-tap). 1 = off, so everything behaves exactly as before until you zoom.
+    @State private var userZoom: CGFloat = 1
+    @State private var userOffset: CGSize = .zero
+    @State private var panBase: CGSize = .zero
+    @State private var pinchStart: (zoom: CGFloat, offset: CGSize)?
+    @State private var lastTap: (time: Date, point: CGPoint)?
+    @State private var pendingTap: Task<Void, Never>?
     @State private var scrub: Double = 0
     @State private var scrubbing = false
     @State private var hideTask: Task<Void, Never>?
@@ -126,7 +132,6 @@ struct ReaderView: View {
             }
         }
         .ignoresSafeArea()
-        .fullScreenCover(isPresented: $showPanelEditor) { PanelEditorView(model: model) }
         .statusBarHidden(!chromeVisible)
         .persistentSystemOverlays(chromeVisible ? .automatic : .hidden)
         .onAppear {
@@ -152,6 +157,8 @@ struct ReaderView: View {
             if !scrubbing { scrub = Double(newValue) }
             saveProgress()
         }
+        .onChange(of: model.pageIndex) { _, _ in resetZoom() }
+        .onChange(of: model.panelIndex) { _, _ in resetZoom() }
         .onChange(of: settings.snapToPanels) { _, _ in
             model.updateSettings(snap: settings.snapToPanels, pageFirst: settings.showFullPageFirst)
         }
@@ -184,6 +191,8 @@ struct ReaderView: View {
                 .id(model.pageIndex)
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.3), value: model.pageIndex)
+                .scaleEffect(userZoom)
+                .offset(userOffset)
             }
 
             if model.isLoading && model.image == nil {
@@ -207,18 +216,36 @@ struct ReaderView: View {
                     }
                 )
                 .simultaneousGesture(
-                    DragGesture(minimumDistance: 24).onEnded { value in
-                        handleDrag(value.translation)
-                    }
+                    DragGesture(minimumDistance: 24)
+                        .onChanged { value in
+                            if isZoomed { pan(value.translation, size: size) }
+                        }
+                        .onEnded { value in
+                            if isZoomed {
+                                panBase = userOffset            // zoomed in: dragging moves the page, it does not turn it
+                            } else {
+                                handleDrag(value.translation)
+                            }
+                        }
                 )
                 .simultaneousGesture(
-                    MagnificationGesture().onEnded { scale in
-                        if scale < 0.85 {
-                            model.showOverview()
-                        } else if scale > 1.15 && model.panelIndex < 0 {
-                            model.toggleOverview()
+                    MagnifyGesture()
+                        .onChanged { value in
+                            if pinchStart == nil { pinchStart = (userZoom, userOffset) }
+                            pinch(value, size: size)
                         }
-                    }
+                        .onEnded { value in
+                            let wasZoomed = (pinchStart?.zoom ?? 1) > 1.02
+                            pinch(value, size: size)
+                            pinchStart = nil
+                            if userZoom < 1.05 {
+                                resetZoom()
+                                // pinching in on an un-zoomed page still shows the whole page, as before
+                                if !wasZoomed && value.magnification < 0.85 { model.showOverview() }
+                            } else {
+                                panBase = userOffset
+                            }
+                        }
                 )
 
             // Chrome
@@ -247,6 +274,7 @@ struct ReaderView: View {
         let width = max(size.width, 1)
         let f = point.x / width
         let edge: CGFloat = model.panelIndex < 0 ? 0.12 : 0.25    // whole page: slim edges so panels near them stay tappable
+        // The edges stay instant. Only the middle waits a moment, to see whether a second tap is coming.
         if f < edge {
             if model.rtl { forward() } else { back() }
             return
@@ -255,7 +283,25 @@ struct ReaderView: View {
             if model.rtl { back() } else { forward() }
             return
         }
-        if let img = model.image,
+        if let last = lastTap, Date().timeIntervalSince(last.time) < 0.3,
+           hypot(point.x - last.point.x, point.y - last.point.y) < 60 {
+            pendingTap?.cancel()
+            lastTap = nil
+            doubleTap(at: point, size: size)
+            return
+        }
+        lastTap = (Date(), point)
+        pendingTap?.cancel()
+        pendingTap = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+            lastTap = nil
+            middleTap(at: point, size: size)
+        }
+    }
+
+    private func middleTap(at point: CGPoint, size: CGSize) {
+        if !isZoomed, let img = model.image,
            let hit = PanelCanvas.panel(at: point, image: img, panels: model.panels,
                                        panelIndex: model.panelIndex, size: size, fill: 0.96),
            hit != model.panelIndex {
@@ -265,6 +311,57 @@ struct ReaderView: View {
         }
         chromeVisible.toggle()
         if chromeVisible { scheduleHide() }
+    }
+
+    // MARK: Manual zoom
+
+    private var isZoomed: Bool { return userZoom > 1.02 }
+
+    private func resetZoom() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            userZoom = 1
+            userOffset = .zero
+        }
+        panBase = .zero
+    }
+
+    /// Keeps the zoomed page from being dragged completely out of view.
+    private func clamp(_ offset: CGSize, zoom: CGFloat, size: CGSize) -> CGSize {
+        let maxX = (zoom - 1) * size.width / 2
+        let maxY = (zoom - 1) * size.height / 2
+        return CGSize(width: min(max(offset.width, -maxX), maxX), height: min(max(offset.height, -maxY), maxY))
+    }
+
+    private func pan(_ translation: CGSize, size: CGSize) {
+        userOffset = clamp(CGSize(width: panBase.width + translation.width, height: panBase.height + translation.height),
+                           zoom: userZoom, size: size)
+    }
+
+    /// Pinch: the spot between your fingers stays under them while the page grows or shrinks.
+    private func pinch(_ value: MagnifyGesture.Value, size: CGSize) {
+        guard let start = pinchStart else { return }
+        let z1 = min(max(start.zoom * value.magnification, 1), 6)
+        let c = CGPoint(x: size.width / 2, y: size.height / 2)
+        let p = CGPoint(x: value.startAnchor.x * size.width, y: value.startAnchor.y * size.height)
+        let ratio = z1 / start.zoom
+        let off = CGSize(width: (p.x - c.x) - ratio * ((p.x - c.x) - start.offset.width),
+                         height: (p.y - c.y) - ratio * ((p.y - c.y) - start.offset.height))
+        userZoom = z1
+        userOffset = clamp(off, zoom: z1, size: size)
+    }
+
+    /// Double-tap: zoom in on the spot you tapped, or zoom back out.
+    private func doubleTap(at point: CGPoint, size: CGSize) {
+        if isZoomed { resetZoom(); return }
+        let z: CGFloat = 2.5
+        let c = CGPoint(x: size.width / 2, y: size.height / 2)
+        let off = CGSize(width: (point.x - c.x) * (1 - z), height: (point.y - c.y) * (1 - z))
+        hideChrome()
+        withAnimation(.easeOut(duration: 0.22)) {
+            userZoom = z
+            userOffset = clamp(off, zoom: z, size: size)
+        }
+        panBase = userOffset
     }
 
     /// Swipe left/right turns the page, swipe up opens the Companion, swipe down shows the menu (or closes the Companion).
@@ -374,9 +471,6 @@ struct ReaderView: View {
                 Button { model.toggleOverview() } label: {
                     Label(model.panelIndex < 0 ? "Zoom to first panel" : "Show whole page", systemImage: "viewfinder")
                 }
-            }
-            if settings.snapToPanels {
-                Button { showPanelEditor = true } label: { Label("Fix panels on this page", systemImage: "rectangle.dashed") }
             }
             Button { toggleCompanion() } label: { Label("Companion", systemImage: "sparkles") }
             Button { model.reachedEnd = true; close() } label: { Label("Mark as read and close", systemImage: "checkmark.circle") }
