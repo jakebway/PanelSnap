@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerates the PanelSnap app icon: red manga speed lines, one tilted yellow comic panel, one bolt.
+"""Regenerates the PanelSnap app icon: red manga speed lines, one tilted yellow comic book with a spine and page edges, one bolt.
 Needs Pillow: pip install pillow"""
 from PIL import Image, ImageDraw
 import math, os
@@ -24,15 +24,33 @@ for i in range(n):
 
 layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
 ld = ImageDraw.Draw(layer)
-PW, PH = 1000, 1100
-box = (cx - PW // 2, cy - PH // 2, cx + PW // 2, cy + PH // 2)
+# A comic book: tall cover, a spine on the left with staples, and a block of pages showing on the right and bottom.
+BW, BH = 800, 1120
+box = (cx - BW // 2, cy - BH // 2, cx + BW // 2, cy + BH // 2)
+CREAM = (250, 240, 214)
+ORANGE = (240, 150, 20)
 off = 56
-ld.rounded_rectangle((box[0] + off, box[1] + off, box[2] + off, box[3] + off), radius=40, fill=INK)
-ld.rounded_rectangle(box, radius=40, fill=YELLOW, outline=INK, width=44)
-
-bolt = [(cx + 90, box[1] + 120), (cx - 230, cy + 60), (cx - 20, cy + 60), (cx - 110, box[3] - 120),
-        (cx + 250, cy - 90), (cx + 30, cy - 90)]
-ld.polygon([(x + 22, y + 22) for x, y in bolt], fill=INK)
+ld.rounded_rectangle((box[0] + off + 30, box[1] + off + 30, box[2] + off + 30, box[3] + off + 30), radius=34, fill=INK)  # shadow
+# pages
+pg = 38
+ld.rounded_rectangle((box[0] + 24, box[1] + 24, box[2] + pg, box[3] + pg), radius=30, fill=CREAM, outline=INK, width=30)
+for k in range(1, 4):
+    ld.line((box[2] + pg - 10 - k * 9, box[1] + 90, box[2] + pg - 10 - k * 9, box[3] - 40), fill=(205, 190, 160), width=6)
+    ld.line((box[0] + 90, box[3] + pg - 10 - k * 9, box[2] - 40, box[3] + pg - 10 - k * 9), fill=(205, 190, 160), width=6)
+# cover
+ld.rounded_rectangle(box, radius=30, fill=YELLOW, outline=INK, width=40)
+# spine
+sp = 120
+ld.rounded_rectangle((box[0], box[1], box[0] + sp, box[3]), radius=30, fill=ORANGE, outline=INK, width=40)
+ld.rectangle((box[0] + sp - 40, box[1] + 40, box[0] + sp, box[3] - 40), fill=ORANGE)
+ld.line((box[0] + sp, box[1] + 20, box[0] + sp, box[3] - 20), fill=INK, width=26)
+for fy in (box[1] + 200, box[3] - 200):
+    ld.rounded_rectangle((box[0] + 34, fy - 22, box[0] + sp - 30, fy + 22), radius=14, fill=(235, 235, 240), outline=INK, width=10)
+# bolt on the cover
+mx = box[0] + sp + (BW - sp) // 2
+bolt = [(mx + 80, box[1] + 150), (mx - 220, cy + 70), (mx - 20, cy + 70), (mx - 100, box[3] - 150),
+        (mx + 230, cy - 90), (mx + 30, cy - 90)]
+ld.polygon([(x + 20, y + 20) for x, y in bolt], fill=INK)
 ld.polygon(bolt, fill=(255, 255, 255), outline=INK, width=14)
 
 layer = layer.rotate(-7, resample=Image.BICUBIC, center=(cx, cy))
