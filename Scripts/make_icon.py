@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerates the PanelSnap app icon: red manga speed lines, one tilted two-tone (yellow and ink) comic book page made of abstract panels.
+"""Regenerates the PanelSnap app icon: red manga speed lines, one tilted comic book page made of abstract, brightly coloured panels.
 Needs Pillow: pip install pillow"""
 from PIL import Image, ImageDraw
 import math, os
@@ -10,6 +10,7 @@ INK = (14, 10, 16)
 RED = (226, 28, 36)
 SOFT_RED = (206, 20, 30)      # speed lines: only a hint darker than the background
 YELLOW = (255, 208, 20)
+CYAN, PINK, LIME, VIOLET = (0, 190, 255), (255, 40, 150), (120, 220, 40), (110, 70, 255)   # one bright colour per panel
 
 img = Image.new("RGB", (S, S), RED)
 d = ImageDraw.Draw(img)
@@ -24,7 +25,7 @@ for i in range(n):
 
 layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
 ld = ImageDraw.Draw(layer)
-# Two tones only: yellow cover, ink panels. A tall comic-book page with its panel layout, nothing else.
+# A tall comic-book page with its panel layout, each panel a different bright colour.
 BW, BH = 800, 1120
 box = (cx - BW // 2, cy - BH // 2, cx + BW // 2, cy + BH // 2)
 off = 44
@@ -35,10 +36,10 @@ x0, y0, x1, y1 = box[0] + m, box[1] + m, box[2] - m, box[3] - m
 h1 = int((y1 - y0) * 0.42)
 h2 = int((y1 - y0) * 0.26)
 midx = (x0 + x1) // 2
-ld.rectangle((x0, y0, x1, y0 + h1), fill=INK)                                                   # wide panel
-ld.rectangle((x0, y0 + h1 + gap, midx - gap // 2, y0 + h1 + gap + h2), fill=INK)                # two small
-ld.rectangle((midx + gap // 2, y0 + h1 + gap, x1, y0 + h1 + gap + h2), fill=INK)
-ld.rectangle((x0, y0 + h1 + h2 + 2 * gap, x1, y1), fill=INK)                                    # wide bottom
+ld.rectangle((x0, y0, x1, y0 + h1), fill=CYAN)                                                   # wide panel
+ld.rectangle((x0, y0 + h1 + gap, midx - gap // 2, y0 + h1 + gap + h2), fill=PINK)                # two small
+ld.rectangle((midx + gap // 2, y0 + h1 + gap, x1, y0 + h1 + gap + h2), fill=LIME)
+ld.rectangle((x0, y0 + h1 + h2 + 2 * gap, x1, y1), fill=VIOLET)                                    # wide bottom
 
 layer = layer.rotate(-7, resample=Image.BICUBIC, center=(cx, cy))
 img.paste(layer, (0, 0), layer)
