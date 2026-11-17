@@ -36,10 +36,10 @@ x0, y0, x1, y1 = box[0] + m, box[1] + m, box[2] - m, box[3] - m
 h1 = int((y1 - y0) * 0.42)
 h2 = int((y1 - y0) * 0.26)
 midx = (x0 + x1) // 2
-ld.rectangle((x0, y0, x1, y0 + h1), fill=CYAN)                                                   # wide panel
-ld.rectangle((x0, y0 + h1 + gap, midx - gap // 2, y0 + h1 + gap + h2), fill=PINK)                # two small
-ld.rectangle((midx + gap // 2, y0 + h1 + gap, x1, y0 + h1 + gap + h2), fill=LIME)
-ld.rectangle((x0, y0 + h1 + h2 + 2 * gap, x1, y1), fill=VIOLET)                                    # wide bottom
+ld.rectangle((x0, y0, x1, y0 + h1), fill=CYAN, outline=INK, width=26)                                                   # wide panel
+ld.rectangle((x0, y0 + h1 + gap, midx - gap // 2, y0 + h1 + gap + h2), fill=PINK, outline=INK, width=26)                # two small
+ld.rectangle((midx + gap // 2, y0 + h1 + gap, x1, y0 + h1 + gap + h2), fill=LIME, outline=INK, width=26)
+ld.rectangle((x0, y0 + h1 + h2 + 2 * gap, x1, y1), fill=VIOLET, outline=INK, width=26)                                    # wide bottom
 
 layer = layer.rotate(-7, resample=Image.BICUBIC, center=(cx, cy))
 img.paste(layer, (0, 0), layer)
