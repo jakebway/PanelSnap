@@ -47,7 +47,7 @@ Nothing in the app needs an account or API key.
 
 ## How panel snapping works
 
-Everything runs on-device, with no third-party code: the page is shrunk, the gutter colour (white, cream or black) is found, and the page is recursively cut along gutters (XY-cut) to get panels in reading order. Pages with diagonal or irregular panels fall back to connected-component analysis. Results are cached per comic. See `PanelSnap/Services/PanelDetector.swift`.
+Everything runs on-device. Panels are found by a neural network and put in reading order; a page with no panels is shown whole. Results are cached per comic. See `PanelSnap/Services/MLPanelDetector.swift`.
 
 ## Project layout
 
@@ -70,4 +70,4 @@ Settings › Reading › *Regular pages* turns off panel detection and zooming a
 
 ## Panel detection
 
-Panels are found by a small neural network (the [DeepPanel](https://github.com/pedrovgs/DeepPanel) U-Net by Pedro Gómez, Apache License 2.0), run on the phone with ONNX Runtime. It reads a page the way a person does, so it copes with borderless art and odd layouts. If the model ever fails to run, a built-in rule-based detector takes over.
+Panels are found by a small neural network (the [DeepPanel](https://github.com/pedrovgs/DeepPanel) U-Net by Pedro Gómez, Apache License 2.0), run on the phone with ONNX Runtime. It reads a page the way a person does, so it copes with borderless art and odd layouts. There is no rule-based backup.

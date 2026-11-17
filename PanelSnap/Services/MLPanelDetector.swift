@@ -6,7 +6,7 @@ import OnnxRuntimeBindings
 
 /// Finds comic panels with a small neural network (the DeepPanel U-Net, Apache 2.0, by Pedro Gómez) instead of
 /// rules. It looks at the whole page the way a reader does, so it copes with borderless art, panels that overlap
-/// and odd layouts. If anything goes wrong, `PanelDetector` falls back to its rule-based method.
+/// and odd layouts.
 enum MLPanelDetector {
     private static let side = 224
     private static let lock = NSLock()
@@ -29,7 +29,7 @@ enum MLPanelDetector {
         lock.lock(); defer { lock.unlock() }
         if let s = session { return s }
         guard let path = Bundle.main.path(forResource: "deeppanel", ofType: "onnx") else {
-            _status = "Backup: model file missing"
+            _status = "Model file missing"
             return nil
         }
         do {
@@ -42,7 +42,7 @@ enum MLPanelDetector {
             return s
         } catch {
             Console.log("Panel model failed to load: \(error)")
-            _status = "Backup: model would not load"
+            _status = "Model would not load"
             return nil
         }
     }
@@ -86,7 +86,7 @@ enum MLPanelDetector {
             scores = raw.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
         } catch {
             Console.log("Panel model failed to run: \(error)")
-            setStatus("Backup: model failed to run")
+            setStatus("Model failed to run")
             return nil
         }
         if scores.count < side * side * 3 { return nil }
@@ -125,7 +125,7 @@ enum MLPanelDetector {
         }
 
         // Boxes can overlap on purpose: a small panel inset on top of a big one is still its own panel.
-        if boxes.isEmpty { setStatus("Backup: no panels found"); return nil }
+        if boxes.isEmpty { setStatus("No panels on last page"); return nil }
         setStatus("Neural network")
         return order(boxes, rtl: rtl)
         #else
