@@ -39,7 +39,8 @@ final class SegmentedDownloader {
     }
 
     func start() {
-        let size = max(Int64(1_000_000), min(Int64(8_000_000), total / 32))
+        // Small pieces: the last ones to finish are short, so there is no long slow tail.
+        let size = max(Int64(512_000), min(Int64(2_000_000), total / 64))
         var offset: Int64 = 0
         while offset < total {
             let end = min(offset + size - 1, total - 1)
@@ -108,6 +109,7 @@ final class SegmentedDownloader {
             return
         }
         chunks[index].done += Int64(data.count)
+        chunks[index].tries = 0                       // it is moving, so earlier hiccups don't count
         received += Int64(data.count)
         let now = Date()
         let report = now.timeIntervalSince(lastReport) > 0.25
@@ -161,6 +163,12 @@ final class SegmentedDownloader {
         private var session: URLSession!
         private var chunk = -1
         private var stopped = false
+        private var task: URLSessionDataTask?
+        private var got: Int64 = 0                 // bytes this connection has received
+        private var lastGot: Int64 = 0
+        private var slowTicks = 0
+        private var stalls: [Int: Int] = [:]       // how many times each piece was restarted for being slow
+        private var watchdog: DispatchSourceTimer?
 
         init(owner: SegmentedDownloader) {
             self.owner = owner
@@ -170,19 +178,48 @@ final class SegmentedDownloader {
             cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
             cfg.urlCache = nil
             session = URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
+            // A connection that has crawled for a few seconds is dropped and the piece restarts on a fresh one,
+            // which is usually fast again. This is what rescues the slow end of a download.
+            let t = DispatchSource.makeTimerSource(queue: .global())
+            t.schedule(deadline: .now() + 2, repeating: 2)
+            t.setEventHandler { [weak self] in self?.checkSpeed() }
+            t.resume()
+            watchdog = t
+        }
+
+        private func checkSpeed() {
+            guard !stopped, let task = task, chunk >= 0 else { return }
+            let rate = got - lastGot
+            lastGot = got
+            if rate < 40_000 {          // under about 20 KB/s
+                slowTicks += 1
+            } else {
+                slowTicks = 0
+            }
+            if slowTicks >= 2, (stalls[chunk] ?? 0) < 4 {
+                slowTicks = 0
+                stalls[chunk, default: 0] += 1
+                task.cancel()
+            }
         }
 
         func next() {
             guard !stopped, let owner = owner, let index = owner.take() else {
+                watchdog?.cancel()
                 session.finishTasksAndInvalidate()
                 return
             }
             chunk = index
-            session.dataTask(with: owner.request(for: index)).resume()
+            slowTicks = 0
+            lastGot = got
+            let t = session.dataTask(with: owner.request(for: index))
+            task = t
+            t.resume()
         }
 
         func stop() {
             stopped = true
+            watchdog?.cancel()
             session.invalidateAndCancel()
         }
 
@@ -197,6 +234,7 @@ final class SegmentedDownloader {
         }
 
         func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            got += Int64(data.count)
             owner?.write(data, chunk: chunk)
         }
 
