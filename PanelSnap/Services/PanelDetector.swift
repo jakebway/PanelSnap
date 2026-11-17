@@ -10,7 +10,7 @@ import Foundation
 /// Output rectangles are normalised (0...1) with a TOP-LEFT origin.
 enum PanelDetector {
 
-    static let version = 3
+    static let version = 4
 
     private struct IRect: Equatable {
         var x0: Int
@@ -95,6 +95,7 @@ enum PanelDetector {
             }
         }
 
+        if !darkPage { rects = absorbCaptions(rects, grid: grid, pageArea: pageArea) }
         rects = rowMajor(rects, rtl: rtl)
 
         // Normalise + a touch of breathing room.
@@ -320,7 +321,69 @@ enum PanelDetector {
             }
             return out
         }
+        // Last resort: panels whose artwork touches the next panel's frame leave no clean gutter. A frame edge still
+        // shows up as a full-width line of ink with almost nothing right beside it, so cut there.
+        if let cut = frameCut(rows, minSegment: minSegY) {
+            let top = IRect(x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y0 + cut)
+            let bottom = IRect(x0: t.x0, y0: t.y0 + cut, x1: t.x1, y1: t.y1)
+            return split(g, top, eps: eps, rtl: rtl, depth: depth + 1) + split(g, bottom, eps: eps, rtl: rtl, depth: depth + 1)
+        }
         return [t]
+    }
+
+    /// A small, sparse box of text right beside bigger artwork (a caption cut off from its picture) belongs to that
+    /// picture, so it is merged into it instead of being offered as a panel of its own.
+    private static func absorbCaptions(_ input: [IRect], grid g: Grid, pageArea: Int) -> [IRect] {
+        var rects = input
+        var i = 0
+        while i < rects.count {
+            let r = rects[i]
+            guard Double(r.area) < Double(pageArea) * 0.05, inkFill(g, r) < 0.3 else { i += 1; continue }
+            let gap = Int(Double(g.width) * 0.04)
+            var best = -1
+            var bestArea = 0
+            for (j, o) in rects.enumerated() where j != i && o.area > r.area * 2 {
+                let touchX = r.x0 <= o.x1 + gap && o.x0 <= r.x1 + gap
+                let touchY = r.y0 <= o.y1 + gap && o.y0 <= r.y1 + gap
+                // it must sit beside the picture, lined up with it, not at a corner
+                let overlapY = min(r.y1, o.y1) - max(r.y0, o.y0)
+                let overlapX = min(r.x1, o.x1) - max(r.x0, o.x0)
+                if touchX && touchY && (overlapY > r.h / 2 || overlapX > r.w / 2) && o.area > bestArea {
+                    best = j
+                    bestArea = o.area
+                }
+            }
+            if best >= 0 {
+                let o = rects[best]
+                rects[best] = IRect(x0: min(o.x0, r.x0), y0: min(o.y0, r.y0), x1: max(o.x1, r.x1), y1: max(o.y1, r.y1))
+                rects.remove(at: i)
+            } else {
+                i += 1
+            }
+        }
+        return rects
+    }
+
+    /// Finds a row where a frame line (almost the full width in ink) meets open artwork: the ink drops sharply just
+    /// below a bottom edge, or just above a top edge. Returns the offset to cut at.
+    private static func frameCut(_ rows: [Int], minSegment: Int) -> Int? {
+        let n = rows.count
+        if n < minSegment * 2 + 2 { return nil }
+        let full = Int(Double(rows.max() ?? 0) * 0.9)
+        if full < 8 { return nil }
+        let half = Int(Double(rows.max() ?? 0) * 0.45)
+        var y = minSegment
+        while y < n - minSegment - 2 {
+            if rows[y] >= full && rows[y - 1] >= full / 2 {
+                // follow the line down while it is still heavy ink, then check that open artwork follows
+                var e = y + 1
+                while e < n - 2 && rows[e] >= half { e += 1 }
+                if e < n - minSegment && rows[e] * 4 <= full && rows[e + 1] * 3 <= full { return e }
+                y = e
+            }
+            y += 1
+        }
+        return nil
     }
 
     // MARK: - Connected components (diagonal / irregular layouts)
