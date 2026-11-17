@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerates the PanelSnap app icon: red manga speed lines, one tilted yellow comic book with a spine and page edges, one bolt.
+"""Regenerates the PanelSnap app icon: red manga speed lines, one tilted yellow comic book with a spine, staples, page edges and a cover of panels.
 Needs Pillow: pip install pillow"""
 from PIL import Image, ImageDraw
 import math, os
@@ -46,12 +46,33 @@ ld.rectangle((box[0] + sp - 40, box[1] + 40, box[0] + sp, box[3] - 40), fill=ORA
 ld.line((box[0] + sp, box[1] + 20, box[0] + sp, box[3] - 20), fill=INK, width=26)
 for fy in (box[1] + 200, box[3] - 200):
     ld.rounded_rectangle((box[0] + 34, fy - 22, box[0] + sp - 30, fy + 22), radius=14, fill=(235, 235, 240), outline=INK, width=10)
-# bolt on the cover
-mx = box[0] + sp + (BW - sp) // 2
-bolt = [(mx + 80, box[1] + 150), (mx - 220, cy + 70), (mx - 20, cy + 70), (mx - 100, box[3] - 150),
-        (mx + 230, cy - 90), (mx + 30, cy - 90)]
-ld.polygon([(x + 20, y + 20) for x, y in bolt], fill=INK)
-ld.polygon(bolt, fill=(255, 255, 255), outline=INK, width=14)
+# cover art: a masthead and a page of panels, so it reads as a comic book at a glance
+fx0, fx1 = box[0] + sp + 56, box[2] - 56
+fy0, fy1 = box[1] + 56, box[3] - 56
+mast_h = 170
+ld.rounded_rectangle((fx0, fy0, fx1, fy0 + mast_h), radius=18, fill=RED, outline=INK, width=22)
+for k in range(3):                      # lettering strokes standing in for a title
+    x = fx0 + 50 + k * 150
+    ld.rounded_rectangle((x, fy0 + 52, x + 110, fy0 + mast_h - 52), radius=14, fill=(255, 255, 255))
+gap = 26
+py0 = fy0 + mast_h + gap
+mid = py0 + (fy1 - py0) // 2
+panels = [
+    (fx0, py0, fx1, mid - gap // 2),                              # wide panel on top
+    (fx0, mid + gap // 2, fx0 + (fx1 - fx0) // 2 - gap // 2, fy1),  # two below
+    (fx0 + (fx1 - fx0) // 2 + gap // 2, mid + gap // 2, fx1, fy1),
+]
+SKY, PINK = (112, 196, 240), (250, 190, 200)
+for pnl, col in zip(panels, (SKY, (255, 255, 255), PINK)):
+    ld.rectangle(pnl, fill=col, outline=INK, width=22)
+# one action burst in the big panel
+bx, by = (panels[0][0] + panels[0][2]) // 2, (panels[0][1] + panels[0][3]) // 2
+pts = []
+for i in range(20):
+    ang = math.pi * 2 * i / 20
+    r = 118 if i % 2 == 0 else 62
+    pts.append((bx + r * math.cos(ang), by + r * math.sin(ang)))
+ld.polygon(pts, fill=YELLOW, outline=INK, width=10)
 
 layer = layer.rotate(-7, resample=Image.BICUBIC, center=(cx, cy))
 img.paste(layer, (0, 0), layer)
