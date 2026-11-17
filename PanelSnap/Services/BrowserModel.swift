@@ -255,7 +255,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         if name.isEmpty { name = "download" }
         let ext = (name as NSString).pathExtension.lowercased()
         if !ext.isEmpty, !LibraryStore.comicExtensions.contains(ext), !Self.sniffExtensions.contains(ext) {
-            update(id) { $0.name = name; $0.state = .failed("Not a comic file, so it was not downloaded.") }
+            update(id) { $0.name = name; $0.state = .failed("Not a comic file. Download canceled.") }
             completionHandler(nil)          // passing nil cancels the download
             return
         }
@@ -369,7 +369,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 ext = sniffed
             } else {
                 try? FileManager.default.removeItem(at: dest.deletingLastPathComponent())
-                update(id) { $0.state = .failed("That file is not a comic.") }
+                update(id) { $0.state = .failed("This file isn't a comic.") }
                 return
             }
         }
@@ -382,7 +382,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             let name = dest.lastPathComponent
             update(id) {
                 if gained > 0 { $0.state = .done("Added to your library") }
-                else if library.errorMessage != nil { $0.state = .failed("Downloaded, but it could not be opened.") }
+                else if library.errorMessage != nil { $0.state = .failed("Downloaded, but couldn't be opened.") }
                 else { $0.state = .done("Already in your library") }
             }
             Console.log("browser: downloaded \(name), library +\(gained)")

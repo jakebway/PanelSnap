@@ -51,7 +51,7 @@ struct BrowserView: View {
     private var topBar: some View {
         HStack(spacing: 10) {
             Button { dismiss() } label: { CircleIcon(systemName: "xmark") }
-                .accessibilityLabel("Close browser")
+                .accessibilityLabel("Close Browser")
             HStack(spacing: 8) {
                 Image(systemName: "shield.lefthalf.filled")
                     .font(.system(size: 14, weight: .semibold))
@@ -138,7 +138,7 @@ struct BrowserView: View {
                     .font(.system(size: 42))
                     .foregroundStyle(Theme.accent)
             }
-            Text(shield.isReady ? "Ad-free browsing" : shield.status.isEmpty ? "Getting ready…" : shield.status)
+            Text(shield.isReady ? "Ad-Free Browsing" : shield.status.isEmpty ? "Getting ready…" : shield.status)
                 .font(.system(size: 22, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)

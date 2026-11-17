@@ -14,37 +14,37 @@ struct SettingsView: View {
                 Form {
                     Section(header: Text("Reading"),
                             footer: Text(settings.snapToPanels
-                                         ? "Zooms from panel to panel. Tap or swipe to move along."
-                                         : "A regular comic viewer: whole pages, swipe to turn, pinch to zoom. No panel detection.")) {
-                        Picker("Reading mode", selection: $settings.snapToPanels) {
-                            Text("Panel by panel").tag(true)
-                            Text("Regular pages").tag(false)
+                                         ? "Zooms in on one panel at a time. Tap or swipe to move to the next."
+                                         : "Shows whole pages. Swipe to turn the page and pinch to zoom. Panels are not detected.")) {
+                        Picker("Reading Mode", selection: $settings.snapToPanels) {
+                            Text("Panel by Panel").tag(true)
+                            Text("Regular Pages").tag(false)
                         }
                         .pickerStyle(.segmented)
                         if settings.snapToPanels {
-                            Toggle("Show the whole page first", isOn: $settings.showFullPageFirst)
+                            Toggle("Show Whole Page First", isOn: $settings.showFullPageFirst)
                         }
                     }
 
-                    Section(footer: Text("Characters come from a guide built into the app. Turning this on also fetches story summaries from public sites like Wikipedia. No account or key needed.")) {
-                        Toggle("Look up comic info online", isOn: $settings.onlineLookup)
-                        Toggle("Hide spoilers", isOn: $settings.spoilerShield)
+                    Section(header: Text("Companion"), footer: Text("Character info comes from a guide built into the app. With lookups on, PanelSnap also fetches story summaries from public sources such as Wikipedia. No account or key is needed.")) {
+                        Toggle("Look Up Comic Info Online", isOn: $settings.onlineLookup)
+                        Toggle("Hide Spoilers", isOn: $settings.spoilerShield)
                     }
 
-                    Section(header: Text("Theme"), footer: Text("Pick a ready-made look, or choose your own two colours.")) {
+                    Section(header: Text("Theme"), footer: Text("Choose a preset, or pick your own two colors.")) {
                         presetRow
-                        ColorPicker("Main color", selection: colorBinding(\.accentHex), supportsOpacity: false)
-                        ColorPicker("Second color", selection: colorBinding(\.highlightHex), supportsOpacity: false)
-                        Button("Reset to comic colors") {
+                        ColorPicker("Main Color", selection: colorBinding(\.accentHex), supportsOpacity: false)
+                        ColorPicker("Second Color", selection: colorBinding(\.highlightHex), supportsOpacity: false)
+                        Button("Reset to Comic Colors") {
                             settings.accentHex = ThemePreset.comic.accent
                             settings.highlightHex = ThemePreset.comic.highlight
                         }
                         .foregroundStyle(Theme.secondary)
                     }
 
-                    Section(footer: Text("Your comics live in Files › On My iPhone › PanelSnap › Comics.")) {
+                    Section(header: Text("Library"), footer: Text("Your comics are stored in Files › On My iPhone › PanelSnap › Comics.")) {
                         Button { Paths.showInFiles() } label: {
-                            Label("Show my comics folder in Files", systemImage: "folder")
+                            Label("Show Comics Folder in Files", systemImage: "folder")
                         }
                         NavigationLink {
                             ConsoleView()

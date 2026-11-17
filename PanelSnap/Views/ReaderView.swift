@@ -464,8 +464,8 @@ struct ReaderView: View {
     /// Everything you might want while reading, in one place.
     private var readerMenu: some View {
         Menu {
-            Toggle(isOn: $settings.snapToPanels) { Label("Snap panel to panel", systemImage: "rectangle.split.2x2") }
-            Toggle(isOn: $settings.showFullPageFirst) { Label("Whole page first", systemImage: "doc") }
+            Toggle(isOn: $settings.snapToPanels) { Label("Snap Panel to Panel", systemImage: "rectangle.split.2x2") }
+            Toggle(isOn: $settings.showFullPageFirst) { Label("Whole Page First", systemImage: "doc") }
             Divider()
             if !model.panels.isEmpty {
                 Button { model.toggleOverview() } label: {
@@ -473,9 +473,9 @@ struct ReaderView: View {
                 }
             }
             Button { toggleCompanion() } label: { Label("Companion", systemImage: "sparkles") }
-            Button { model.reachedEnd = true; close() } label: { Label("Mark as read and close", systemImage: "checkmark.circle") }
+            Button { model.reachedEnd = true; close() } label: { Label("Mark as Read and Close", systemImage: "checkmark.circle") }
             Divider()
-            Button { close() } label: { Label("Back to library", systemImage: "chevron.down") }
+            Button { close() } label: { Label("Back to Library", systemImage: "chevron.down") }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 16, weight: .bold))
@@ -546,14 +546,14 @@ struct ReaderView: View {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 44))
                 .foregroundStyle(Theme.accent)
-            Text("That's the end!")
+            Text("The End")
                 .font(.title3.weight(.bold))
             Text(entry.title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
             HStack(spacing: 10) {
-                Button("Keep reading") { model.reachedEnd = false }
+                Button("Keep Reading") { model.reachedEnd = false }
                     .buttonStyle(GreyButtonStyle())
                 Button("Done") { close() }
                     .buttonStyle(YellowButtonStyle())

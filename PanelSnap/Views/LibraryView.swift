@@ -98,7 +98,7 @@ struct LibraryView: View {
         } label: {
             CircleIcon(systemName: "plus")
         }
-        .accessibilityLabel("Add comics")
+        .accessibilityLabel("Add Comics")
     }
 
     var body: some View {
@@ -230,24 +230,24 @@ struct LibraryView: View {
         .onChange(of: library.shelves) { _, list in
             if let s = shelf, !list.contains(s) { shelf = nil }
         }
-        .alert("Rename comic", isPresented: $showRename) {
+        .alert("Rename Comic", isPresented: $showRename) {
             TextField("Title", text: $renameText)
             Button("Save") {
                 if let id = renameID { library.rename(id: id, to: renameText) }
             }
             Button("Cancel", role: .cancel) {}
         }
-        .alert(shelfRenaming == nil ? "New shelf" : "Rename shelf", isPresented: $showShelfAlert) {
+        .alert(shelfRenaming == nil ? "New Shelf" : "Rename Shelf", isPresented: $showShelfAlert) {
             TextField("Shelf name", text: $shelfText)
             Button(shelfRenaming == nil ? "Create" : "Save") { commitShelfName() }
             Button("Cancel", role: .cancel) {}
         } message: {
             if shelfRenaming == nil && !shelfMoveIDs.isEmpty {
-                Text("The selected comics move onto it.")
+                Text("The selected comics will be moved to it.")
             }
         }
-        .confirmationDialog("Delete this shelf?", isPresented: $showDeleteShelf, titleVisibility: .visible) {
-            Button("Delete shelf", role: .destructive) {
+        .confirmationDialog("Delete Shelf?", isPresented: $showDeleteShelf, titleVisibility: .visible) {
+            Button("Delete Shelf", role: .destructive) {
                 library.deleteShelf(shelfToDelete)
                 if shelf == shelfToDelete { shelf = nil }
             }
@@ -255,7 +255,7 @@ struct LibraryView: View {
         } message: {
             Text("The comics stay in your library.")
         }
-        .confirmationDialog(deleteIDs.count == 1 ? "Delete this comic?" : "Delete \(deleteIDs.count) comics?",
+        .confirmationDialog(deleteIDs.count == 1 ? "Delete Comic?" : "Delete \(deleteIDs.count) Comics?",
                             isPresented: $showDeleteComics, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 library.delete(ids: deleteIDs)
@@ -264,7 +264,7 @@ struct LibraryView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The files are removed from PanelSnap.")
+            Text("The files will be removed from PanelSnap.")
         }
         .fullScreenCover(item: $route) { r in
             switch r {
@@ -360,11 +360,11 @@ struct LibraryView: View {
                                 shelfText = name
                                 shelfMoveIDs = []
                                 showShelfAlert = true
-                            } label: { Label("Rename shelf", systemImage: "pencil") }
+                            } label: { Label("Rename Shelf", systemImage: "pencil") }
                             Button(role: .destructive) {
                                 shelfToDelete = name
                                 showDeleteShelf = true
-                            } label: { Label("Delete shelf", systemImage: "trash") }
+                            } label: { Label("Delete Shelf", systemImage: "trash") }
                         }
                 }
                 Button { newShelf(moving: []) } label: {
@@ -374,7 +374,7 @@ struct LibraryView: View {
                         .frame(width: 34, height: 34)
                         .background(Theme.card2, in: Circle())
                 }
-                .accessibilityLabel("New shelf")
+                .accessibilityLabel("New Shelf")
             }
             .padding(.vertical, 2)
         }
@@ -434,8 +434,8 @@ struct LibraryView: View {
                 shelfItems(for: selection)
             } label: { barPill("folder", "Shelf") }
             Menu {
-                Button { library.markRead(ids: selection, true) } label: { Label("Mark as read", systemImage: "checkmark.circle") }
-                Button { library.markRead(ids: selection, false) } label: { Label("Mark as unread", systemImage: "arrow.uturn.backward") }
+                Button { library.markRead(ids: selection, true) } label: { Label("Mark as Read", systemImage: "checkmark.circle") }
+                Button { library.markRead(ids: selection, false) } label: { Label("Mark as Unread", systemImage: "arrow.uturn.backward") }
             } label: { barPill("checkmark.circle", "Read") }
             Button {
                 deleteIDs = selection
@@ -455,11 +455,11 @@ struct LibraryView: View {
 
     @ViewBuilder
     private func shelfItems(for ids: Set<UUID>) -> some View {
-        Button { library.move(ids, toShelf: nil) } label: { Label("No shelf", systemImage: "tray") }
+        Button { library.move(ids, toShelf: nil) } label: { Label("No Shelf", systemImage: "tray") }
         ForEach(library.shelves, id: \.self) { name in
             Button { library.move(ids, toShelf: name) } label: { Label(name, systemImage: "folder") }
         }
-        Button { newShelf(moving: ids) } label: { Label("New shelf…", systemImage: "plus") }
+        Button { newShelf(moving: ids) } label: { Label("New Shelf…", systemImage: "plus") }
     }
 
     // MARK: Pieces
@@ -516,7 +516,7 @@ struct LibraryView: View {
                     .font(.system(size: 48))
                     .foregroundStyle(Theme.accent)
             }
-            Text("Your library is empty")
+            Text("Your Library Is Empty")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
             Text("Tap the + at the top and choose files, a whole folder, or the ad-free browser. PanelSnap reads CBZ, CBR, CB7, PDF and EPUB.")
@@ -526,7 +526,7 @@ struct LibraryView: View {
                 .frame(maxWidth: 420)
                 .padding(.horizontal, 28)
             Button { Task { await library.scanFolder() } } label: {
-                Label("Scan Comics folder", systemImage: "arrow.clockwise")
+                Label("Scan Comics Folder", systemImage: "arrow.clockwise")
             }
             .buttonStyle(GreyButtonStyle())
             Text("Or drop files into Files › On My iPhone › PanelSnap › Comics. They appear here by themselves.")
@@ -546,7 +546,7 @@ struct LibraryView: View {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { library.errorMessage = nil }
             VStack(spacing: 14) {
-                Text("Some files couldn't be added")
+                Text("Some Files Couldn't Be Added")
                     .font(.system(size: 18, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                 Text(message)
@@ -660,7 +660,7 @@ struct LibraryView: View {
         } label: { Label("Rename", systemImage: "pencil") }
         Menu {
             shelfItems(for: [entry.id])
-        } label: { Label("Move to shelf", systemImage: "folder") }
+        } label: { Label("Move to Shelf", systemImage: "folder") }
         Button {
             library.markRead(id: entry.id, !entry.finished)
         } label: {

@@ -122,7 +122,7 @@ struct CompanionView: View {
         if model.phase == .loading {
             HStack(spacing: 10) {
                 ProgressView()
-                Text("Looking this comic up…")
+                Text("Looking Up This Comic…")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -178,7 +178,7 @@ struct CompanionView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) { revealed = true }
                 } label: {
-                    Label("Tap to reveal spoilers", systemImage: "eye")
+                    Label("Tap to Reveal Spoilers", systemImage: "eye")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
@@ -276,7 +276,7 @@ struct CompanionView: View {
             Button {
                 showFix = true
             } label: {
-                Label("Not the right comic?", systemImage: "magnifyingglass")
+                Label("Not the Right Comic?", systemImage: "magnifyingglass")
                     .font(.subheadline)
             }
             Button {
@@ -444,14 +444,14 @@ struct CharacterSheet: View {
                     } else if card?.facts == nil {
                         HStack(spacing: 10) {
                             ProgressView()
-                            Text("Looking up who this is…")
+                            Text("Looking Up This Character…")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     if let u = card?.url, let url = URL(string: u) {
                         Link(destination: url) {
-                            Label("Read more", systemImage: "arrow.up.right.square")
+                            Label("Read More", systemImage: "arrow.up.right.square")
                         }
                         .buttonStyle(.bordered)
                     }
@@ -487,7 +487,7 @@ struct FixMatchSheet: View {
                         .keyboardType(.numbersAndPunctuation)
                 }
             }
-            .navigationTitle("Fix the match")
+            .navigationTitle("Fix the Match")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

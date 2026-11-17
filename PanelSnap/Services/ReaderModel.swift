@@ -121,7 +121,7 @@ final class ReaderModel: ObservableObject {
                 await MainActor.run {
                     guard let self = self, token == self.loadToken else { return }
                     self.isLoading = false
-                    self.loadError = "Page \(page + 1) could not be read."
+                    self.loadError = "Page \(page + 1) couldn't be read."
                 }
                 return
             }

@@ -27,7 +27,7 @@ enum ComicError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unreadable: return "This file could not be opened."
+        case .unreadable: return "This file couldn't be opened."
         case .noPages: return "No pages were found inside this file."
         case .unsupported(let what): return what
         }

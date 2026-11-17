@@ -83,10 +83,10 @@ enum LibrarySort: String, CaseIterable, Identifiable {
     var id: String { return rawValue }
     var label: String {
         switch self {
-        case .recent: return "Recently read"
-        case .added: return "Newest added"
+        case .recent: return "Recently Read"
+        case .added: return "Recently Added"
         case .title: return "Title A–Z"
-        case .custom: return "My order"
+        case .custom: return "My Order"
         }
     }
     var icon: String {
