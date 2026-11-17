@@ -10,11 +10,8 @@ struct PanelSnapApp: App {
         let docs = Paths.documents
         _ = Paths.comics
         Console.log("PanelSnap launched")
-        let note = docs.appendingPathComponent("Put your comics in the Comics folder.txt")
-        if !FileManager.default.fileExists(atPath: note.path) {
-            try? "Drop CBZ, CBR, CB7, PDF or EPUB files into the Comics folder, or use Add Comics inside PanelSnap.\n"
-                .write(to: note, atomically: true, encoding: .utf8)
-        }
+        // An older version left a second note beside this one; one is enough.
+        try? FileManager.default.removeItem(at: docs.appendingPathComponent("Put your comics in the Comics folder.txt"))
     }
 
     var body: some Scene {
