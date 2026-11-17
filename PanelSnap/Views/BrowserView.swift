@@ -17,6 +17,8 @@ struct BrowserView: View {
     @State private var landscape = false
     @State private var text = ""
     @FocusState private var focused: Bool
+    @State private var askingHome = false
+    @State private var homeText = ""
 
     /// Keep the address bar clear of the Duo's corner status widget (it sits in the status bar when held upright).
     private var barTrailing: CGFloat { return (topInset > 20 && !landscape) ? 0 : Theme.cameraWidth }
@@ -39,6 +41,16 @@ struct BrowserView: View {
         .task {
             model.attach(library)
             await model.prepare()
+        }
+        .alert("Home Page", isPresented: $askingHome) {
+            TextField("website.com", text: $homeText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+            Button("Save") { model.setHome(homeText) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The browser opens here, and the Home button brings you back.")
         }
         .onChange(of: model.addressText) { _, new in if !focused { text = new } }
         .onChange(of: focused) { _, now in
@@ -241,8 +253,27 @@ struct BrowserView: View {
             barButton("chevron.right", enabled: model.canGoForward) { model.webView?.goForward() }
             Spacer()
             barButton(model.isLoading ? "xmark" : "arrow.clockwise", enabled: model.hasPage) { model.reloadOrStop() }
+            Spacer()
+            barButton("house", enabled: true) {
+                if model.homeURL.isEmpty { homeText = ""; askingHome = true } else { model.goHome() }
+            }
+            Spacer()
+            Menu {
+                if model.hasPage {
+                    Button { model.setHomeToCurrentPage() } label: { Label("Use This Page as Home", systemImage: "house.fill") }
+                }
+                Button { homeText = model.homeURL; askingHome = true } label: { Label("Set Home Address…", systemImage: "pencil") }
+                if !model.homeURL.isEmpty {
+                    Button(role: .destructive) { model.setHome("") } label: { Label("Clear Home", systemImage: "xmark") }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 54, height: 44)
+            }
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 24)
         .frame(height: 50)
         .background(Theme.card)
     }

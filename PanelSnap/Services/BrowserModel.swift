@@ -35,6 +35,10 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     @Published var downloads: [BrowserDownload] = []
     @Published var notice: BrowserNotice?
     @Published var blockedCount = 0
+    /// The page the browser opens on and the house button returns to. Empty means none is set.
+    @Published var homeURL: String = UserDefaults.standard.string(forKey: "browserHome") ?? "" {
+        didSet { UserDefaults.standard.set(homeURL, forKey: "browserHome") }
+    }
 
     private weak var library: LibraryStore?
     private var observers: [NSKeyValueObservation] = []
@@ -57,7 +61,22 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func prepare() async {
         await BrowserShield.shared.prepare()
-        if webView == nil { build() }
+        if webView == nil {
+            build()
+            if !homeURL.isEmpty { go(homeURL) }
+        }
+    }
+
+    func goHome() { if !homeURL.isEmpty { go(homeURL) } }
+
+    func setHome(_ input: String) {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { homeURL = ""; return }
+        homeURL = text.contains("://") ? text : "https://" + text
+    }
+
+    func setHomeToCurrentPage() {
+        if let url = webView?.url, url.scheme?.hasPrefix("http") == true { homeURL = url.absoluteString }
     }
 
     private func build() {
