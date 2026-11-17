@@ -94,10 +94,7 @@ struct ReaderView: View {
     @State private var chromeVisible = true
     @State private var showCompanion = false
     // Manual zoom (pinch or double-tap). 1 = off, so everything behaves exactly as before until you zoom.
-    @State private var userZoom: CGFloat = 1
-    @State private var userOffset: CGSize = .zero
-    @State private var panBase: CGSize = .zero
-    @State private var pinchStart: (zoom: CGFloat, offset: CGSize)?
+    @State private var zoom = ZoomState()          // not observed here: zooming redraws the page only
     @State private var lastTap: (time: Date, point: CGPoint)?
     @State private var pendingTap: Task<Void, Never>?
     @State private var scrub: Double = 0
@@ -181,18 +178,18 @@ struct ReaderView: View {
             Color.black
 
             if let img = model.image {
-                PanelCanvas(
-                    image: img,
-                    panels: model.panels,
-                    panelIndex: model.panelIndex,
-                    size: size,
-                    fill: 0.96
-                )
-                .id(model.pageIndex)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.3), value: model.pageIndex)
-                .scaleEffect(userZoom)
-                .offset(userOffset)
+                ZoomedContent(zoom: zoom) {
+                    PanelCanvas(
+                        image: img,
+                        panels: model.panels,
+                        panelIndex: model.panelIndex,
+                        size: size,
+                        fill: 0.96
+                    )
+                    .id(model.pageIndex)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: model.pageIndex)
+                }
             }
 
             if model.isLoading && model.image == nil {
@@ -217,36 +214,16 @@ struct ReaderView: View {
                 )
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 24)
-                        .onChanged { value in
-                            if isZoomed { pan(value.translation, size: size) }
-                        }
                         .onEnded { value in
-                            if isZoomed {
-                                panBase = userOffset            // zoomed in: dragging moves the page, it does not turn it
-                            } else {
-                                handleDrag(value.translation)
-                            }
+                            // Zoomed in, or just pinched: the drag belongs to the zoom, so it must not turn the page.
+                            if zoom.isZoomed || Date().timeIntervalSince(zoom.lastPinch) < 0.45 { return }
+                            handleDrag(value.translation)
                         }
                 )
-                .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            if pinchStart == nil { pinchStart = (userZoom, userOffset) }
-                            pinch(value, size: size)
-                        }
-                        .onEnded { value in
-                            let wasZoomed = (pinchStart?.zoom ?? 1) > 1.02
-                            pinch(value, size: size)
-                            pinchStart = nil
-                            if userZoom < 1.05 {
-                                resetZoom()
-                                // pinching in on an un-zoomed page still shows the whole page, as before
-                                if !wasZoomed && value.magnification < 0.85 { model.showOverview() }
-                            } else {
-                                panBase = userOffset
-                            }
-                        }
-                )
+
+            ZoomGestures(zoom: zoom, enabled: !showCompanion && !scrubbing && !model.reachedEnd,
+                         onPinchedOut: { model.showOverview() })
+                .allowsHitTesting(false)
 
             // Chrome
             VStack(spacing: 0) {
@@ -315,40 +292,9 @@ struct ReaderView: View {
 
     // MARK: Manual zoom
 
-    private var isZoomed: Bool { return userZoom > 1.02 }
+    private var isZoomed: Bool { return zoom.isZoomed }
 
-    private func resetZoom() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            userZoom = 1
-            userOffset = .zero
-        }
-        panBase = .zero
-    }
-
-    /// Keeps the zoomed page from being dragged completely out of view.
-    private func clamp(_ offset: CGSize, zoom: CGFloat, size: CGSize) -> CGSize {
-        let maxX = (zoom - 1) * size.width / 2
-        let maxY = (zoom - 1) * size.height / 2
-        return CGSize(width: min(max(offset.width, -maxX), maxX), height: min(max(offset.height, -maxY), maxY))
-    }
-
-    private func pan(_ translation: CGSize, size: CGSize) {
-        userOffset = clamp(CGSize(width: panBase.width + translation.width, height: panBase.height + translation.height),
-                           zoom: userZoom, size: size)
-    }
-
-    /// Pinch: the spot between your fingers stays under them while the page grows or shrinks.
-    private func pinch(_ value: MagnifyGesture.Value, size: CGSize) {
-        guard let start = pinchStart else { return }
-        let z1 = min(max(start.zoom * value.magnification, 1), 6)
-        let c = CGPoint(x: size.width / 2, y: size.height / 2)
-        let p = CGPoint(x: value.startAnchor.x * size.width, y: value.startAnchor.y * size.height)
-        let ratio = z1 / start.zoom
-        let off = CGSize(width: (p.x - c.x) - ratio * ((p.x - c.x) - start.offset.width),
-                         height: (p.y - c.y) - ratio * ((p.y - c.y) - start.offset.height))
-        userZoom = z1
-        userOffset = clamp(off, zoom: z1, size: size)
-    }
+    private func resetZoom() { zoom.reset() }
 
     /// Double-tap: zoom in on the spot you tapped, or zoom back out.
     private func doubleTap(at point: CGPoint, size: CGSize) {
@@ -357,11 +303,10 @@ struct ReaderView: View {
         let c = CGPoint(x: size.width / 2, y: size.height / 2)
         let off = CGSize(width: (point.x - c.x) * (1 - z), height: (point.y - c.y) * (1 - z))
         hideChrome()
-        withAnimation(.easeOut(duration: 0.22)) {
-            userZoom = z
-            userOffset = clamp(off, zoom: z, size: size)
+        withAnimation(.easeOut(duration: 0.25)) {
+            zoom.zoom = z
+            zoom.offset = zoom.clamp(off, zoom: z, size: size)
         }
-        panBase = userOffset
     }
 
     /// Swipe left/right turns the page, swipe up opens the Companion, swipe down shows the menu (or closes the Companion).
