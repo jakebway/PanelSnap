@@ -113,5 +113,8 @@ struct SettingsView: View {
         .padding(.horizontal, 20)
         .padding(.top, topInset > 20 ? (landscape ? 22 : 8) : 30)
         .padding(.bottom, 12)
+        // Span the whole screen, so the title sits in the true centre (the Duo's status-widget inset would
+        // otherwise push it left of centre).
+        .ignoresSafeArea(.container, edges: .horizontal)
     }
 }
