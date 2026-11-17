@@ -42,7 +42,10 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.secondary)
                     }
 
-                    Section {
+                    Section(footer: Text("Your comics live in Files › On My iPhone › PanelSnap › Comics.")) {
+                        Button { Paths.showInFiles() } label: {
+                            Label("Show my comics folder in Files", systemImage: "folder")
+                        }
                         NavigationLink {
                             ConsoleView()
                         } label: {

@@ -139,7 +139,21 @@ enum Paths {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         return ensure(base.appendingPathComponent("PanelSnap", isDirectory: true))
     }
-    static var comics: URL { return ensure(documents.appendingPathComponent("Comics", isDirectory: true)) }
+    static var comics: URL {
+        // A small note next to the Comics folder: it keeps the app's folder showing up in Files › On My iPhone.
+        let note = documents.appendingPathComponent("Put comics in the Comics folder.txt")
+        if !FileManager.default.fileExists(atPath: note.path) {
+            try? "Drop CBZ, CBR, CB7, PDF or EPUB files into the Comics folder. PanelSnap adds them to your library by itself."
+                .write(to: note, atomically: true, encoding: .utf8)
+        }
+        return ensure(documents.appendingPathComponent("Comics", isDirectory: true))
+    }
+
+    /// Opens the Files app on this app's folder.
+    static func showInFiles() {
+        _ = comics
+        if let url = URL(string: "shareddocuments://" + documents.path) { UIApplication.shared.open(url) }
+    }
     static var covers: URL { return ensure(support.appendingPathComponent("Covers", isDirectory: true)) }
     static var panelCache: URL { return ensure(support.appendingPathComponent("Panels", isDirectory: true)) }
     static var companionCache: URL { return ensure(caches.appendingPathComponent("Companion", isDirectory: true)) }
