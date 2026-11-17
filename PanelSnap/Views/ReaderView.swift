@@ -155,7 +155,7 @@ struct ReaderView: View {
             saveProgress()
         }
         .onChange(of: model.pageIndex) { _, _ in resetZoom() }
-        .onChange(of: model.panelIndex) { _, _ in resetZoom() }
+        .onChange(of: model.panelIndex) { _, _ in if !zoom.converting { resetZoom() } }
         .onChange(of: settings.snapToPanels) { _, _ in
             model.updateSettings(snap: settings.snapToPanels, pageFirst: settings.showFullPageFirst)
         }
@@ -222,7 +222,8 @@ struct ReaderView: View {
                 )
 
             ZoomGestures(zoom: zoom, enabled: !showCompanion && !scrubbing && !model.reachedEnd,
-                         onPinchedOut: { model.showOverview() })
+                         onPinchedOut: { model.showOverview() },
+                         onLeavePanel: { leavePanel(size: size) })
                 .allowsHitTesting(false)
 
             // Chrome
@@ -295,6 +296,24 @@ struct ReaderView: View {
     private var isZoomed: Bool { return zoom.isZoomed }
 
     private func resetZoom() { zoom.reset() }
+
+    /// Pinching while a panel is focused: show the whole page, keeping exactly what is on screen, so the page can be explored.
+    private func leavePanel(size: CGSize) {
+        guard model.panelIndex >= 0, let img = model.image else { return }
+        let cam = PanelCanvas.camera(image: img, panels: model.panels, panelIndex: model.panelIndex, size: size, fill: 0.96)
+        let z = zoom.zoom
+        let newZoom = z * cam.zoom
+        let newOffset = CGSize(width: z * cam.dx + zoom.offset.width, height: z * cam.dy + zoom.offset.height)
+        zoom.converting = true
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            model.showOverview()
+            zoom.zoom = newZoom
+            zoom.offset = zoom.clamp(newOffset, zoom: newZoom, size: size)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { zoom.converting = false }
+    }
 
     /// Double-tap: zoom in on the spot you tapped, or zoom back out.
     private func doubleTap(at point: CGPoint, size: CGSize) {

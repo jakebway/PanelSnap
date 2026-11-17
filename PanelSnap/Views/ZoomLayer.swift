@@ -7,6 +7,7 @@ final class ZoomState: ObservableObject {
     @Published var zoom: CGFloat = 1
     @Published var offset: CGSize = .zero
     var lastPinch = Date.distantPast
+    var converting = false          // true while switching from a focused panel to the whole page, so the zoom is not reset
 
     var isZoomed: Bool { return zoom > 1.02 }
 
@@ -44,6 +45,7 @@ struct ZoomGestures: UIViewRepresentable {
     let zoom: ZoomState
     var enabled: Bool
     var onPinchedOut: () -> Void           // pinching in on a page that is not zoomed: show the whole page
+    var onLeavePanel: () -> Void           // pinching on a focused panel: switch to free zooming on the whole page
 
     func makeCoordinator() -> Coordinator { Coordinator(zoom: zoom) }
 
@@ -57,6 +59,7 @@ struct ZoomGestures: UIViewRepresentable {
     func updateUIView(_ uiView: HookView, context: Context) {
         context.coordinator.enabled = enabled
         context.coordinator.onPinchedOut = onPinchedOut
+        context.coordinator.onLeavePanel = onLeavePanel
     }
 
     final class HookView: UIView {
@@ -71,6 +74,8 @@ struct ZoomGestures: UIViewRepresentable {
         let zoom: ZoomState
         var enabled = true
         var onPinchedOut: () -> Void = {}
+        var onLeavePanel: () -> Void = {}
+        private var left = false
         private weak var stage: UIView?
         private weak var window: UIWindow?
         private lazy var pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
@@ -125,13 +130,21 @@ struct ZoomGestures: UIViewRepresentable {
             let c = CGPoint(x: size.width / 2, y: size.height / 2)
             switch g.state {
             case .began:
+                left = false
                 start = (zoom.zoom, zoom.offset, g.location(in: stage))
                 zoom.lastPinch = Date()
             case .changed:
-                guard let s = start else { return }
+                guard var s = start else { return }
+                if !left && abs(g.scale - 1) > 0.03 {
+                    // Pinching on a focused panel: go to the whole page at the same apparent zoom, so you can roam it freely.
+                    left = true
+                    onLeavePanel()
+                    s = (zoom.zoom, zoom.offset, s.point)
+                    start = s
+                }
                 // The spot of the page that was between your fingers when you started stays between them,
                 // wherever they move, so the page zooms and follows you at the same time.
-                let z = min(max(s.zoom * g.scale, 0.8), 6)
+                let z = min(max(s.zoom * g.scale, 0.8), 12)
                 let now = g.location(in: stage)
                 let ratio = z / s.zoom
                 let off = CGSize(width: (now.x - c.x) - ratio * (s.point.x - c.x - s.offset.width),
@@ -143,7 +156,7 @@ struct ZoomGestures: UIViewRepresentable {
                 guard let s = start else { return }
                 start = nil
                 zoom.lastPinch = Date()
-                if zoom.zoom < 1.05 {
+                if zoom.zoom < 1.05 || (left && g.scale < 0.7) {
                     let showWholePage = s.zoom <= 1.02 && g.scale < 0.85
                     zoom.reset()
                     if showWholePage { onPinchedOut() }
