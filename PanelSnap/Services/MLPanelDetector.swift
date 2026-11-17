@@ -10,6 +10,16 @@ import OnnxRuntimeBindings
 enum MLPanelDetector {
     private static let side = 224
     private static let lock = NSLock()
+    private static var _status = "Not used yet"
+
+    /// What the last page used, so a problem can be told apart from a wrong guess. Shown in Settings.
+    static var status: String {
+        lock.lock(); defer { lock.unlock() }
+        return _status
+    }
+    private static func setStatus(_ s: String) {
+        lock.lock(); _status = s; lock.unlock()
+    }
 
     #if canImport(OnnxRuntimeBindings)
     private static var env: ORTEnv?
@@ -18,7 +28,10 @@ enum MLPanelDetector {
     private static func loadSession() -> ORTSession? {
         lock.lock(); defer { lock.unlock() }
         if let s = session { return s }
-        guard let path = Bundle.main.path(forResource: "deeppanel", ofType: "onnx") else { return nil }
+        guard let path = Bundle.main.path(forResource: "deeppanel", ofType: "onnx") else {
+            _status = "Backup: model file missing"
+            return nil
+        }
         do {
             let e = try ORTEnv(loggingLevel: .warning)
             let options = try ORTSessionOptions()
@@ -29,6 +42,7 @@ enum MLPanelDetector {
             return s
         } catch {
             Console.log("Panel model failed to load: \(error)")
+            _status = "Backup: model would not load"
             return nil
         }
     }
@@ -72,6 +86,7 @@ enum MLPanelDetector {
             scores = raw.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
         } catch {
             Console.log("Panel model failed to run: \(error)")
+            setStatus("Backup: model failed to run")
             return nil
         }
         if scores.count < side * side * 3 { return nil }
@@ -109,13 +124,9 @@ enum MLPanelDetector {
             if x1 - x0 > 0.04 && y1 - y0 > 0.03 { boxes.append(CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)) }
         }
 
-        // A box that sits almost entirely inside a bigger one is not a panel of its own.
-        boxes = boxes.filter { b in
-            !boxes.contains { o in
-                o != b && o.width * o.height > b.width * b.height * 1.2 && o.intersection(b).width * o.intersection(b).height > b.width * b.height * 0.85
-            }
-        }
-        if boxes.isEmpty { return nil }
+        // Boxes can overlap on purpose: a small panel inset on top of a big one is still its own panel.
+        if boxes.isEmpty { setStatus("Backup: no panels found"); return nil }
+        setStatus("Neural network")
         return order(boxes, rtl: rtl)
         #else
         return nil
