@@ -10,7 +10,7 @@ import Foundation
 /// Output rectangles are normalised (0...1) with a TOP-LEFT origin.
 enum PanelDetector {
 
-    static let version = 4
+    static let version = 5
 
     private struct IRect: Equatable {
         var x0: Int
@@ -32,6 +32,8 @@ enum PanelDetector {
     // MARK: - Public
 
     static func detect(image: CGImage, rtl: Bool) -> [CGRect] {
+        // The neural network understands pages the way a reader does; the rules below are the fallback.
+        if let found = MLPanelDetector.detect(image: image, rtl: rtl), !found.isEmpty { return found }
         guard let (gray, w, h) = makeGray(image: image, maxDimension: 720), w > 16, h > 16 else {
             return [CGRect(x: 0, y: 0, width: 1, height: 1)]
         }
