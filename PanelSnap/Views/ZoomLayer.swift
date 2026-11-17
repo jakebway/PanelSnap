@@ -76,6 +76,8 @@ struct ZoomGestures: UIViewRepresentable {
         var onPinchedOut: () -> Void = {}
         var onLeavePanel: () -> Void = {}
         private var left = false
+        private var baseScale: CGFloat = 1       // the recogniser's scale when the current two-finger hold began
+        private var touches = 2
         private weak var stage: UIView?
         private weak var window: UIWindow?
         private lazy var pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
@@ -131,11 +133,23 @@ struct ZoomGestures: UIViewRepresentable {
             switch g.state {
             case .began:
                 left = false
+                baseScale = 1
+                touches = g.numberOfTouches
                 start = (zoom.zoom, zoom.offset, g.location(in: stage))
                 zoom.lastPinch = Date()
             case .changed:
                 guard var s = start else { return }
-                if !left && abs(g.scale - 1) > 0.015 {
+                // With fewer than two fingers down, iOS reports the position of the one left, which would yank the page
+                // toward it. Ignore those frames, and start afresh from the current state when the second finger returns.
+                if g.numberOfTouches < 2 { touches = g.numberOfTouches; return }
+                if touches != g.numberOfTouches {
+                    touches = g.numberOfTouches
+                    s = (zoom.zoom, zoom.offset, g.location(in: stage))
+                    start = s
+                    baseScale = g.scale
+                    return
+                }
+                if !left && abs(g.scale / baseScale - 1) > 0.015 {
                     // Pinching on a focused panel: go to the whole page at the same apparent zoom, so you can roam it freely.
                     left = true
                     onLeavePanel()
@@ -144,7 +158,7 @@ struct ZoomGestures: UIViewRepresentable {
                 }
                 // The spot of the page that was between your fingers when you started stays between them,
                 // wherever they move, so the page zooms and follows you at the same time.
-                let z = min(max(s.zoom * g.scale, 0.8), 12)
+                let z = min(max(s.zoom * g.scale / baseScale, 0.8), 12)
                 let now = g.location(in: stage)
                 let ratio = z / s.zoom
                 let off = CGSize(width: (now.x - c.x) - ratio * (s.point.x - c.x - s.offset.width),
