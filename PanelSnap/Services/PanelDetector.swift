@@ -10,7 +10,7 @@ import Foundation
 /// Output rectangles are normalised (0...1) with a TOP-LEFT origin.
 enum PanelDetector {
 
-    static let version = 2
+    static let version = 3
 
     private struct IRect: Equatable {
         var x0: Int
@@ -94,6 +94,8 @@ enum PanelDetector {
                 rects = [page]
             }
         }
+
+        rects = rowMajor(rects, rtl: rtl)
 
         // Normalise + a touch of breathing room.
         let pad = 0.006
@@ -387,6 +389,42 @@ enum PanelDetector {
     }
 
     // MARK: - Reading order for loose rectangles
+
+    /// A grid of panels can come out of the cutting step column by column. When the panels line up in clean rows
+    /// (no panel straddles two rows), put them back in reading order: row by row, each row left to right
+    /// (right to left for manga). Layouts with a tall panel beside stacked ones are left in the cutting order.
+    private static func rowMajor(_ rects: [IRect], rtl: Bool) -> [IRect] {
+        if rects.count < 3 { return rects }
+        func overlap(_ a: IRect, _ b: IRect) -> Double {
+            let o = Double(min(a.y1, b.y1) - max(a.y0, b.y0))
+            return o / Double(max(1, min(a.h, b.h)))
+        }
+        var rows: [[IRect]] = []
+        for r in rects.sorted(by: { $0.y0 < $1.y0 }) {
+            if let i = rows.firstIndex(where: { row in overlap(row[0], r) >= 0.6 }) {
+                rows[i].append(r)
+            } else {
+                rows.append([r])
+            }
+        }
+        // Every pair must be clearly in the same row or clearly in different rows.
+        for i in 0..<rects.count {
+            for j in (i + 1)..<rects.count {
+                let o = overlap(rects[i], rects[j])
+                if o > 0.15 && o < 0.6 { return rects }
+            }
+        }
+        for (i, a) in rows.enumerated() {
+            for b in rows[(i + 1)...] {
+                for x in a { for y in b where overlap(x, y) > 0.15 { return rects } }
+            }
+        }
+        var out: [IRect] = []
+        for row in rows {
+            out.append(contentsOf: row.sorted { rtl ? ($0.x0 > $1.x0) : ($0.x0 < $1.x0) })
+        }
+        return out
+    }
 
     private static func readingOrder(_ rects: [IRect], rtl: Bool) -> [IRect] {
         let sorted = rects.sorted { $0.y0 < $1.y0 }
