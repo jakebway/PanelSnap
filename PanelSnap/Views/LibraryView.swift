@@ -476,6 +476,7 @@ struct LibraryView: View {
             ComicTitle(text: "Library")
             HStack(spacing: 10) {
                 Button { route = .settings } label: { CircleIcon(systemName: "gearshape.fill") }
+                    .accessibilityLabel("Settings")
                 addMenu
                 Spacer()
             }

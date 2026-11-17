@@ -18,6 +18,7 @@ struct BrowserView: View {
     @State private var text = ""
     @FocusState private var focused: Bool
     @State private var askingHome = false
+    @State private var showBookmarks = false
     @State private var homeText = ""
 
     /// Keep the address bar clear of the Duo's corner status widget (it sits in the status bar when held upright).
@@ -41,6 +42,12 @@ struct BrowserView: View {
         .task {
             model.attach(library)
             await model.prepare()
+        }
+        .sheet(isPresented: $showBookmarks) {
+            BookmarksSheet { url in
+                showBookmarks = false
+                model.go(url)
+            }
         }
         .alert("Home Page", isPresented: $askingHome) {
             TextField("website.com", text: $homeText)
@@ -210,6 +217,11 @@ struct BrowserView: View {
                 }
             }
             Spacer(minLength: 0)
+            if case .failed = item.state, item.retryURL != nil {
+                Button { model.retryDownload(item.id) } label: {
+                    Text("Retry").font(.footnote.weight(.bold)).foregroundStyle(Theme.accent)
+                }
+            }
             if case .downloading = item.state {} else if case .adding = item.state {} else {
                 Button { model.dismissDownload(item.id) } label: {
                     Image(systemName: "xmark").font(.footnote.weight(.bold)).foregroundStyle(Theme.secondary)
@@ -260,6 +272,13 @@ struct BrowserView: View {
             Spacer()
             Menu {
                 if model.hasPage {
+                    Button { model.toggleBookmark() } label: {
+                        Label(model.currentIsBookmarked ? "Remove Bookmark" : "Add Bookmark",
+                              systemImage: model.currentIsBookmarked ? "bookmark.slash" : "bookmark")
+                    }
+                }
+                Button { showBookmarks = true } label: { Label("Bookmarks", systemImage: "book") }
+                if model.hasPage {
                     Button { model.setHomeToCurrentPage() } label: { Label("Use This Page as Home", systemImage: "house.fill") }
                 }
                 Button { homeText = model.homeURL; askingHome = true } label: { Label("Set Home Address…", systemImage: "pencil") }
@@ -286,5 +305,47 @@ struct BrowserView: View {
                 .frame(width: 54, height: 44)
         }
         .disabled(!enabled)
+    }
+}
+
+
+/// The saved pages list.
+struct BookmarksSheet: View {
+    @ObservedObject private var model = BrowserModel.shared
+    let open: (String) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if model.bookmarks.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "bookmark").font(.system(size: 34)).foregroundStyle(Theme.secondary)
+                        Text("No Bookmarks Yet").font(.headline).foregroundStyle(.white)
+                        Text("Open a page, then choose Add Bookmark from the ••• menu.")
+                            .font(.subheadline).foregroundStyle(Theme.secondary).multilineTextAlignment(.center)
+                    }
+                    .padding(30)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(model.bookmarks) { b in
+                            Button { open(b.url) } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(b.title).foregroundStyle(.white).lineLimit(1)
+                                    Text(b.url).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1)
+                                }
+                            }
+                            .listRowBackground(Theme.card)
+                        }
+                        .onDelete { model.bookmarks.remove(atOffsets: $0) }
+                    }
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(Theme.bg)
+            .navigationTitle("Bookmarks")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .preferredColorScheme(.dark)
     }
 }

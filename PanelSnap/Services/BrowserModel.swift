@@ -11,6 +11,13 @@ struct BrowserDownload: Identifiable {
     var speed: Double = 0              // bytes per second
     var fast = false                   // using several connections at once
     var state: State = .downloading
+    var retryURL: URL? = nil
+}
+
+struct Bookmark: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var title: String
+    var url: String
 }
 
 struct BrowserNotice: Identifiable {
@@ -35,6 +42,13 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     @Published var downloads: [BrowserDownload] = []
     @Published var notice: BrowserNotice?
     @Published var blockedCount = 0
+    @Published var bookmarks: [Bookmark] = {
+        guard let d = UserDefaults.standard.data(forKey: "browserBookmarks"),
+              let list = try? JSONDecoder().decode([Bookmark].self, from: d) else { return [] }
+        return list
+    }() {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(bookmarks), forKey: "browserBookmarks") }
+    }
     /// The page the browser opens on and the house button returns to. Empty means none is set.
     @Published var homeURL: String = UserDefaults.standard.string(forKey: "browserHome") ?? "" {
         didSet { UserDefaults.standard.set(homeURL, forKey: "browserHome") }
@@ -65,6 +79,28 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             build()
             if !homeURL.isEmpty { go(homeURL) }
         }
+    }
+
+    var currentIsBookmarked: Bool {
+        guard let u = webView?.url?.absoluteString else { return false }
+        return bookmarks.contains { $0.url == u }
+    }
+
+    /// Adds the current page, or removes it if it is already saved.
+    func toggleBookmark() {
+        guard let wv = webView, let url = wv.url, url.scheme?.hasPrefix("http") == true else { return }
+        if let i = bookmarks.firstIndex(where: { $0.url == url.absoluteString }) {
+            bookmarks.remove(at: i)
+        } else {
+            let t = (wv.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            bookmarks.insert(Bookmark(title: t.isEmpty ? (url.host ?? url.absoluteString) : t, url: url.absoluteString), at: 0)
+        }
+    }
+
+    func retryDownload(_ id: UUID) {
+        guard let url = downloads.first(where: { $0.id == id })?.retryURL else { return }
+        downloads.removeAll { $0.id == id }
+        webView?.load(URLRequest(url: url))
     }
 
     func goHome() { if !homeURL.isEmpty { go(homeURL) } }
@@ -415,7 +451,8 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         progressObservers[id] = nil
         let cancelled = (error as NSError).code == NSURLErrorCancelled
         if cancelled, case .failed = downloads.first(where: { $0.id == id })?.state ?? .downloading { return }
-        update(id) { $0.state = .failed("Download failed.") }
+        let source = download.originalRequest?.url
+        update(id) { $0.state = .failed("Download failed."); $0.retryURL = source }
         Console.log("browser: download failed: \(error.localizedDescription)")
     }
 
