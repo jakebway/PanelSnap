@@ -184,7 +184,8 @@ struct ReaderView: View {
                         panels: model.panels,
                         panelIndex: model.panelIndex,
                         size: size,
-                        fill: 0.96
+                        fill: 0.96,
+                        animated: !zoom.converting
                     )
                     .id(model.pageIndex)
                     .transition(.opacity)

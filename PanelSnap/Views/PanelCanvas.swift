@@ -8,6 +8,7 @@ struct PanelCanvas: View {
     let panelIndex: Int
     let size: CGSize
     let fill: Double
+    var animated = true          // false while a pinch hands a focused panel over to free zooming
 
     struct Camera {
         var zoom: CGFloat
@@ -71,7 +72,7 @@ struct PanelCanvas: View {
             .frame(width: cam.width, height: cam.height)
             .scaleEffect(cam.zoom)
             .offset(x: cam.dx, y: cam.dy)
-            .animation(.spring(response: 0.46, dampingFraction: 0.9), value: panelIndex)
+            .animation(animated ? .spring(response: 0.46, dampingFraction: 0.9) : nil, value: panelIndex)
             .frame(width: size.width, height: size.height)
             .clipped()
     }

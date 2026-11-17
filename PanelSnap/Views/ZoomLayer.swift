@@ -135,7 +135,7 @@ struct ZoomGestures: UIViewRepresentable {
                 zoom.lastPinch = Date()
             case .changed:
                 guard var s = start else { return }
-                if !left && abs(g.scale - 1) > 0.03 {
+                if !left && abs(g.scale - 1) > 0.015 {
                     // Pinching on a focused panel: go to the whole page at the same apparent zoom, so you can roam it freely.
                     left = true
                     onLeavePanel()
