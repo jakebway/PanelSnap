@@ -211,7 +211,6 @@ struct LibraryView: View {
             if id == nil { themeStamp = settings.themeKey }
         }
         .onAppear {
-            Console.logEnvironment(reason: "library appeared")
             Task { await library.scanFolder() }
             // Compile the browser's ad-block lists quietly in the background, so the browser opens instantly.
             Task {

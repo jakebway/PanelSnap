@@ -46,12 +46,6 @@ struct SettingsView: View {
                         Button { Paths.showInFiles() } label: {
                             Label("Show Comics Folder in Files", systemImage: "folder")
                         }
-                        NavigationLink {
-                            ConsoleView()
-                        } label: {
-                            Label("Console", systemImage: "terminal")
-                                .foregroundStyle(Theme.secondary)
-                        }
                     }
                 }
                 .scrollContentBackground(.hidden)
