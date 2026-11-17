@@ -146,7 +146,7 @@ struct LibraryView: View {
 
                                 let items = visible
                                 if items.isEmpty {
-                                    Text(shelf == nil ? "No comics match your search." : "Nothing on this shelf yet. Tap Organize, select comics and choose Shelf.")
+                                    Text(shelf == nil ? "No comics match your search." : "Nothing on this shelf yet. Press and hold a comic, then choose Move to Shelf, or drag it onto the shelf.")
                                         .font(.subheadline)
                                         .foregroundStyle(Theme.secondary)
                                         .frame(maxWidth: .infinity)
@@ -291,7 +291,7 @@ struct LibraryView: View {
             .contextMenu {
                 if !organizing { menu(for: entry) }
             }
-            .modifier(ReorderModifier(enabled: organizing, id: entry.id) { dragged, target in
+            .modifier(ReorderModifier(enabled: true, id: entry.id) { dragged, target in
                 reorder(dragged, onto: target)
             })
     }
@@ -305,6 +305,14 @@ struct LibraryView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             library.moveComic(dragged, onto: target)
         }
+    }
+
+    /// A comic dragged onto a shelf chip moves to that shelf (the All chip takes it off any shelf).
+    private func dropOnShelf(_ items: [String], _ name: String?) -> Bool {
+        let ids = Set(items.compactMap { UUID(uuidString: $0) })
+        if ids.isEmpty { return false }
+        library.move(ids, toShelf: name)
+        return true
     }
 
     private func commitShelfName() {
@@ -351,8 +359,10 @@ struct LibraryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 shelfChip("All", count: library.comics.count, selected: shelf == nil) { shelf = nil }
+                    .dropDestination(for: String.self) { items, _ in dropOnShelf(items, nil) }
                 ForEach(library.shelves, id: \.self) { name in
                     shelfChip(name, count: library.comics.filter { $0.shelf == name }.count, selected: shelf == name) { shelf = name }
+                        .dropDestination(for: String.self) { items, _ in dropOnShelf(items, name) }
                         .contextMenu {
                             Button {
                                 shelfRenaming = name
@@ -406,12 +416,6 @@ struct LibraryView: View {
                 .padding(.trailing, 6)
                 Button("Done") { endOrganizing() }
                     .buttonStyle(YellowButtonStyle(compact: true))
-            } else {
-                Button { organizing = true } label: {
-                    Label("Organize", systemImage: "square.grid.2x2")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                }
             }
         }
     }
@@ -684,7 +688,7 @@ struct LibraryView: View {
     }
 }
 
-/// Lets a cell be dragged onto another one (only while organising).
+/// Lets a cell be picked up with a long press and dropped onto another comic or a shelf.
 private struct ReorderModifier: ViewModifier {
     let enabled: Bool
     let id: UUID
