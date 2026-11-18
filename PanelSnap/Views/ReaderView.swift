@@ -258,7 +258,7 @@ struct ReaderView: View {
     private func handleTap(at point: CGPoint, size: CGSize) {
         let width = max(size.width, 1)
         let f = point.x / width
-        let edge: CGFloat = model.panelIndex < 0 ? 0.08 : 0.15    // whole page: slim edges so panels near them stay tappable
+        let edge: CGFloat = model.panelIndex < 0 ? 0.095 : 0.17    // whole page: slim edges so panels near them stay tappable
         // The edges stay instant. Only the middle waits a moment, to see whether a second tap is coming.
         if f < edge {
             if model.rtl { forward() } else { back() }
@@ -286,16 +286,31 @@ struct ReaderView: View {
     }
 
     private func middleTap(at point: CGPoint, size: CGSize) {
-        if !isZoomed, let img = model.image,
-           let hit = PanelCanvas.panel(at: point, image: img, panels: model.panels,
-                                       panelIndex: model.panelIndex, size: size, fill: 0.96),
-           hit != model.panelIndex {
-            hideChrome()
-            model.focus(panel: hit)
-            return
+        if let img = model.image {
+            // Undo any zoom or nudge the reader has applied, so the tap lands on the panel that is really under the finger.
+            let z = max(zoom.zoom, 0.01)
+            let base = CGPoint(x: size.width / 2 + (point.x - size.width / 2 - zoom.offset.width) / z,
+                               y: size.height / 2 + (point.y - size.height / 2 - zoom.offset.height) / z)
+            if let hit = PanelCanvas.panel(at: base, image: img, panels: model.panels,
+                                           panelIndex: model.panelIndex, size: size, fill: 0.96) {
+                hideChrome()
+                if hit != model.panelIndex {
+                    resetZoomInstantly()
+                    model.focus(panel: hit)
+                } else if isZoomed {
+                    zoom.reset()          // already on this panel but nudged or zoomed: snap it back
+                }
+                return
+            }
         }
+        if isZoomed { return }
         chromeVisible.toggle()
         if chromeVisible { scheduleHide() }
+    }
+
+    private func resetZoomInstantly() {
+        zoom.zoom = 1
+        zoom.offset = .zero
     }
 
     // MARK: Manual zoom
