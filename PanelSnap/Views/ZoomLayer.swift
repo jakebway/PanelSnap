@@ -268,7 +268,7 @@ struct ZoomGestures: UIViewRepresentable {
                 let dominant = abs(v.x) > abs(v.y) ? abs(v.x) : abs(v.y)
                 if speed > 700 && dominant > 1.3 * (abs(v.x) > abs(v.y) ? abs(v.y) : abs(v.x)) {
                     withAnimation(.easeOut(duration: 0.2)) { zoom.offset = .zero }
-                    onFlick(t)
+                    onFlick(CGSize(width: t.x, height: t.y))
                 } else {
                     withAnimation(.easeOut(duration: 0.3)) {
                         zoom.offset = limit(CGSize(width: zoom.offset.width + v.x * 0.1, height: zoom.offset.height + v.y * 0.1))
