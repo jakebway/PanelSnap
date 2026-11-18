@@ -55,34 +55,106 @@ enum DiscoverSort: String, CaseIterable, Identifiable {
 /// shows (the way the open-source comicgeeks module does), and asks politely: one request per week, kept for an hour.
 @MainActor
 final class DiscoverModel: ObservableObject {
-    @Published var week: ReleaseWeek = .current
-    @Published var comics: [DiscoverComic] = []
-    @Published var loading = false
-    @Published var failed = false
+    @Published var weeks: [ReleaseWeek: [DiscoverComic]] = [:]
+    @Published var loadingWeeks = Set<ReleaseWeek>()
+    @Published var failedWeeks = Set<ReleaseWeek>()
+    @Published var forYou: [DiscoverComic] = []
+    @Published var searchResults: [DiscoverComic] = []
+    @Published var searching = false
 
-    private var cache: [ReleaseWeek: [DiscoverComic]] = [:]
     private var loadedAt: [ReleaseWeek: Date] = [:]
     private let browser = WebJSONFetcher()
+    private var recommendedFor = ""
 
-    func load(force: Bool = false) async {
-        if !force, let c = cache[week], let t = loadedAt[week], Date().timeIntervalSince(t) < 3600 {
-            comics = c
-            failed = false
-            return
-        }
-        loading = true
-        failed = false
-        let wanted = week
-        let list = await fetch(wanted)
+    func load(_ week: ReleaseWeek, force: Bool = false) async {
+        if !force, weeks[week] != nil, let t = loadedAt[week], Date().timeIntervalSince(t) < 3600 { return }
+        loadingWeeks.insert(week)
+        failedWeeks.remove(week)
+        let list = await fetch(Self.url(["list": "releases", "list_option": "thumbs", "view": "list",
+                                         "date": Self.releaseDay(week), "date_type": "week"]))
         if let list = list, !list.isEmpty {
-            cache[wanted] = list
-            loadedAt[wanted] = Date()
-            if week == wanted { comics = list }
-        } else if week == wanted {
-            comics = cache[wanted] ?? []
-            failed = comics.isEmpty
+            weeks[week] = list
+            loadedAt[week] = Date()
+        } else if weeks[week] == nil {
+            failedWeeks.insert(week)
         }
-        loading = false
+        loadingWeeks.remove(week)
+    }
+
+    /// Searches the whole catalogue, old and new.
+    func search(_ query: String) async {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { searchResults = []; return }
+        searching = true
+        let list = await fetch(Self.url(["list": "search", "title": q, "list_option": "series"]))
+        if q == query.trimmingCharacters(in: .whitespaces) { searchResults = list ?? [] }
+        searching = false
+    }
+
+    /// "You may also like": comics in the same series families as the ones you read, that are not already in your
+    /// library, plus new releases that share words with your titles.
+    func recommend(libraryTitles: [String]) async {
+        let names = Self.seriesNames(from: libraryTitles)
+        let key = names.joined(separator: "|")
+        guard !names.isEmpty, key != recommendedFor else { return }
+        recommendedFor = key
+        var picks: [DiscoverComic] = []
+        let owned = Set(names.map { Self.normal($0) })
+        for name in names.prefix(4) {
+            for c in (await fetch(Self.url(["list": "search", "title": name, "list_option": "series"])) ?? []).prefix(8) {
+                let n = Self.normal(c.title)
+                if owned.contains(n) || picks.contains(where: { $0.id == c.id }) { continue }
+                picks.append(c)
+            }
+        }
+        // New releases that mention the same words (a character or a team) as the library.
+        await load(.current)
+        await load(.next)
+        let words = Set(names.flatMap { Self.significantWords($0) })
+        let fresh = ((weeks[.current] ?? []) + (weeks[.next] ?? []))
+            .map { c -> (DiscoverComic, Int) in (c, Self.significantWords(c.title).filter { words.contains($0) }.count) }
+            .filter { $0.1 > 0 && !owned.contains(Self.normal($0.0.title)) }
+            .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.pulls > $1.0.pulls }
+            .map { $0.0 }
+        var out: [DiscoverComic] = []
+        for c in fresh.prefix(6) + picks where !out.contains(where: { $0.id == c.id }) { out.append(c) }
+        forYou = Array(out.prefix(24))
+    }
+
+    // MARK: Library titles
+
+    /// "Avengers Disassembled #3 (2006) (digital)" -> "Avengers Disassembled".
+    static func seriesNames(from titles: [String]) -> [String] {
+        var counts: [String: Int] = [:]
+        var order: [String] = []
+        for t in titles {
+            var s = t.replacingOccurrences(of: "\(.*?\)|\[.*?\]", with: " ", options: .regularExpression)
+            if let r = s.range(of: "#\s*\d", options: .regularExpression) { s = String(s[..<r.lowerBound]) }
+            s = s.replacingOccurrences(of: "\b(vol(ume)?\.?|v)\s*\d+.*$", with: " ", options: [.regularExpression, .caseInsensitive])
+            s = s.replacingOccurrences(of: "[_\.]", with: " ", options: .regularExpression)
+            s = s.replacingOccurrences(of: "\s+", with: " ", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: " -–"))
+            if s.count < 3 { continue }
+            if counts[s] == nil { order.append(s) }
+            counts[s, default: 0] += 1
+        }
+        return order
+    }
+
+    static func normal(_ title: String) -> String {
+        return title.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+    }
+
+    private static let filler: Set<String> = ["the", "and", "of", "a", "an", "to", "in", "vol", "tp", "hc", "comic", "comics", "issue", "all", "one", "new", "marvel", "dc", "image"]
+    static func significantWords(_ title: String) -> [String] {
+        return normal(title).split(separator: " ").map(String.init).filter { $0.count > 2 && !filler.contains($0) && Int($0) == nil }
+    }
+
+    // MARK: Requests
+
+    private static func url(_ params: [String: String]) -> URL? {
+        var c = URLComponents(string: "https://leagueofcomicgeeks.com/comic/get_comics")
+        c?.queryItems = params.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+        return c?.url
     }
 
     /// The Wednesday (new-comic day) of the chosen week, as YYYY-MM-DD.
@@ -98,13 +170,8 @@ final class DiscoverModel: ObservableObject {
         return f.string(from: wednesday)
     }
 
-    private func fetch(_ week: ReleaseWeek) async -> [DiscoverComic]? {
-        var c = URLComponents(string: "https://leagueofcomicgeeks.com/comic/get_comics")
-        c?.queryItems = [URLQueryItem(name: "list", value: "releases"), URLQueryItem(name: "list_option", value: "thumbs"),
-                         URLQueryItem(name: "view", value: "list"), URLQueryItem(name: "date", value: Self.releaseDay(week)),
-                         URLQueryItem(name: "date_type", value: "week")]
-        guard let url = c?.url else { return nil }
-
+    private func fetch(_ url: URL?) async -> [DiscoverComic]? {
+        guard let url = url else { return nil }
         // First a plain request; if the site wants a real browser, use one (a hidden web page) instead.
         var req = URLRequest(url: url)
         req.timeoutInterval = 25
@@ -132,10 +199,11 @@ final class DiscoverModel: ObservableObject {
         for chunk in html.components(separatedBy: "<li").dropFirst() {
             let item = chunk
             let head = String(item.prefix(upTo: item.firstIndex(of: ">") ?? item.endIndex))
-            guard let title = text(of: ["title", "color-primary"], in: item), !title.isEmpty else { continue }
+            guard let title = text(of: ["title", "color-primary"], in: item) ?? text(of: ["title"], in: item) ?? item.firstMatch(#"<a[^>]*href="/comics?/[^"]*"[^>]*>([^<]{2,})</a>"#).map(clean), !title.isEmpty else { continue }
             let description = element(["comic-description", "col-feed-max"], in: item)
             var link = ""
             if let d = description, let m = d.firstMatch(#"href="([^"]+)""#) { link = m }
+            if link.isEmpty, let m = item.firstMatch(#"href="(/comics?/[^"]+)""#) { link = m }
             let id = link.hasPrefix("http") ? link : (link.isEmpty ? title : "https://leagueofcomicgeeks.com" + link)
             if !seen.insert(id).inserted { continue }
             var summary = ""
@@ -144,7 +212,8 @@ final class DiscoverModel: ObservableObject {
                 summary = clean(summary)
             }
             var cover: URL?
-            if let r = item.range(of: "comic-cover-art"), let src = String(item[r.upperBound...]).firstMatch(#"data-src="([^"]+)""#) {
+            let artZone = item.range(of: "comic-cover-art").map { String(item[$0.upperBound...]) } ?? item
+            if let src = artZone.firstMatch(#"data-src="([^"]+)""#) ?? artZone.firstMatch(#"<img[^>]+src="([^"]+)""#) {
                 var s = src.replacingOccurrences(of: "medium", with: "large")
                 if s.hasPrefix("/") { s = "https://leagueofcomicgeeks.com" + s.replacingOccurrences(of: "-med", with: "-lg") }
                 cover = URL(string: s)
