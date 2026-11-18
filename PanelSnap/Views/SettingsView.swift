@@ -42,6 +42,10 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.secondary)
                     }
 
+                    Section(header: Text("Discover"), footer: Text("A list of this week's, last week's and next week's new comics, with a button to search your Home website for any of them. Find it in the + menu on the library.")) {
+                        Toggle("Show Discover", isOn: $settings.showDiscover)
+                    }
+
                     Section(header: Text("Library"), footer: Text("Your comics are stored in Files › On My iPhone › PanelSnap › Comics.")) {
                         Button { Paths.showInFiles() } label: {
                             Label("Show Comics Folder in Files", systemImage: "folder")

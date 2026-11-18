@@ -73,11 +73,63 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func attach(_ library: LibraryStore) { self.library = library }
 
+    /// Set by Discover: a title to search for on the Home website, or a page to open, once the browser is showing.
+    private var pendingSearch: String?
+    private var pendingOpen: URL?
+
     func prepare() async {
         await BrowserShield.shared.prepare()
         if webView == nil {
             build()
-            if !homeURL.isEmpty { go(homeURL) }
+            if let u = pendingOpen { pendingOpen = nil; webView?.load(URLRequest(url: u)) }
+            else if !homeURL.isEmpty { go(homeURL) }
+        }
+    }
+
+    /// Opens a page (the browser may not exist yet).
+    func open(_ url: URL) {
+        pendingSearch = nil
+        if let wv = webView { wv.load(URLRequest(url: url)) } else { pendingOpen = url }
+    }
+
+    /// Goes to the Home website and types the title into its search box.
+    func searchHome(_ query: String) {
+        pendingOpen = nil
+        guard !homeURL.isEmpty else {
+            pendingSearch = nil
+            show("Set a Home website first: tap ••• › Set Home Address…")
+            return
+        }
+        pendingSearch = query
+        if webView != nil { go(homeURL) }       // otherwise prepare() goes there when the browser appears
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let query = pendingSearch else { return }
+        let home = URL(string: homeURL)?.host?.replacingOccurrences(of: "www.", with: "")
+        guard let host = webView.url?.host?.replacingOccurrences(of: "www.", with: ""), host == home else { return }
+        pendingSearch = nil
+        guard let data = try? JSONSerialization.data(withJSONObject: [query]),
+              let arg = String(data: data, encoding: .utf8) else { return }
+        // Finds the site's search box, types the title in and submits it, the way a person would.
+        let script = """
+        (function(q){
+          var sel='input[type=search],input[name=s],input[name=q],input[name=search],input[name=query],input[name=keyword],input[name=keywords],input[placeholder*="earch" i],input[id*="earch" i],input[class*="earch" i]';
+          var els=[].slice.call(document.querySelectorAll(sel)).filter(function(e){return ['hidden','submit','checkbox','radio','button'].indexOf(e.type)<0;});
+          var shown=els.filter(function(e){var r=e.getBoundingClientRect();return r.width>0&&r.height>0;});
+          var el=shown[0]||els[0]; if(!el) return 'none';
+          var set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; set.call(el,q);
+          el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+          var f=el.form; if(f){ if(f.requestSubmit){f.requestSubmit();}else{f.submit();} return 'form'; }
+          ['keydown','keypress','keyup'].forEach(function(t){el.dispatchEvent(new KeyboardEvent(t,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));});
+          return 'enter';
+        })(\(arg)[0]);
+        """
+        webView.evaluateJavaScript(script) { [weak self] result, _ in
+            if (result as? String) == "none" || result == nil {
+                UIPasteboard.general.string = query
+                self?.show("Couldn't find this site's search box. \"\(query)\" is copied, so you can paste it in.")
+            }
         }
     }
 

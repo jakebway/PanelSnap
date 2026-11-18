@@ -35,11 +35,13 @@ struct LibraryView: View {
         case reader(ComicEntry)
         case settings
         case browser
+        case discover
         var id: String {
             switch self {
             case .reader(let e): return "reader-" + e.id.uuidString
             case .settings: return "settings"
             case .browser: return "browser"
+            case .discover: return "discover"
             }
         }
     }
@@ -95,6 +97,9 @@ struct LibraryView: View {
             Button { addComics() } label: { Label("Files", systemImage: "doc.on.doc") }
             Button { addFolder() } label: { Label("Folder", systemImage: "folder") }
             Button { route = .browser } label: { Label("Browser", systemImage: "globe") }
+            if settings.showDiscover {
+                Button { route = .discover } label: { Label("Discover New Comics", systemImage: "sparkles") }
+            }
         } label: {
             CircleIcon(systemName: "plus")
         }
@@ -273,6 +278,15 @@ struct LibraryView: View {
                 SettingsView()
             case .browser:
                 BrowserView()
+            case .discover:
+                DiscoverView(onFind: { comic in
+                                 BrowserModel.shared.searchHome(comic.searchTerm)
+                                 route = .browser
+                             },
+                             onOpen: { url in
+                                 BrowserModel.shared.open(url)
+                                 route = .browser
+                             })
             }
         }
     }

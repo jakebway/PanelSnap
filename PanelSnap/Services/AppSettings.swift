@@ -10,6 +10,7 @@ final class AppSettings: ObservableObject {
     @Published var snapToPanels: Bool { didSet { defaults.set(snapToPanels, forKey: "snapToPanels") } }
     @Published var showFullPageFirst: Bool { didSet { defaults.set(showFullPageFirst, forKey: "wholePageFirst") } }
     @Published var onlineLookup: Bool { didSet { defaults.set(onlineLookup, forKey: "onlineLookup") } }
+    @Published var showDiscover: Bool { didSet { defaults.set(showDiscover, forKey: "showDiscover") } }
     @Published var spoilerShield: Bool { didSet { defaults.set(spoilerShield, forKey: "spoilerShield") } }
     @Published var librarySort: LibrarySort { didSet { defaults.set(librarySort.rawValue, forKey: "librarySort") } }
     /// Theme colours, stored as hex ("FFD11A"). Changing them updates `Theme` straight away.
@@ -24,12 +25,14 @@ final class AppSettings: ObservableObject {
             "snapToPanels": true,
             "wholePageFirst": true,
             "onlineLookup": true,
-            "spoilerShield": true
+            "spoilerShield": true,
+            "showDiscover": true
         ])
         snapToPanels = d.bool(forKey: "snapToPanels")
         showFullPageFirst = d.bool(forKey: "wholePageFirst")
         onlineLookup = d.bool(forKey: "onlineLookup")
         spoilerShield = d.bool(forKey: "spoilerShield")
+        showDiscover = d.bool(forKey: "showDiscover")
         librarySort = LibrarySort(rawValue: d.string(forKey: "librarySort") ?? "") ?? .recent
         accentHex = d.string(forKey: "accentHex") ?? ThemePreset.comic.accent
         highlightHex = d.string(forKey: "highlightHex") ?? ThemePreset.comic.highlight
