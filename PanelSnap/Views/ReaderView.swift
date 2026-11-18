@@ -224,7 +224,11 @@ struct ReaderView: View {
 
             ZoomGestures(zoom: zoom, enabled: !showCompanion && !scrubbing && !model.reachedEnd,
                          onPinchedOut: { model.showOverview() },
-                         onLeavePanel: { leavePanel(size: size) })
+                         onLeavePanel: { leavePanel(size: size) },
+                         onEdgeSwipe: { swipedLeft in
+                             hideChrome()
+                             model.turnPage(forward: model.rtl ? !swipedLeft : swipedLeft)
+                         })
                 .allowsHitTesting(false)
 
             // Chrome

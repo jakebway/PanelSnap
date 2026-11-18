@@ -46,6 +46,7 @@ struct ZoomGestures: UIViewRepresentable {
     var enabled: Bool
     var onPinchedOut: () -> Void           // pinching in on a page that is not zoomed: show the whole page
     var onLeavePanel: () -> Void           // pinching on a focused panel: switch to free zooming on the whole page
+    var onEdgeSwipe: (Bool) -> Void        // zoomed in and pushed past the side of the page: true = swiped left
 
     func makeCoordinator() -> Coordinator { Coordinator(zoom: zoom) }
 
@@ -60,6 +61,7 @@ struct ZoomGestures: UIViewRepresentable {
         context.coordinator.enabled = enabled
         context.coordinator.onPinchedOut = onPinchedOut
         context.coordinator.onLeavePanel = onLeavePanel
+        context.coordinator.onEdgeSwipe = onEdgeSwipe
     }
 
     final class HookView: UIView {
@@ -75,6 +77,8 @@ struct ZoomGestures: UIViewRepresentable {
         var enabled = true
         var onPinchedOut: () -> Void = {}
         var onLeavePanel: () -> Void = {}
+        var onEdgeSwipe: (Bool) -> Void = { _ in }
+        private var startedAtLeftEdge = false, startedAtRightEdge = false
         private var left = false
         private var baseScale: CGFloat = 1       // the recogniser's scale when the current two-finger hold began
         private var touches = 2
@@ -194,15 +198,36 @@ struct ZoomGestures: UIViewRepresentable {
             case .began:
                 g.setTranslation(.zero, in: stage)
                 panBase = zoom.offset
+                // Only a drag that starts against a side of the page can carry on into a swipe to the next one.
+                let maxX = max(zoom.zoom - 1, 0) * size.width / 2
+                startedAtLeftEdge = zoom.offset.width >= maxX - 2
+                startedAtRightEdge = zoom.offset.width <= -maxX + 2
             case .changed:
                 let t = g.translation(in: stage)
-                zoom.offset = zoom.clamp(CGSize(width: panBase.width + t.x, height: panBase.height + t.y),
-                                         zoom: zoom.zoom, size: size)
+                let raw = CGSize(width: panBase.width + t.x, height: panBase.height + t.y)
+                let held = zoom.clamp(raw, zoom: zoom.zoom, size: size)
+                // Past the edge the page stretches a little and resists, so you can feel that the edge was reached.
+                zoom.offset = CGSize(width: held.width + (raw.width - held.width) * 0.3,
+                                     height: held.height + (raw.height - held.height) * 0.3)
             case .ended:
                 let v = g.velocity(in: stage)
-                let glide = zoom.clamp(CGSize(width: zoom.offset.width + v.x * 0.18, height: zoom.offset.height + v.y * 0.18),
-                                       zoom: zoom.zoom, size: size)
-                withAnimation(.easeOut(duration: 0.45)) { zoom.offset = glide }
+                let t = g.translation(in: stage)
+                let raw = CGSize(width: panBase.width + t.x, height: panBase.height + t.y)
+                let held = zoom.clamp(raw, zoom: zoom.zoom, size: size)
+                let pushed = raw.width - held.width          // > 0: dragged right past the left edge; < 0: past the right edge
+                let horizontal = abs(t.x) > abs(t.y) * 1.3
+                let toNext = startedAtRightEdge && pushed < -40 || startedAtRightEdge && pushed < -8 && v.x < -700
+                let toPrevious = startedAtLeftEdge && pushed > 40 || startedAtLeftEdge && pushed > 8 && v.x > 700
+                if horizontal && (toNext || toPrevious) {
+                    withAnimation(.easeOut(duration: 0.2)) { zoom.offset = held }
+                    onEdgeSwipe(toNext)
+                } else {
+                    let glide = zoom.clamp(CGSize(width: held.width + v.x * 0.18, height: held.height + v.y * 0.18),
+                                           zoom: zoom.zoom, size: size)
+                    withAnimation(.easeOut(duration: 0.45)) { zoom.offset = glide }
+                }
+            case .cancelled:
+                withAnimation(.easeOut(duration: 0.2)) { zoom.offset = zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size) }
             default:
                 break
             }
