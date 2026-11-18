@@ -42,7 +42,12 @@ jobs:
         run: bash Scripts/build-ipa.sh
 
       - name: Check the panel model
-        run: swift Scripts/CheckPanelModel.swift PanelSnap/Resources/DeepPanel.mlmodel Tests/panel-check-input.f32 Tests/panel-check-classes.u8
+        run: |
+          swift Scripts/CheckPanelModel.swift PanelSnap/Resources/DeepPanel.mlmodel Tests/panel-check-input.f32 Tests/panel-check-classes.u8
+          mkdir -p /tmp/pd
+          xcrun coremlcompiler compile PanelSnap/Resources/DeepPanel.mlmodel /tmp/pd
+          swiftc -O -o /tmp/pd/check PanelSnap/Services/MLPanelDetector.swift Scripts/PanelCheck/*.swift
+          /tmp/pd/check Tests/test-page.png Tests/test-page-expected.json
 
       - name: Save the IPA (Actions artifact)
         if: success()
