@@ -41,12 +41,12 @@ jobs:
         id: build
         run: bash Scripts/build-ipa.sh
 
-      - name: Check the panel model
+      - name: Check the panel detector
         run: |
-          swift Scripts/CheckPanelModel.swift PanelSnap/Resources/DeepPanel.mlmodel Tests/panel-check-input.f32 Tests/panel-check-classes.u8
           mkdir -p /tmp/pd
-          xcrun coremlcompiler compile PanelSnap/Resources/DeepPanel.mlmodel /tmp/pd
-          swiftc -O -o /tmp/pd/check PanelSnap/Services/MLPanelDetector.swift Scripts/PanelCheck/*.swift
+          xcrun coremlcompiler compile PanelSnap/Resources/InkwellPanels.mlmodel /tmp/pd
+          cp PanelSnap/Resources/InkwellOrder.json /tmp/pd/
+          swiftc -O -o /tmp/pd/check PanelSnap/Services/MLPanelDetector.swift PanelSnap/Services/OrderModel.swift Scripts/PanelCheck/*.swift
           /tmp/pd/check Tests/test-page.png Tests/test-page-expected.json
 
       - name: Save the IPA (Actions artifact)

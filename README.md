@@ -70,4 +70,4 @@ Settings › Reading › *Regular pages* turns off panel detection and zooming a
 
 ## Panel detection
 
-Panels are found by a small neural network (the [DeepPanel](https://github.com/pedrovgs/DeepPanel) U-Net by Pedro Gómez, Apache License 2.0), run on the phone with Apple's Core ML. It reads a page the way a person does, so it copes with borderless art and odd layouts. There is no rule-based backup.
+Panels are found by a small neural network and put in reading order by a second small model, both from the [Inkwell](https://huggingface.co/cedarrapidsboy/inkwell-panel-models) project: a YOLOv8-nano panel detector trained on about 3,800 annotated comic pages (AGPL-3.0) and a pairwise reading-order model (MIT). The detector runs on the phone with Apple's Core ML; the order model's decision trees run in the app. There is no rule-based backup for finding panels.
