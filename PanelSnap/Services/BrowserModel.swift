@@ -424,8 +424,8 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             let dest = dir.appendingPathComponent(name)
             destinations[id] = dest
             update(id) { $0.fast = true; $0.total = length }
-            Console.log("browser: \(name) downloading over 8 connections")
-            let fast = SegmentedDownloader(url: url, headers: headers, total: length, dest: dest, connections: 8)
+            Console.log("browser: \(name) downloading over several connections (more are added while it speeds up)")
+            let fast = SegmentedDownloader(url: url, headers: headers, total: length, dest: dest, connections: 10)
             fast.onProgress = { [weak self] bytes in
                 DispatchQueue.main.async { self?.report(id, bytes: bytes, total: length) }
             }

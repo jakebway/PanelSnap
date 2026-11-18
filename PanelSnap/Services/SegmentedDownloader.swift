@@ -24,13 +24,18 @@ final class SegmentedDownloader {
     private var workers: [Worker] = []
     private var ended = false
     private var lastReport = Date.distantPast
+    private var active = 0                       // connections currently working
+    private var scaler: DispatchSourceTimer?
+    private var scaleBytes: Int64 = 0
+    private var scaleSpeed: Double = 0
+    private let ceiling = 32                     // never more connections than this
 
     /// Called a few times a second with the bytes received so far.
     var onProgress: ((Int64) -> Void)?
     /// Called once: nil on success.
     var onFinish: ((Error?) -> Void)?
 
-    init(url: URL, headers: [String: String], total: Int64, dest: URL, connections: Int = 8) {
+    init(url: URL, headers: [String: String], total: Int64, dest: URL, connections: Int = 10) {
         self.url = url
         self.headers = headers
         self.total = total
@@ -57,11 +62,45 @@ final class SegmentedDownloader {
             finish(error)
             return
         }
-        for _ in 0..<min(connections, chunks.count) {
-            let w = Worker(owner: self)
-            workers.append(w)
-            w.next()
+        for _ in 0..<min(connections, chunks.count) { addWorker() }
+        startScaling()
+    }
+
+    private func addWorker() {
+        let w = Worker(owner: self)
+        lock.lock()
+        workers.append(w)
+        active += 1
+        lock.unlock()
+        w.next()
+    }
+
+    /// Some sites hand out far more speed to more connections, others stop caring after a few. Every few seconds,
+    /// if the last batch of new connections raised the total speed, add more (up to a limit); if not, stop adding.
+    private func startScaling() {
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + 4, repeating: 4)
+        scaleBytes = 0
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            self.lock.lock()
+            let done = self.ended || self.queue.isEmpty
+            let now = self.received
+            let current = self.active
+            self.lock.unlock()
+            if done { self.scaler?.cancel(); self.scaler = nil; return }
+            let speed = Double(now - self.scaleBytes) / 4
+            self.scaleBytes = now
+            let gained = self.scaleSpeed == 0 || speed > self.scaleSpeed * 1.15
+            self.scaleSpeed = speed
+            if gained && current < self.ceiling {
+                for _ in 0..<4 { self.addWorker() }
+            } else if !gained {
+                self.scaler?.cancel(); self.scaler = nil      // more connections stopped helping
+            }
         }
+        scaler = timer
+        timer.resume()
     }
 
     func cancel() {
@@ -70,6 +109,7 @@ final class SegmentedDownloader {
         ended = true
         lock.unlock()
         if wasEnded { return }
+        scaler?.cancel(); scaler = nil
         workers.forEach { $0.stop() }
         try? handle?.close()
         handle = nil
@@ -130,7 +170,16 @@ final class SegmentedDownloader {
             if all { finish(nil) }
             return !all
         }
-        // Stopped early: put the rest back in the queue and try again.
+        // Stopped early. A connection beyond the first few that gets refused is simply retired: the site has had
+        // enough, and the rest of the file carries on over the others.
+        if active > connections, error != nil {
+            active -= 1
+            queue.insert(index, at: 0)
+            scaler?.cancel(); scaler = nil
+            lock.unlock()
+            return false
+        }
+        // Put the rest in the queue and try again.
         chunks[index].tries += 1
         let tries = chunks[index].tries
         if tries <= 6 { queue.insert(index, at: 0) }
@@ -148,6 +197,7 @@ final class SegmentedDownloader {
         if ended { lock.unlock(); return }
         ended = true
         lock.unlock()
+        scaler?.cancel(); scaler = nil
         workers.forEach { $0.stop() }
         try? handle?.close()
         handle = nil
