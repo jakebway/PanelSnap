@@ -57,6 +57,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     private weak var library: LibraryStore?
     private var observers: [NSKeyValueObservation] = []
     private var downloadIDs: [ObjectIdentifier: UUID] = [:]
+    private var wkDownloads: [UUID: WKDownload] = [:]
     private var destinations: [UUID: URL] = [:]
     private var progressObservers: [UUID: NSKeyValueObservation] = [:]
     private var samples: [UUID: (time: Date, bytes: Int64)] = [:]
@@ -320,6 +321,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         download.delegate = self
         let id = UUID()
         downloadIDs[ObjectIdentifier(download)] = id
+        wkDownloads[id] = download
         downloads.insert(BrowserDownload(id: id, name: "Starting download…"), at: 0)
         progressObservers[id] = download.progress.observe(\.fractionCompleted) { [weak self] p, _ in
             let done = p.completedUnitCount, all = p.totalUnitCount
@@ -351,7 +353,18 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         if let i = downloads.firstIndex(where: { $0.id == id }) { change(&downloads[i]) }
     }
 
+    /// Removes a download from the list, stopping it first if it is still coming down.
     func dismissDownload(_ id: UUID) {
+        fastDownloads[id]?.cancel()
+        fastDownloads[id] = nil
+        if let key = downloadIDs.first(where: { $0.value == id })?.key {
+            wkDownloads[id]?.cancel { _ in }
+            downloadIDs[key] = nil
+        }
+        wkDownloads[id] = nil
+        progressObservers[id] = nil
+        if let d = destinations[id] { try? FileManager.default.removeItem(at: d.deletingLastPathComponent()) }
+        destinations[id] = nil
         downloads.removeAll { $0.id == id }
     }
 
@@ -364,6 +377,18 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         if !ext.isEmpty, !LibraryStore.comicExtensions.contains(ext), !Self.sniffExtensions.contains(ext) {
             update(id) { $0.name = name; $0.state = .failed("Not a comic file. Download canceled.") }
             completionHandler(nil)          // passing nil cancels the download
+            return
+        }
+        // The same file already coming down (a page that starts it twice): keep the first, drop this one.
+        let twin = downloads.contains { d in
+            if d.id != id, d.name == name, case .downloading = d.state { return true }
+            return false
+        }
+        if twin {
+            downloads.removeAll { $0.id == id }
+            progressObservers[id] = nil
+            downloadIDs[ObjectIdentifier(download)] = nil
+            completionHandler(nil)
             return
         }
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PanelSnapDownload-\(UUID().uuidString)")
@@ -419,13 +444,14 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             fastDownloads[id] = nil
             progressObservers[id] = nil
             downloadIDs[ObjectIdentifier(download)] = nil
+            wkDownloads[id] = nil
             download.cancel { _ in }
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PanelSnapDownload-\(UUID().uuidString)")
             let dest = dir.appendingPathComponent(name)
             destinations[id] = dest
             update(id) { $0.fast = true; $0.total = length }
             Console.log("browser: \(name) downloading over several connections (more are added while it speeds up)")
-            let fast = SegmentedDownloader(url: url, headers: headers, total: length, dest: dest, connections: 10)
+            let fast = SegmentedDownloader(url: url, headers: headers, total: length, dest: dest, connections: 8)
             fast.onProgress = { [weak self] bytes in
                 DispatchQueue.main.async { self?.report(id, bytes: bytes, total: length) }
             }

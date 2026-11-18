@@ -55,6 +55,8 @@ enum DiscoverSort: String, CaseIterable, Identifiable {
 /// shows (the way the open-source comicgeeks module does), and asks politely: one request per week, kept for an hour.
 @MainActor
 final class DiscoverModel: ObservableObject {
+    /// One shared copy, so the lists are already loaded by the time Discover is opened.
+    static let shared = DiscoverModel()
     @Published var weeks: [ReleaseWeek: [DiscoverComic]] = [:]
     @Published var loadingWeeks = Set<ReleaseWeek>()
     @Published var failedWeeks = Set<ReleaseWeek>()
@@ -79,6 +81,14 @@ final class DiscoverModel: ObservableObject {
             failedWeeks.insert(week)
         }
         loadingWeeks.remove(week)
+    }
+
+    /// Loads what the For You page shows. Called when the app opens, so Discover is ready when it is.
+    func prefetch(libraryTitles: [String]) async {
+        async let a: Void = load(.current)
+        async let b: Void = load(.next)
+        _ = await (a, b)
+        await recommend(libraryTitles: libraryTitles)
     }
 
     /// Searches the whole catalogue, old and new.

@@ -28,14 +28,14 @@ final class SegmentedDownloader {
     private var scaler: DispatchSourceTimer?
     private var scaleBytes: Int64 = 0
     private var scaleSpeed: Double = 0
-    private let ceiling = 32                     // never more connections than this
+    private var ceiling = 16                     // never more connections than this
 
     /// Called a few times a second with the bytes received so far.
     var onProgress: ((Int64) -> Void)?
     /// Called once: nil on success.
     var onFinish: ((Error?) -> Void)?
 
-    init(url: URL, headers: [String: String], total: Int64, dest: URL, connections: Int = 10) {
+    init(url: URL, headers: [String: String], total: Int64, dest: URL, connections: Int = 8) {
         self.url = url
         self.headers = headers
         self.total = total
@@ -91,10 +91,10 @@ final class SegmentedDownloader {
             if done { self.scaler?.cancel(); self.scaler = nil; return }
             let speed = Double(now - self.scaleBytes) / 4
             self.scaleBytes = now
-            let gained = self.scaleSpeed == 0 || speed > self.scaleSpeed * 1.15
+            let gained = self.scaleSpeed == 0 || speed > self.scaleSpeed * 1.25
             self.scaleSpeed = speed
             if gained && current < self.ceiling {
-                for _ in 0..<4 { self.addWorker() }
+                for _ in 0..<2 { self.addWorker() }
             } else if !gained {
                 self.scaler?.cancel(); self.scaler = nil      // more connections stopped helping
             }
@@ -172,8 +172,9 @@ final class SegmentedDownloader {
         }
         // Stopped early. A connection beyond the first few that gets refused is simply retired: the site has had
         // enough, and the rest of the file carries on over the others.
-        if active > connections, error != nil {
+        if active > 4, error != nil {
             active -= 1
+            ceiling = max(4, active)                  // this is as many as the site will take
             queue.insert(index, at: 0)
             scaler?.cancel(); scaler = nil
             lock.unlock()

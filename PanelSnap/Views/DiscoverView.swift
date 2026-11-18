@@ -29,7 +29,7 @@ struct DiscoverView: View {
 
     @EnvironmentObject var library: LibraryStore
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var model = DiscoverModel()
+    @ObservedObject private var model = DiscoverModel.shared
     @State private var topInset: CGFloat = 0
     @State private var landscape = false
     @State private var tab: DiscoverTab = .forYou

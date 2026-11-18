@@ -20,6 +20,7 @@ struct BrowserView: View {
     @State private var askingHome = false
     @State private var showBookmarks = false
     @State private var homeText = ""
+    @State private var swiped: [UUID: CGFloat] = [:]
 
     /// Keep the address bar clear of the Duo's corner status widget (it sits in the status bar when held upright).
     private var barTrailing: CGFloat { return (topInset > 20 && !landscape) ? 0 : Theme.cameraWidth }
@@ -230,6 +231,26 @@ struct BrowserView: View {
         }
         .padding(12)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .offset(x: swiped[item.id] ?? 0)
+        .opacity(1 - min(abs(swiped[item.id] ?? 0) / 300, 0.6))
+        // Swipe a download sideways to dismiss it (a download that is still coming down is stopped first).
+        .gesture(
+            DragGesture(minimumDistance: 14)
+                .onChanged { v in
+                    if abs(v.translation.width) > abs(v.translation.height) { swiped[item.id] = v.translation.width }
+                }
+                .onEnded { v in
+                    if abs(v.translation.width) > 90 || abs(v.predictedEndTranslation.width) > 220 {
+                        withAnimation(.easeOut(duration: 0.18)) { swiped[item.id] = v.translation.width < 0 ? -500 : 500 }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                            model.dismissDownload(item.id)
+                            swiped[item.id] = nil
+                        }
+                    } else {
+                        withAnimation(.spring(duration: 0.25)) { swiped[item.id] = 0 }
+                    }
+                }
+        )
     }
 
     private func detail(_ d: BrowserDownload) -> String {
