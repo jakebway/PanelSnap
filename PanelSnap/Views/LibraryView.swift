@@ -97,9 +97,6 @@ struct LibraryView: View {
             Button { addComics() } label: { Label("Files", systemImage: "doc.on.doc") }
             Button { addFolder() } label: { Label("Folder", systemImage: "folder") }
             Button { route = .browser } label: { Label("Browser", systemImage: "globe") }
-            if settings.showDiscover {
-                Button { route = .discover } label: { Label("Discover New Comics", systemImage: "sparkles") }
-            }
         } label: {
             CircleIcon(systemName: "plus")
         }
@@ -370,6 +367,26 @@ struct LibraryView: View {
     }
 
     private var shelfBar: some View {
+        HStack(spacing: 10) {
+            shelfChips
+            if settings.showDiscover {
+                Button { route = .discover } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                        Text("Discover").font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Theme.card2, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Discover new comics")
+            }
+        }
+    }
+
+    private var shelfChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 shelfChip("All", count: library.comics.count, selected: shelf == nil) { shelf = nil }

@@ -2,56 +2,48 @@ import Foundation
 
 /// One comic on the weekly release list.
 struct DiscoverComic: Identifiable, Hashable {
-    let id: String
-    var title: String
-    var publisher: String
+    let id: String             // the Grand Comics Database issue number
+    var series: String         // "Absolute Batman"
+    var year: String           // "2024"
+    var issue: String          // "6"
+    var variant: String        // "Nick Dragotta Cover", when the descriptor names one
     var price: String
-    var creators: String
-    var date: String
-    var summary: String
-    var diamondID: String
+    var pages: String
 
-    /// The official catalogue page (Diamond / PreviewsWorld) for this item, when it has an ID.
-    var listingURL: URL? {
-        guard !diamondID.isEmpty else { return nil }
-        return URL(string: "https://www.previewsworld.com/Catalog/" + diamondID)
-    }
+    var title: String { return issue.isEmpty ? series : series + " #" + issue }
 
-    var coverURL: URL? {
-        guard !diamondID.isEmpty else { return nil }
-        return URL(string: "https://www.previewsworld.com/SiteImage/CatalogImage/" + diamondID + "?type=1")
-    }
+    /// The comic's page on the Grand Comics Database website.
+    var listingURL: URL? { return URL(string: "https://www.comics.org/issue/" + id + "/") }
 
-    /// What to type into a download site's search box: the series name and issue number, without variant text.
-    var searchTerm: String {
-        var t = title
-        t = t.replacingOccurrences(of: "\\(.*?\\)", with: " ", options: .regularExpression)
-        for marker in [" CVR", " VAR", " 1:", " 2ND PTG", " 3RD PTG", " FOIL", " DIRECT MARKET", " POLYBAG"] {
-            if let r = t.range(of: marker, options: .caseInsensitive) { t = String(t[..<r.lowerBound]) }
-        }
-        t = t.replacingOccurrences(of: "#", with: " ")
-        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-        return t.trimmingCharacters(in: .whitespaces).capitalized
-    }
+    /// What to type into a download site's search box: the series name and issue number.
+    var searchTerm: String { return issue.isEmpty ? series : series + " " + issue }
 }
 
 enum ReleaseWeek: String, CaseIterable, Identifiable {
-    case previous, new, future
+    case previous, current, next
     var id: String { return rawValue }
     var label: String {
         switch self {
         case .previous: return "Last Week"
-        case .new: return "This Week"
-        case .future: return "Next Week"
+        case .current: return "This Week"
+        case .next: return "Next Week"
+        }
+    }
+    var dayOffset: Int {
+        switch self {
+        case .previous: return -7
+        case .current: return 0
+        case .next: return 7
         }
     }
 }
 
-/// Weekly comic-shop release lists from the free ShortBoxed service (no account or key), which mirrors the
-/// publishers' Diamond new-release lists.
+/// Weekly new-comic lists from the Grand Comics Database (comics.org), a volunteer-run catalogue whose data is
+/// licensed CC BY-SA. Its "on sale this week" list is open to read, with no account or key. Only US-priced
+/// issues are shown, and variant covers are folded into the main issue.
 @MainActor
 final class DiscoverModel: ObservableObject {
-    @Published var week: ReleaseWeek = .new
+    @Published var week: ReleaseWeek = .current
     @Published var comics: [DiscoverComic] = []
     @Published var loading = false
     @Published var failed = false
@@ -72,8 +64,7 @@ final class DiscoverModel: ObservableObject {
             let list = try await Self.fetch(wanted)
             cache[wanted] = list
             loadedAt[wanted] = Date()
-            if week == wanted { comics = list }
-            if list.isEmpty && week == wanted { failed = true }
+            if week == wanted { comics = list; failed = list.isEmpty }
         } catch {
             Console.log("Discover failed: \(error)")
             if week == wanted { comics = cache[wanted] ?? []; failed = comics.isEmpty }
@@ -82,47 +73,62 @@ final class DiscoverModel: ObservableObject {
     }
 
     private static func fetch(_ week: ReleaseWeek) async throws -> [DiscoverComic] {
-        guard let url = URL(string: "https://api.shortboxed.com/comics/v1/" + week.rawValue) else { return [] }
-        var req = URLRequest(url: url)
-        req.timeoutInterval = 20
-        let (data, response) = try await URLSession.shared.data(for: req)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { throw URLError(.badServerResponse) }
-        return parse(data)
-    }
-
-    /// Reads the list whichever way it is wrapped, and whichever way the fields are spelled.
-    static func parse(_ data: Data) -> [DiscoverComic] {
-        guard let json = try? JSONSerialization.jsonObject(with: data) else { return [] }
-        var items: [[String: Any]] = []
-        if let a = json as? [[String: Any]] { items = a }
-        else if let o = json as? [String: Any] {
-            for key in ["comics", "results", "data", "items"] {
-                if let a = o[key] as? [[String: Any]] { items = a; break }
-            }
-        }
-        func text(_ d: [String: Any], _ keys: [String]) -> String {
-            for k in keys {
-                if let s = d[k] as? String, !s.trimmingCharacters(in: .whitespaces).isEmpty { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
-                if let n = d[k] as? NSNumber { return n.stringValue }
-            }
-            return ""
+        var cal = Calendar(identifier: .iso8601)
+        cal.timeZone = TimeZone.current
+        let day = cal.date(byAdding: .day, value: week.dayOffset, to: Date()) ?? Date()
+        let year = cal.component(.yearForWeekOfYear, from: day)
+        let number = cal.component(.weekOfYear, from: day)
+        var next: URL? = URL(string: "https://www.comics.org/api/issue/on_sale_weekly/\(year)/week/\(number)/?format=json")
+        var all: [DiscoverComic] = []
+        var pages = 0
+        while let url = next, pages < 12 {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 25
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+            let (data, response) = try await URLSession.shared.data(for: req)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { throw URLError(.badServerResponse) }
+            let (items, link) = parse(data)
+            all += items
+            next = link
+            pages += 1
         }
         var seen = Set<String>()
+        return all.filter { seen.insert($0.id).inserted }
+            .sorted { $0.series.localizedStandardCompare($1.series) == .orderedAscending
+                      || ($0.series == $1.series && $0.issue.localizedStandardCompare($1.issue) == .orderedAscending) }
+    }
+
+    /// One page of the list: its comics, and the address of the next page (if any).
+    static func parse(_ data: Data) -> ([DiscoverComic], URL?) {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return ([], nil) }
+        let link = (root["next"] as? String).flatMap { URL(string: $0.contains("format=") ? $0 : $0 + ($0.contains("?") ? "&" : "?") + "format=json") }
         var out: [DiscoverComic] = []
-        for d in items {
-            let title = text(d, ["title", "name"])
-            if title.isEmpty { continue }
-            let diamond = text(d, ["diamond_id", "diamondId", "diamondID"])
-            let id = diamond.isEmpty ? title : diamond
-            if !seen.insert(id).inserted { continue }
-            out.append(DiscoverComic(id: id, title: title.capitalized,
-                                     publisher: text(d, ["publisher"]).capitalized,
-                                     price: text(d, ["price"]),
-                                     creators: text(d, ["creators", "creator"]),
-                                     date: text(d, ["release_date", "releaseDate", "date"]),
-                                     summary: text(d, ["description", "desc", "summary"]),
-                                     diamondID: diamond))
+        for d in (root["results"] as? [[String: Any]]) ?? [] {
+            if !(d["variant_of"] is NSNull) && d["variant_of"] != nil { continue }      // a variant cover of another issue
+            let price = (d["price"] as? String) ?? ""
+            if !price.uppercased().contains("USD") { continue }                          // keep the US market
+            guard let api = d["api_url"] as? String,
+                  let id = api.split(separator: "/").last.map(String.init), !id.isEmpty else { continue }
+            var series = (d["series_name"] as? String) ?? ""
+            var year = ""
+            if let r = series.range(of: " \\(\\d{4}\\??\\s+series\\)$", options: .regularExpression) {
+                year = String(series[r]).filter { $0.isNumber }
+                series = String(series[..<r.lowerBound])
+            }
+            let descriptor = ((d["descriptor"] as? String) ?? "").trimmingCharacters(in: .whitespaces)
+            var issue = descriptor
+            var variant = ""
+            if let b = descriptor.firstIndex(of: "[") {
+                issue = String(descriptor[..<b]).trimmingCharacters(in: .whitespaces)
+                variant = String(descriptor[b...]).trimmingCharacters(in: CharacterSet(charactersIn: "[] "))
+            }
+            if series.isEmpty { continue }
+            var pages = (d["page_count"] as? String) ?? ""
+            if let dot = pages.firstIndex(of: ".") { pages = String(pages[..<dot]) }
+            out.append(DiscoverComic(id: id, series: series, year: year, issue: issue, variant: variant,
+                                     price: price.replacingOccurrences(of: " USD", with: "").isEmpty ? "" : "$" + price.replacingOccurrences(of: " USD", with: ""),
+                                     pages: pages == "0" ? "" : pages))
         }
-        return out.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        return (out, link)
     }
 }

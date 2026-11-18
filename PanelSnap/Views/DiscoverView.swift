@@ -10,19 +10,12 @@ struct DiscoverView: View {
     @State private var topInset: CGFloat = 0
     @State private var landscape = false
     @State private var search = ""
-    @State private var publisher: String?
     @State private var selected: DiscoverComic?
-
-    private var publishers: [String] {
-        let counts = Dictionary(grouping: model.comics.filter { !$0.publisher.isEmpty }, by: { $0.publisher }).mapValues { $0.count }
-        return counts.filter { $0.value >= 3 }.sorted { $0.value > $1.value }.prefix(12).map { $0.key }
-    }
 
     private var visible: [DiscoverComic] {
         var list = model.comics
-        if let p = publisher { list = list.filter { $0.publisher == p } }
         let q = search.trimmingCharacters(in: .whitespaces)
-        if !q.isEmpty { list = list.filter { $0.title.localizedCaseInsensitiveContains(q) || $0.creators.localizedCaseInsensitiveContains(q) } }
+        if !q.isEmpty { list = list.filter { $0.title.localizedCaseInsensitiveContains(q) } }
         return list
     }
 
@@ -38,13 +31,12 @@ struct DiscoverView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 10)
                 searchField
-                if !publishers.isEmpty { chips }
                 content
             }
         }
         .readSafeTop($topInset)
         .readLandscape($landscape)
-        .task(id: model.week) { publisher = nil; await model.load() }
+        .task(id: model.week) { await model.load() }
         .sheet(item: $selected) { comic in
             DetailSheet(comic: comic,
                         onFind: { selected = nil; onFind(comic) },
@@ -84,26 +76,6 @@ struct DiscoverView: View {
         .padding(.bottom, 8)
     }
 
-    private var chips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("All", on: publisher == nil) { publisher = nil }
-                ForEach(publishers, id: \.self) { p in chip(p, on: publisher == p) { publisher = p } }
-            }
-            .padding(.horizontal, 20)
-        }
-        .padding(.bottom, 8)
-    }
-
-    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text).font(.footnote.weight(.semibold))
-                .foregroundStyle(on ? Theme.onAccent : Color.white)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(on ? Theme.accent : Theme.card2, in: Capsule())
-        }
-    }
-
     @ViewBuilder private var content: some View {
         if model.loading && model.comics.isEmpty {
             Spacer(); ProgressView().tint(Theme.accent); Spacer()
@@ -113,8 +85,8 @@ struct DiscoverView: View {
                 Text("Couldn't load the release list").font(.headline)
                 Text("Check your connection and try again.").font(.subheadline).foregroundStyle(Theme.secondary)
                 Button("Try Again") { Task { await model.load(force: true) } }.buttonStyle(YellowButtonStyle(compact: true))
-                if let url = URL(string: "https://www.previewsworld.com/NewReleases") {
-                    Button("Open the official list in the browser") { onOpen(url) }
+                if let url = URL(string: "https://gocollect.com/blog/category/comiclist/this-week") {
+                    Button("Open ComicList in the browser") { onOpen(url) }
                         .font(.footnote).foregroundStyle(Theme.accent)
                 }
             }
@@ -131,7 +103,9 @@ struct DiscoverView: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 24)
+                Text("Data from the Grand Comics Database (comics.org), CC BY-SA.")
+                    .font(.caption2).foregroundStyle(Theme.secondary)
+                    .padding(.vertical, 18)
             }
             .refreshable { await model.load(force: true) }
         }
@@ -139,11 +113,9 @@ struct DiscoverView: View {
 
     private func row(_ c: DiscoverComic) -> some View {
         HStack(spacing: 12) {
-            CoverThumb(url: c.coverURL)
             VStack(alignment: .leading, spacing: 3) {
                 Text(c.title).font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
-                Text(c.publisher).font(.caption).foregroundStyle(Theme.accent)
-                if !c.creators.isEmpty { Text(c.creators).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1) }
+                if !c.year.isEmpty { Text(c.year + " series").font(.caption).foregroundStyle(Theme.accent) }
             }
             Spacer(minLength: 4)
             if !c.price.isEmpty { Text(c.price).font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary) }
@@ -151,23 +123,6 @@ struct DiscoverView: View {
         }
         .padding(10)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-}
-
-/// A cover picture that falls back to a plain tile when there is none.
-private struct CoverThumb: View {
-    let url: URL?
-    var width: CGFloat = 46
-    var body: some View {
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                ZStack { Theme.card2; Image(systemName: "book.closed").foregroundStyle(Theme.secondary) }
-            }
-        }
-        .frame(width: width, height: width * 1.5)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
@@ -181,20 +136,13 @@ private struct DetailSheet: View {
             Theme.bg.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .top, spacing: 14) {
-                        CoverThumb(url: comic.coverURL, width: 90)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(comic.title).font(.title3.weight(.bold)).foregroundStyle(.white)
-                            Text(comic.publisher).font(.subheadline).foregroundStyle(Theme.accent)
-                            if !comic.creators.isEmpty { Text(comic.creators).font(.footnote).foregroundStyle(Theme.secondary) }
-                            HStack(spacing: 10) {
-                                if !comic.date.isEmpty { Text(comic.date).font(.footnote).foregroundStyle(Theme.secondary) }
-                                if !comic.price.isEmpty { Text(comic.price).font(.footnote.weight(.semibold)).foregroundStyle(Theme.secondary) }
-                            }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(comic.title).font(.title3.weight(.bold)).foregroundStyle(.white)
+                        if !comic.year.isEmpty { Text(comic.year + " series").font(.subheadline).foregroundStyle(Theme.accent) }
+                        HStack(spacing: 10) {
+                            if !comic.price.isEmpty { Text(comic.price).font(.footnote.weight(.semibold)).foregroundStyle(Theme.secondary) }
+                            if !comic.pages.isEmpty { Text(comic.pages + " pages").font(.footnote).foregroundStyle(Theme.secondary) }
                         }
-                    }
-                    if !comic.summary.isEmpty {
-                        Text(comic.summary).font(.subheadline).foregroundStyle(Color(white: 0.85))
                     }
                     Button { onFind() } label: {
                         Label("Find on My Home Website", systemImage: "magnifyingglass").frame(maxWidth: .infinity)
@@ -202,7 +150,7 @@ private struct DetailSheet: View {
                     .buttonStyle(YellowButtonStyle(compact: false))
                     if let url = comic.listingURL {
                         Button { onOpen(url) } label: {
-                            Label("Open Official Listing in Browser", systemImage: "globe").frame(maxWidth: .infinity)
+                            Label("Open Listing in Browser", systemImage: "globe").frame(maxWidth: .infinity)
                         }
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)

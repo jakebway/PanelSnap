@@ -42,7 +42,7 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.secondary)
                     }
 
-                    Section(header: Text("Discover"), footer: Text("A list of this week's, last week's and next week's new comics, with a button to search your Home website for any of them. Find it in the + menu on the library.")) {
+                    Section(header: Text("Discover"), footer: Text("A list of this week's, last week's and next week's new comics from the Grand Comics Database, with a button to search your Home website for any of them. Its button sits at the end of the shelf row on the library.")) {
                         Toggle("Show Discover", isOn: $settings.showDiscover)
                     }
 
