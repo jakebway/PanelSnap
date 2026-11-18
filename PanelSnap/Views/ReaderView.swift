@@ -99,6 +99,13 @@ struct ReaderView: View {
     @State private var pendingTap: Task<Void, Never>?
     @State private var scrub: Double = 0
     @State private var scrubbing = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Puts the slider back on the page that is really showing (after returning to the app, or an interrupted drag).
+    private func syncSlider() {
+        scrubbing = false
+        scrub = Double(model.pageIndex)
+    }
     @State private var hideTask: Task<Void, Never>?
     @State private var started = false
 
@@ -139,6 +146,7 @@ struct ReaderView: View {
             }
             UIApplication.shared.isIdleTimerDisabled = true
             haptic.prepare()
+            syncSlider()
             scheduleHide()
         }
         .onDisappear {
@@ -154,6 +162,9 @@ struct ReaderView: View {
             if !scrubbing { scrub = Double(newValue) }
             saveProgress()
         }
+        .onChange(of: model.pageCount) { _, _ in syncSlider() }
+        .onChange(of: chromeVisible) { _, shown in if shown { syncSlider() } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { syncSlider() } }
         .onChange(of: model.pageIndex) { _, _ in resetZoom() }
         .onChange(of: model.panelIndex) { _, _ in if !zoom.converting { resetZoom() } }
         .onChange(of: settings.snapToPanels) { _, _ in
