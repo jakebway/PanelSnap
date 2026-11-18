@@ -42,13 +42,7 @@ jobs:
         run: bash Scripts/build-ipa.sh
 
       - name: Check the panel model
-        run: |
-          python3 -m venv /tmp/mlcheck
-          if /tmp/mlcheck/bin/pip install -q coremltools numpy; then
-            /tmp/mlcheck/bin/python Scripts/check_panel_model.py PanelSnap/Resources/DeepPanel.mlmodel Tests/panel-check.npz
-          else
-            echo "::warning::Could not install coremltools; panel model check skipped."
-          fi
+        run: swift Scripts/CheckPanelModel.swift PanelSnap/Resources/DeepPanel.mlmodel Tests/panel-check-input.f32 Tests/panel-check-classes.u8
 
       - name: Save the IPA (Actions artifact)
         if: success()
