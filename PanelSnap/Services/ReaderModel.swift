@@ -127,9 +127,10 @@ final class ReaderModel: ObservableObject {
             }
             var found = cache.panels(for: page)
             if found == nil && scan {
-                let detected = PanelDetector.detect(image: cg, rtl: isRTL)
-                cache.store(detected, for: page)
-                found = detected
+                if let detected = PanelDetector.detect(image: cg, rtl: isRTL) {
+                    cache.store(detected, for: page)
+                    found = detected
+                }
             }
             let rects = found ?? []
             let ui = UIImage(cgImage: cg)
@@ -180,8 +181,7 @@ final class ReaderModel: ObservableObject {
             Task.detached(priority: .utility) { [weak self] in
                 guard let cg = src.pageImage(at: next, maxPixel: 2600) else { return }
                 var found = cache.panels(for: next)
-                if found == nil {
-                    let detected = PanelDetector.detect(image: cg, rtl: isRTL)
+                if found == nil, let detected = PanelDetector.detect(image: cg, rtl: isRTL) {
                     cache.store(detected, for: next)
                     found = detected
                 }

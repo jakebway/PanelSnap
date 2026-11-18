@@ -23,11 +23,6 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         if settings.snapToPanels {
                             Toggle("Show Whole Page First", isOn: $settings.showFullPageFirst)
-                            HStack {
-                                Text("Panel Detection")
-                                Spacer()
-                                Text(MLPanelDetector.status).foregroundStyle(Theme.secondary)
-                            }
                         }
                     }
 

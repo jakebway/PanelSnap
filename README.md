@@ -70,4 +70,4 @@ Settings › Reading › *Regular pages* turns off panel detection and zooming a
 
 ## Panel detection
 
-Panels are found by a small neural network (the [DeepPanel](https://github.com/pedrovgs/DeepPanel) U-Net by Pedro Gómez, Apache License 2.0), run on the phone with ONNX Runtime. It reads a page the way a person does, so it copes with borderless art and odd layouts. There is no rule-based backup.
+Panels are found by a small neural network (the [DeepPanel](https://github.com/pedrovgs/DeepPanel) U-Net by Pedro Gómez, Apache License 2.0), run on the phone with Apple's Core ML. It reads a page the way a person does, so it copes with borderless art and odd layouts. There is no rule-based backup.

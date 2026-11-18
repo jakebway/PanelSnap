@@ -1,57 +1,57 @@
 import Foundation
 import CoreGraphics
-#if canImport(OnnxRuntimeBindings)
-import OnnxRuntimeBindings
-#endif
+import CoreML
 
-/// Finds comic panels with a small neural network (the DeepPanel U-Net, Apache 2.0, by Pedro Gómez) instead of
-/// rules. It looks at the whole page the way a reader does, so it copes with borderless art, panels that overlap
-/// and odd layouts.
+/// Finds comic panels with a small neural network (the DeepPanel U-Net, Apache 2.0, by Pedro Gómez). It looks at
+/// the whole page the way a reader does, so it copes with borderless art, inset panels and odd layouts.
+/// It runs on Apple's own Core ML, which is part of iOS, so nothing outside the app is needed.
 enum MLPanelDetector {
     private static let side = 224
     private static let lock = NSLock()
-    private static var _status = "Not used yet"
+    private static var model: MLModel?
+    private static var loadFailed = false
 
-    /// What the last page used, so a problem can be told apart from a wrong guess. Shown in Settings.
-    static var status: String {
+    private static func loadModel() -> MLModel? {
         lock.lock(); defer { lock.unlock() }
-        return _status
-    }
-    private static func setStatus(_ s: String) {
-        lock.lock(); _status = s; lock.unlock()
-    }
-
-    #if canImport(OnnxRuntimeBindings)
-    private static var env: ORTEnv?
-    private static var session: ORTSession?
-
-    private static func loadSession() -> ORTSession? {
-        lock.lock(); defer { lock.unlock() }
-        if let s = session { return s }
-        guard let path = Bundle.main.path(forResource: "deeppanel", ofType: "onnx") else {
-            _status = "Model file missing"
-            return nil
-        }
+        if let m = model { return m }
+        if loadFailed { return nil }
+        let config = MLModelConfiguration()
+        config.computeUnits = .all
         do {
-            let e = try ORTEnv(loggingLevel: .warning)
-            let options = try ORTSessionOptions()
-            try options.setIntraOpNumThreads(2)
-            let s = try ORTSession(env: e, modelPath: path, sessionOptions: options)
-            env = e
-            session = s
-            return s
+            var url = Bundle.main.url(forResource: "DeepPanel", withExtension: "mlmodelc")
+            if url == nil, let raw = Bundle.main.url(forResource: "DeepPanel", withExtension: "mlmodel") {
+                // Not compiled at build time: compile it once on the phone and keep the result.
+                let kept = Paths.caches.appendingPathComponent("DeepPanel.mlmodelc")
+                if !FileManager.default.fileExists(atPath: kept.path) {
+                    let tmp = try MLModel.compileModel(at: raw)
+                    try? FileManager.default.removeItem(at: kept)
+                    try FileManager.default.moveItem(at: tmp, to: kept)
+                }
+                url = kept
+            }
+            guard let found = url else {
+                Console.log("Panel model is missing from the app")
+                loadFailed = true
+                return nil
+            }
+            let m = try MLModel(contentsOf: found, configuration: config)
+            model = m
+            return m
         } catch {
             Console.log("Panel model failed to load: \(error)")
-            _status = "Model would not load"
+            loadFailed = true
             return nil
         }
     }
-    #endif
 
-    /// Panels in reading order as 0...1 rectangles (top-left origin), or nil if the model could not run.
+    /// Loads the model ahead of time so the first page does not wait for it.
+    static func warmUp() {
+        DispatchQueue.global(qos: .utility).async { _ = loadModel() }
+    }
+
+    /// Panels in reading order as 0...1 rectangles (top-left origin); empty when the page has none; nil if the model could not run.
     static func detect(image: CGImage, rtl: Bool) -> [CGRect]? {
-        #if canImport(OnnxRuntimeBindings)
-        guard let session = loadSession() else { return nil }
+        guard let model = loadModel() else { return nil }
         let iw = CGFloat(image.width), ih = CGFloat(image.height)
         guard iw > 8, ih > 8 else { return nil }
 
@@ -60,36 +60,38 @@ enum MLPanelDetector {
         let nw = ceil(iw * fit), nh = ceil(ih * fit)
         let ox = floor((CGFloat(side) - nw) / 2), oy = floor((CGFloat(side) - nh) / 2)
         var bytes = [UInt8](repeating: 0, count: side * side * 4)
-        guard let ctx = CGContext(data: &bytes, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))
-        ctx.interpolationQuality = .high
-        // Bitmap memory is top-down, so the vertical offset measured from the top is flipped for drawing.
-        ctx.draw(image, in: CGRect(x: ox, y: CGFloat(side) - oy - nh, width: nw, height: nh))
-
-        var input = [Float](repeating: 0, count: side * side * 3)
-        for i in 0..<(side * side) {
-            input[i * 3] = Float(bytes[i * 4]) / 255
-            input[i * 3 + 1] = Float(bytes[i * 4 + 1]) / 255
-            input[i * 3 + 2] = Float(bytes[i * 4 + 2]) / 255
+        let drawn: Bool = bytes.withUnsafeMutableBytes { buf in
+            guard let ctx = CGContext(data: buf.baseAddress, width: side, height: side, bitsPerComponent: 8,
+                                      bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))
+            ctx.interpolationQuality = .high
+            // Bitmap memory is top-down, so the vertical offset measured from the top is flipped for drawing.
+            ctx.draw(image, in: CGRect(x: ox, y: CGFloat(side) - oy - nh, width: nw, height: nh))
+            return true
         }
+        if !drawn { return nil }
 
+        let count = side * side
         let scores: [Float]
         do {
-            let data = NSMutableData(bytes: input, length: input.count * MemoryLayout<Float>.size)
-            let tensor = try ORTValue(tensorData: data, elementType: .float, shape: [1, NSNumber(value: side), NSNumber(value: side), 3])
-            let out = try session.run(withInputs: ["input_2": tensor], outputNames: ["Identity"], runOptions: nil)
-            guard let result = out["Identity"] else { return nil }
-            let raw = try result.tensorData() as Data
-            scores = raw.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+            let input = try MLMultiArray(shape: [1, NSNumber(value: side), NSNumber(value: side), 3], dataType: .float32)
+            let ptr = input.dataPointer.bindMemory(to: Float.self, capacity: count * 3)
+            for i in 0..<count {
+                ptr[i * 3] = Float(bytes[i * 4]) / 255
+                ptr[i * 3 + 1] = Float(bytes[i * 4 + 1]) / 255
+                ptr[i * 3 + 2] = Float(bytes[i * 4 + 2]) / 255
+            }
+            let features = try MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(multiArray: input)])
+            let result = try model.prediction(from: features)
+            guard let out = result.featureValue(for: "scores")?.multiArrayValue else { return nil }
+            scores = readScores(out)
         } catch {
             Console.log("Panel model failed to run: \(error)")
-            setStatus("Model failed to run")
             return nil
         }
-        if scores.count < side * side * 3 { return nil }
+        if scores.count < count * 3 { return nil }
 
         // Class 2 is "inside a panel". Label the connected blobs of it.
         var mask = [Bool](repeating: false, count: side * side)
@@ -125,12 +127,31 @@ enum MLPanelDetector {
         }
 
         // Boxes can overlap on purpose: a small panel inset on top of a big one is still its own panel.
-        if boxes.isEmpty { setStatus("No panels on last page"); return nil }
-        setStatus("Neural network")
+        if boxes.isEmpty { return [] }            // it ran and found no panels: a splash page
         return order(boxes, rtl: rtl)
-        #else
-        return nil
-        #endif
+    }
+
+    /// The model's answer as a flat height x width x 3 list, whatever memory layout Core ML hands back.
+    private static func readScores(_ a: MLMultiArray) -> [Float] {
+        let dims = a.shape.map { $0.intValue }
+        let st = a.strides.map { $0.intValue }
+        guard dims.count >= 3 else { return [] }
+        let n = dims.count
+        let (h, w, c) = (dims[n - 3], dims[n - 2], dims[n - 1])
+        let (sh, sw, sc) = (st[n - 3], st[n - 2], st[n - 1])
+        guard h == side, w == side, c >= 3 else { return [] }
+        var out = [Float](repeating: 0, count: h * w * 3)
+        switch a.dataType {
+        case .float32:
+            let p = a.dataPointer.bindMemory(to: Float.self, capacity: a.count)
+            for y in 0..<h { for x in 0..<w { for k in 0..<3 { out[(y * w + x) * 3 + k] = p[y * sh + x * sw + k * sc] } } }
+        case .double:
+            let p = a.dataPointer.bindMemory(to: Double.self, capacity: a.count)
+            for y in 0..<h { for x in 0..<w { for k in 0..<3 { out[(y * w + x) * 3 + k] = Float(p[y * sh + x * sw + k * sc]) } } }
+        default:
+            for y in 0..<h { for x in 0..<w { for k in 0..<3 { out[(y * w + x) * 3 + k] = a[y * sh + x * sw + k * sc].floatValue } } }
+        }
+        return out
     }
 
     /// Reading order for boxes: cut the page into bands wherever a clean horizontal line exists, otherwise into
