@@ -128,11 +128,11 @@ final class DiscoverModel: ObservableObject {
         var counts: [String: Int] = [:]
         var order: [String] = []
         for t in titles {
-            var s = t.replacingOccurrences(of: "\(.*?\)|\[.*?\]", with: " ", options: .regularExpression)
-            if let r = s.range(of: "#\s*\d", options: .regularExpression) { s = String(s[..<r.lowerBound]) }
-            s = s.replacingOccurrences(of: "\b(vol(ume)?\.?|v)\s*\d+.*$", with: " ", options: [.regularExpression, .caseInsensitive])
-            s = s.replacingOccurrences(of: "[_\.]", with: " ", options: .regularExpression)
-            s = s.replacingOccurrences(of: "\s+", with: " ", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: " -–"))
+            var s = t.replacingOccurrences(of: "\\(.*?\\)|\\[.*?\\]", with: " ", options: .regularExpression)
+            if let r = s.range(of: "#\\s*\\d", options: .regularExpression) { s = String(s[..<r.lowerBound]) }
+            s = s.replacingOccurrences(of: "\\b(vol(ume)?\\.?|v)\\s*\\d+.*$", with: " ", options: [.regularExpression, .caseInsensitive])
+            s = s.replacingOccurrences(of: "[_\\.]", with: " ", options: .regularExpression)
+            s = s.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: " -–"))
             if s.count < 3 { continue }
             if counts[s] == nil { order.append(s) }
             counts[s, default: 0] += 1
