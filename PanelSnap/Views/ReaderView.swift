@@ -223,6 +223,8 @@ struct ReaderView: View {
                 )
 
             ZoomGestures(zoom: zoom, enabled: !showCompanion && !scrubbing && !model.reachedEnd,
+                         panelFocused: model.panelIndex >= 0,
+                         onFlick: { handleDrag($0) },
                          onPinchedOut: { model.showOverview() },
                          onLeavePanel: { leavePanel(size: size) },
                          onEdgeSwipe: { swipedLeft in

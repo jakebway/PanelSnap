@@ -44,6 +44,8 @@ struct ZoomedContent<Content: View>: View {
 struct ZoomGestures: UIViewRepresentable {
     let zoom: ZoomState
     var enabled: Bool
+    var panelFocused: Bool                 // on a snapped panel: one finger nudges it, a quick flick still swipes
+    var onFlick: (CGSize) -> Void          // a quick flick on a snapped panel: the same as a swipe
     var onPinchedOut: () -> Void           // pinching in on a page that is not zoomed: show the whole page
     var onLeavePanel: () -> Void           // pinching on a focused panel: switch to free zooming on the whole page
     var onEdgeSwipe: (Bool) -> Void        // zoomed in and pushed past the side of the page: true = swiped left
@@ -59,6 +61,8 @@ struct ZoomGestures: UIViewRepresentable {
 
     func updateUIView(_ uiView: HookView, context: Context) {
         context.coordinator.enabled = enabled
+        context.coordinator.panelFocused = panelFocused
+        context.coordinator.onFlick = onFlick
         context.coordinator.onPinchedOut = onPinchedOut
         context.coordinator.onLeavePanel = onLeavePanel
         context.coordinator.onEdgeSwipe = onEdgeSwipe
@@ -75,6 +79,8 @@ struct ZoomGestures: UIViewRepresentable {
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         let zoom: ZoomState
         var enabled = true
+        var panelFocused = false
+        var onFlick: (CGSize) -> Void = { _ in }
         var onPinchedOut: () -> Void = {}
         var onLeavePanel: () -> Void = {}
         var onEdgeSwipe: (Bool) -> Void = { _ in }
@@ -116,7 +122,7 @@ struct ZoomGestures: UIViewRepresentable {
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard enabled, let stage = stage, stage.window != nil else { return false }
             if !stage.bounds.contains(g.location(in: stage)) { return false }
-            if g === pan { return zoom.isZoomed }        // one finger only moves the page when it is zoomed in
+            if g === pan { return zoom.isZoomed || panelFocused }   // one finger moves the page when zoomed in, or nudges a snapped panel
             return true
         }
 
@@ -194,6 +200,10 @@ struct ZoomGestures: UIViewRepresentable {
             guard let stage = stage else { return }
             if pinch.state == .began || pinch.state == .changed { return }
             let size = stage.bounds.size
+            if !zoom.isZoomed {
+                nudge(g, size: size)
+                return
+            }
             switch g.state {
             case .began:
                 g.setTranslation(.zero, in: stage)
@@ -228,6 +238,44 @@ struct ZoomGestures: UIViewRepresentable {
                 }
             case .cancelled:
                 withAnimation(.easeOut(duration: 0.2)) { zoom.offset = zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size) }
+            default:
+                break
+            }
+        }
+
+        // MARK: Nudging a snapped panel
+
+        private var nudgeBase: CGSize = .zero
+
+        /// On a snapped panel a slow drag moves it a little, to read or look at something. A quick flick is still a swipe.
+        private func nudge(_ g: UIPanGestureRecognizer, size: CGSize) {
+            let room = CGSize(width: size.width * 0.4, height: size.height * 0.4)
+            func limit(_ o: CGSize) -> CGSize {
+                return CGSize(width: min(max(o.width, -room.width), room.width), height: min(max(o.height, -room.height), room.height))
+            }
+            switch g.state {
+            case .began:
+                g.setTranslation(.zero, in: stage)
+                nudgeBase = zoom.offset
+            case .changed:
+                let t = g.translation(in: stage)
+                zoom.lastPinch = Date()             // keeps the reader's own swipe from also firing
+                zoom.offset = limit(CGSize(width: nudgeBase.width + t.x, height: nudgeBase.height + t.y))
+            case .ended:
+                let v = g.velocity(in: stage), t = g.translation(in: stage)
+                zoom.lastPinch = Date()
+                let speed = max(abs(v.x), abs(v.y))
+                let dominant = abs(v.x) > abs(v.y) ? abs(v.x) : abs(v.y)
+                if speed > 700 && dominant > 1.3 * (abs(v.x) > abs(v.y) ? abs(v.y) : abs(v.x)) {
+                    withAnimation(.easeOut(duration: 0.2)) { zoom.offset = .zero }
+                    onFlick(t)
+                } else {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        zoom.offset = limit(CGSize(width: zoom.offset.width + v.x * 0.1, height: zoom.offset.height + v.y * 0.1))
+                    }
+                }
+            case .cancelled:
+                break
             default:
                 break
             }
