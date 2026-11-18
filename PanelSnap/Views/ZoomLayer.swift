@@ -200,7 +200,7 @@ struct ZoomGestures: UIViewRepresentable {
             guard let stage = stage else { return }
             if pinch.state == .began || pinch.state == .changed { return }
             let size = stage.bounds.size
-            if !zoom.isZoomed {
+            if !zoom.isZoomed && !converted {
                 nudge(g, size: size)
                 return
             }
@@ -220,6 +220,7 @@ struct ZoomGestures: UIViewRepresentable {
                 zoom.offset = CGSize(width: held.width + (raw.width - held.width) * 0.3,
                                      height: held.height + (raw.height - held.height) * 0.3)
             case .ended:
+                converted = false
                 let v = g.velocity(in: stage)
                 let t = g.translation(in: stage)
                 let raw = CGSize(width: panBase.width + t.x, height: panBase.height + t.y)
@@ -237,6 +238,7 @@ struct ZoomGestures: UIViewRepresentable {
                     withAnimation(.easeOut(duration: 0.45)) { zoom.offset = glide }
                 }
             case .cancelled:
+                converted = false
                 withAnimation(.easeOut(duration: 0.2)) { zoom.offset = zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size) }
             default:
                 break
@@ -246,36 +248,31 @@ struct ZoomGestures: UIViewRepresentable {
         // MARK: Nudging a snapped panel
 
         private var nudgeBase: CGSize = .zero
+        private var converted = false     // this drag has turned into free panning of the whole page
 
-        /// On a snapped panel a slow drag moves it a little, to read or look at something. A quick flick is still a swipe.
+        /// On a snapped panel a quick flick is a swipe. A slower drag lets go of the panel and moves around the
+        /// whole page, at the same zoom, so you can look anywhere (the same hand-over a pinch makes).
         private func nudge(_ g: UIPanGestureRecognizer, size: CGSize) {
-            let room = CGSize(width: size.width * 0.4, height: size.height * 0.4)
-            func limit(_ o: CGSize) -> CGSize {
-                return CGSize(width: min(max(o.width, -room.width), room.width), height: min(max(o.height, -room.height), room.height))
-            }
             switch g.state {
             case .began:
+                converted = false
                 g.setTranslation(.zero, in: stage)
-                nudgeBase = zoom.offset
             case .changed:
-                let t = g.translation(in: stage)
+                let t = g.translation(in: stage), v = g.velocity(in: stage)
                 zoom.lastPinch = Date()             // keeps the reader's own swipe from also firing
-                zoom.offset = limit(CGSize(width: nudgeBase.width + t.x, height: nudgeBase.height + t.y))
+                if hypot(t.x, t.y) > 6 && hypot(v.x, v.y) < 450 {
+                    converted = true
+                    onLeavePanel()
+                    g.setTranslation(.zero, in: stage)
+                    panBase = zoom.offset
+                }
             case .ended:
                 let v = g.velocity(in: stage), t = g.translation(in: stage)
                 zoom.lastPinch = Date()
-                let speed = max(abs(v.x), abs(v.y))
-                let dominant = abs(v.x) > abs(v.y) ? abs(v.x) : abs(v.y)
-                if speed > 700 && dominant > 1.3 * (abs(v.x) > abs(v.y) ? abs(v.y) : abs(v.x)) {
-                    withAnimation(.easeOut(duration: 0.2)) { zoom.offset = .zero }
+                let ax = abs(v.x), ay = abs(v.y)
+                if max(ax, ay) > 700 && max(ax, ay) > 1.3 * min(ax, ay) {
                     onFlick(CGSize(width: t.x, height: t.y))
-                } else {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        zoom.offset = limit(CGSize(width: zoom.offset.width + v.x * 0.1, height: zoom.offset.height + v.y * 0.1))
-                    }
                 }
-            case .cancelled:
-                break
             default:
                 break
             }
