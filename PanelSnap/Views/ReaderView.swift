@@ -341,7 +341,7 @@ struct ReaderView: View {
         t.disablesAnimations = true
         withTransaction(t) {
             model.showOverview()
-            zoom.set(zoom: newZoom, offset: zoom.clamp(newOffset, zoom: newZoom, size: size))
+            zoom.set(zoom: newZoom, offset: newOffset)    // no clamp: the screen must look exactly as it did
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { zoom.converting = false }
     }
