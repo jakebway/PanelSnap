@@ -184,7 +184,7 @@ struct BrowserView: View {
 
     private var downloadsStrip: some View {
         VStack(spacing: 8) {
-            ForEach(model.downloads.prefix(3)) { item in
+            ForEach(shownDownloads) { item in
                 downloadRow(item)
             }
         }
@@ -206,6 +206,8 @@ struct BrowserView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 switch item.state {
+                case .queued:
+                    Text("Waiting for a free slot…").font(.caption).foregroundStyle(Theme.secondary)
                 case .downloading:
                     ProgressView(value: item.progress).tint(Theme.accent)
                     Text(detail(item)).font(.caption2).foregroundStyle(Theme.secondary)
@@ -263,8 +265,15 @@ struct BrowserView: View {
         return parts.joined(separator: " · ")
     }
 
+    /// Running downloads first, then the ones waiting; at most three rows.
+    private var shownDownloads: [BrowserDownload] {
+        func waiting(_ d: BrowserDownload) -> Bool { if case .queued = d.state { return true } else { return false } }
+        return Array((model.downloads.filter { !waiting($0) } + model.downloads.filter { waiting($0) }).prefix(3))
+    }
+
     private func icon(for s: BrowserDownload.State) -> String {
         switch s {
+        case .queued: return "clock.fill"
         case .downloading: return "arrow.down.circle.fill"
         case .adding: return "books.vertical.fill"
         case .done: return "checkmark.circle.fill"

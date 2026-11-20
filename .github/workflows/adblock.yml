@@ -1,0 +1,50 @@
+name: Update ad-block lists
+
+# Rebuilds the browser's ad-block lists from EasyList once a week and publishes them to the "adblock-lists" branch.
+# The app downloads them from there (about once a day) and uses them in place of the lists bundled with it.
+# Nothing here touches main, so it never triggers an app build.
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: adblock
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the lists
+        run: python3 Scripts/build_adblock.py
+      - name: Publish
+        run: |
+          set -eu
+          mkdir -p /tmp/lists
+          cp PanelSnap/Resources/shield-*.json /tmp/lists/
+          cd /tmp/lists
+          python3 - <<'PY'
+          import json, glob, os, datetime
+          files = sorted(os.path.basename(f) for f in glob.glob("shield-*.json"))
+          for f in files:
+              assert isinstance(json.load(open(f)), list) and os.path.getsize(f) > 1000, f
+          json.dump({"version": datetime.date.today().isoformat(), "files": files}, open("manifest.json", "w"))
+          print(files)
+          PY
+          URL="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          rm -rf /tmp/pub
+          if ! git clone --quiet --depth 1 --branch adblock-lists "$URL" /tmp/pub 2>/dev/null; then
+            mkdir -p /tmp/pub && cd /tmp/pub && git init -q -b adblock-lists && git remote add origin "$URL"
+          fi
+          cd /tmp/pub
+          git config user.name "panelsnap-ci"; git config user.email "ci@users.noreply.github.com"
+          rm -f ./*.json && cp /tmp/lists/*.json .
+          git add -A
+          git commit -q -m "Ad-block lists $(date -u +%F)" || { echo "no changes"; exit 0; }
+          git push -q origin adblock-lists

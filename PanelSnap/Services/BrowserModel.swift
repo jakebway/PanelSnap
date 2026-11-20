@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 struct BrowserDownload: Identifiable {
-    enum State { case downloading, adding, done(String), failed(String) }
+    enum State { case queued, downloading, adding, done(String), failed(String) }
     var id = UUID()
     var name: String
     var progress: Double = 0
@@ -80,6 +80,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func prepare() async {
         await BrowserShield.shared.prepare()
+        Task { await BrowserShield.shared.refreshIfDue() }
         if webView == nil {
             build()
             if let u = pendingOpen { pendingOpen = nil; webView?.load(URLRequest(url: u)) }
@@ -351,10 +352,15 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     private func update(_ id: UUID, _ change: (inout BrowserDownload) -> Void) {
         if let i = downloads.firstIndex(where: { $0.id == id }) { change(&downloads[i]) }
+        if !waiting.isEmpty { startWaiting() }
     }
 
     /// Removes a download from the list, stopping it first if it is still coming down.
     func dismissDownload(_ id: UUID) {
+        if let w = waiting.first(where: { $0.id == id }) {
+            waiting.removeAll { $0.id == id }
+            w.abort()
+        }
         fastDownloads[id]?.cancel()
         fastDownloads[id] = nil
         if let key = downloadIDs.first(where: { $0.value == id })?.key {
@@ -381,7 +387,10 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         }
         // The same file already coming down (a page that starts it twice): keep the first, drop this one.
         let twin = downloads.contains { d in
-            if d.id != id, d.name == name, case .downloading = d.state { return true }
+            if d.id != id, d.name == name {
+                if case .downloading = d.state { return true }
+                if case .queued = d.state { return true }
+            }
             return false
         }
         if twin {
@@ -394,11 +403,45 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PanelSnapDownload-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let dest = dir.appendingPathComponent(name)
-        destinations[id] = dest
-        update(id) { $0.name = name }
-        completionHandler(dest)
-        if let url = response.url, response.expectedContentLength >= 3_000_000, !noFast.contains(url.absoluteString) {
-            accelerate(id: id, download: download, url: url, length: response.expectedContentLength, name: name)
+        let begin: () -> Void = { [weak self] in
+            guard let self = self else { completionHandler(nil); return }
+            self.destinations[id] = dest
+            self.update(id) { $0.name = name; $0.state = .downloading }
+            completionHandler(dest)
+            if let url = response.url, response.expectedContentLength >= 3_000_000, !self.noFast.contains(url.absoluteString) {
+                self.accelerate(id: id, download: download, url: url, length: response.expectedContentLength, name: name)
+            }
+        }
+        // Only a couple of downloads run at once; the rest wait their turn (the transfer simply has not started yet).
+        let running = downloads.filter { d in
+            if d.id == id { return false }
+            if case .downloading = d.state { return true }
+            return false
+        }.count
+        if running >= Self.maxActiveDownloads {
+            update(id) { $0.name = name; $0.state = .queued }
+            waiting.append(WaitingDownload(id: id, start: begin, abort: { completionHandler(nil) }))
+        } else {
+            begin()
+        }
+    }
+
+    static let maxActiveDownloads = 2
+
+    private struct WaitingDownload {
+        let id: UUID
+        let start: () -> Void
+        let abort: () -> Void
+    }
+    private var waiting: [WaitingDownload] = []
+
+    /// Starts the next waiting downloads while there is room.
+    private func startWaiting() {
+        while !waiting.isEmpty {
+            let active = downloads.filter { if case .downloading = $0.state { return true } else { return false } }.count
+            if active >= Self.maxActiveDownloads { return }
+            let next = waiting.removeFirst()
+            next.start()
         }
     }
 
