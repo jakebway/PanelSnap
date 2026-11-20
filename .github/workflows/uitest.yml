@@ -1,0 +1,120 @@
+name: UI test (simulator)
+
+# Builds the app, puts a small test comic in it, and drives the reader with taps, pinches, drags and flicks in the iOS
+# Simulator. Screenshots of every step go to the ci-report branch: <branch>/ui/*.png and <branch>/ui/status.md
+on:
+  workflow_dispatch:
+  push:
+    branches: ['test/**']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: uitest-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  ui:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen and Pillow
+        run: |
+          brew install xcodegen
+          python3 -m pip install --break-system-packages pillow 2>&1 | tail -1
+      - name: Generate project
+        run: xcodegen generate --spec project.uitest.yml
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          c=[(r,x) for r,v in d.items() if 'iOS' in r for x in v if x['name'].startswith('iPhone')]
+          c.sort(key=lambda t:(t[0], t[1]['name']))
+          print(c[-1][1]['udid'])")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+      - name: Build for testing
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing -project PanelSnap.xcodeproj -scheme PanelSnap \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build-ui \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee build-ui.log | tail -n 40
+      - name: Put a test comic in the app
+        run: |
+          UDID=${{ steps.sim.outputs.udid }}
+          APP=$(find build-ui/Build/Products -name PanelSnap.app -maxdepth 3 | head -1)
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch "$UDID" com.jakebway.panelsnap; sleep 6
+          xcrun simctl terminate "$UDID" com.jakebway.panelsnap || true
+          DATA=$(xcrun simctl get_app_container "$UDID" com.jakebway.panelsnap data)
+          mkdir -p "$DATA/Documents/Comics"
+          python3 Scripts/make-test-comic.py "$DATA/Documents/Comics/UITest Comic 001.cbz" Tests/test-page.png
+          find "$DATA/Documents" | head
+      - name: Run the UI tests
+        id: test
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project PanelSnap.xcodeproj -scheme PanelSnap \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build-ui \
+            -resultBundlePath ui.xcresult 2>&1 | tee test-ui.log | tail -n 80
+      - name: Collect results
+        if: always()
+        run: |
+          mkdir -p report/ui
+          xcrun xcresulttool export attachments --path ui.xcresult --output-path /tmp/att || true
+          python3 - <<'PY'
+          import json, os, shutil
+          src = "/tmp/att"
+          try:
+              m = json.load(open(os.path.join(src, "manifest.json")))
+          except Exception as e:
+              m = []; print("no manifest", e)
+          n = 0
+          for t in m:
+              for a in t.get("attachments", []):
+                  name = a.get("suggestedHumanReadableName", a["exportedFileName"])
+                  base = name.split("_")[0]
+                  ext = os.path.splitext(a["exportedFileName"])[1] or ".png"
+                  shutil.copy(os.path.join(src, a["exportedFileName"]), f"report/ui/{base}{ext}"); n += 1
+          print(n, "screenshots")
+          PY
+          {
+            echo "# UI test: ${{ steps.test.outcome }}"
+            echo ""
+            echo '```'
+            grep -E "Test Case|error:|passed|failed|XCTAssert|UITEST|Executed" test-ui.log | sed 's#^.*/Tests/#Tests/#' | head -60
+            echo '```'
+          } > report/ui/status.md
+          tail -n 300 test-ui.log > report/ui/test.log
+      - name: Publish to ci-report
+        if: always()
+        env:
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          SLUG="$(echo "$GITHUB_REF_NAME" | tr '/' '-')"
+          URL="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+          for attempt in 1 2 3 4; do
+            rm -rf /tmp/pub
+            if git clone --quiet --depth 1 --branch ci-report "$URL" /tmp/pub 2>/dev/null; then :; else
+              mkdir -p /tmp/pub && cd /tmp/pub && git init -q -b ci-report && git remote add origin "$URL" && cd -
+            fi
+            cd /tmp/pub
+            git config user.name "panelsnap-ci"; git config user.email "ci@users.noreply.github.com"
+            rm -rf "$SLUG/ui"; mkdir -p "$SLUG/ui"
+            cp -R "$GITHUB_WORKSPACE"/report/ui/. "$SLUG/ui"/
+            git add -A; git commit -q -m "UI report for $GITHUB_REF_NAME ($GITHUB_SHA)" || true
+            if git push -q origin ci-report; then exit 0; fi
+            cd /; sleep $((attempt * 3))
+          done
+          exit 1
+      - name: Fail if the tests failed
+        if: steps.test.outcome == 'failure'
+        run: exit 1
