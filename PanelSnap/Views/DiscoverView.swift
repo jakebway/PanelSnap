@@ -317,7 +317,7 @@ private struct CoverThumb: View {
     init(url: URL?, width: CGFloat = 46) {
         self.url = url
         self.width = width
-        _image = State(initialValue: CoverCache.shared.cached(url))
+        _image = State(initialValue: DiscoverCovers.shared.cached(url))
     }
 
     var body: some View {
@@ -335,7 +335,7 @@ private struct CoverThumb: View {
         .animation(.easeOut(duration: 0.18), value: image != nil)
         .task(id: url) {
             guard image == nil, let u = url else { return }
-            image = await CoverCache.shared.load(u)
+            image = await DiscoverCovers.shared.load(u)
         }
     }
 }

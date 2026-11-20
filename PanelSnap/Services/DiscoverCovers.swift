@@ -4,8 +4,8 @@ import ImageIO
 /// Cover pictures for Discover: kept in memory and on disk, shrunk to thumbnail size, and fetched ahead of time, so a
 /// shelf appears already filled in.
 @MainActor
-final class CoverCache {
-    static let shared = CoverCache()
+final class DiscoverCovers {
+    static let shared = DiscoverCovers()
 
     private let memory = NSCache<NSURL, UIImage>()
     private let session: URLSession
@@ -33,7 +33,7 @@ final class CoverCache {
         let task = Task<UIImage?, Never> {
             guard let (data, resp) = try? await session.data(from: url),
                   (resp as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true else { return nil }
-            return await Task.detached(priority: .utility) { CoverCache.thumbnail(data) }.value
+            return await Task.detached(priority: .utility) { DiscoverCovers.thumbnail(data) }.value
         }
         inflight[url] = task
         let image = await task.value

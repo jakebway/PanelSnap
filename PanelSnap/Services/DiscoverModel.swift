@@ -96,7 +96,7 @@ final class DiscoverModel: ObservableObject {
         }
         forYouSections = saved.sections
         recommendedFor = saved.profile
-        CoverCache.shared.prefetch(visibleCovers())
+        DiscoverCovers.shared.prefetch(visibleCovers())
     }
 
     private func visibleCovers() -> [URL] {
@@ -137,7 +137,7 @@ final class DiscoverModel: ObservableObject {
             weeks[week] = list
             loadedAt[week] = Date()
             save()
-            CoverCache.shared.prefetch(list.sorted { $0.pulls > $1.pulls }.prefix(30).compactMap { $0.cover })
+            DiscoverCovers.shared.prefetch(list.sorted { $0.pulls > $1.pulls }.prefix(30).compactMap { $0.cover })
         } else if weeks[week] == nil {
             failedWeeks.insert(week)
         }
@@ -160,7 +160,7 @@ final class DiscoverModel: ObservableObject {
         let list = await fetch(Self.url(["list": "search", "title": q, "list_option": "series"]))
         if q == query.trimmingCharacters(in: .whitespaces) {
             searchResults = list ?? []
-            CoverCache.shared.prefetch((list ?? []).prefix(20).compactMap { $0.cover })
+            DiscoverCovers.shared.prefetch((list ?? []).prefix(20).compactMap { $0.cover })
         }
         searching = false
     }
@@ -254,7 +254,7 @@ final class DiscoverModel: ObservableObject {
 
         forYouSections = sections
         save()
-        CoverCache.shared.prefetch(visibleCovers())
+        DiscoverCovers.shared.prefetch(visibleCovers())
     }
 
     // MARK: Requests
