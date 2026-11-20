@@ -1,0 +1,73 @@
+name: Check (simulator build + report)
+
+# Compiles every pushed branch for the iOS Simulator and publishes a short report and the app's source as plain text
+# to the "ci-report" branch, so regular Claude (chat, no terminal) can read the result straight from GitHub:
+#   https://github.com/<repo>/tree/ci-report/<branch-name>
+# Run it by hand from Actions -> "Check" -> Run workflow, or just push to a branch.
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches-ignore: [ci-report]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: check-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Source bundle
+        run: bash Scripts/make-source-bundle.sh
+
+      # main is already compiled by "Build IPA", so only the source bundle is refreshed there.
+      - name: Build for the simulator
+        id: sim
+        if: github.ref_name != 'main'
+        run: bash Scripts/ci-check.sh
+
+      - name: Publish the report to the ci-report branch
+        if: always()
+        env:
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          SLUG="$(echo "$BRANCH" | tr '/' '-')"
+          URL="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+          rm -rf /tmp/pub
+          for attempt in 1 2 3 4; do
+            if git clone --quiet --depth 1 --branch ci-report "$URL" /tmp/pub 2>/dev/null; then :; else
+              mkdir -p /tmp/pub && cd /tmp/pub && git init -q -b ci-report && git remote add origin "$URL" && cd -
+            fi
+            cd /tmp/pub
+            git config user.name "panelsnap-ci"
+            git config user.email "ci@users.noreply.github.com"
+            rm -rf "$SLUG"
+            mkdir -p "$SLUG"
+            cp -R "$GITHUB_WORKSPACE"/report/. "$SLUG"/
+            {
+              echo "# PanelSnap CI reports"
+              echo ""
+              echo "One folder per branch. Inside: \`status.md\` (build result, errors, warnings), \`build-*.log\` (log tail),"
+              echo "and \`source/reader.txt\` + \`source/all.txt\` (the app's source as plain text)."
+              echo ""
+              for d in */; do echo "- \`${d%/}\`: $(head -1 "$d/status.md" 2>/dev/null | sed 's/^# //')"; done
+            } > README.md
+            git add -A
+            git commit -q -m "Report for $BRANCH ($GITHUB_SHA)" || true
+            if git push -q origin ci-report; then exit 0; fi
+            echo "push raced, retrying"; cd /; rm -rf /tmp/pub; sleep $((attempt * 3))
+          done
+          exit 1

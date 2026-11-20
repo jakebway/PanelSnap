@@ -6,3 +6,5 @@ Payload/
 .DS_Store
 xcuserdata/
 .swiftpm/
+report/
+build-sim/
