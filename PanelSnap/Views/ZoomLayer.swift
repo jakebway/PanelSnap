@@ -21,6 +21,7 @@ final class ZoomState: ObservableObject {
     func set(offset o: CGSize) { set(zoom: zoom, offset: o) }
 
     func reset() {
+        if zoom == 1 && offset == .zero { return }
         withAnimation(.easeOut(duration: 0.22)) { set(zoom: 1, offset: .zero) }
     }
 

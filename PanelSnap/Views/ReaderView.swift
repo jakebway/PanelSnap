@@ -306,8 +306,11 @@ struct ReaderView: View {
                                            panelIndex: model.panelIndex, size: size, fill: 0.96) {
                 hideChrome()
                 if hit != model.panelIndex {
-                    resetZoomInstantly()
-                    model.focus(panel: hit)
+                    // Zoom back and fly to the panel as one movement (same spring as the camera), so it does not skip.
+                    withAnimation(.spring(response: 0.46, dampingFraction: 0.9)) {
+                        zoom.set(zoom: 1, offset: .zero)
+                        model.focus(panel: hit)
+                    }
                 } else if isZoomed {
                     zoom.reset()          // already on this panel but nudged or zoomed: snap it back
                 }
