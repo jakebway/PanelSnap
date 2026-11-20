@@ -121,7 +121,7 @@ final class BrowserShield: ObservableObject {
         Console.log("shield: \(lists.count) of \(names.count) lists active\(downloaded != nil ? " (updated set)" : "")")
         isReady = true
         // Forget compiled lists that are no longer in use, so old versions do not pile up.
-        if let store = store {
+        do {
             let keep = Set(names.compactMap { n in listData(n, downloaded: downloaded != nil).map { "panelsnap.shield.\(n).\($0.count)" } })
             let all: [String] = await withCheckedContinuation { cont in
                 store.getAvailableContentRuleListIdentifiers { cont.resume(returning: $0 ?? []) }
