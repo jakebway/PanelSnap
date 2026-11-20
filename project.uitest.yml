@@ -1,0 +1,28 @@
+# The app plus a UI-test target that opens a comic in the simulator and drives the reader's gestures.
+include:
+  - project.yml
+targets:
+  PanelSnapUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/UI
+    dependencies:
+      - target: PanelSnap
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jakebway.panelsnap.uitests
+        TEST_TARGET_NAME: PanelSnap
+        SWIFT_VERSION: '5.0'
+        CODE_SIGNING_ALLOWED: 'NO'
+        CODE_SIGNING_REQUIRED: 'NO'
+        CODE_SIGN_IDENTITY: ''
+schemes:
+  PanelSnap:
+    build:
+      targets:
+        PanelSnap: all
+        PanelSnapUITests: [test]
+    test:
+      targets:
+        - PanelSnapUITests
