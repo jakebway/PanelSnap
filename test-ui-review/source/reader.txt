@@ -387,7 +387,7 @@ struct ReaderView: View {
         t.disablesAnimations = true
         withTransaction(t) {
             model.showOverview()
-            zoom.set(zoom: newZoom, offset: zoom.clamp(newOffset, zoom: newZoom, size: size))
+            zoom.set(zoom: newZoom, offset: newOffset)    // no clamp: the screen must look exactly as it did
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { zoom.converting = false }
     }
@@ -800,7 +800,9 @@ struct ZoomGestures: UIViewRepresentable {
                 let ratio = z / s.zoom
                 let off = CGSize(width: (now.x - c.x) - ratio * (s.point.x - c.x - s.offset.width),
                                  height: (now.y - c.y) - ratio * (s.point.y - c.y - s.offset.height))
-                zoom.set(zoom: z, offset: zoom.clamp(off, zoom: z, size: size))
+                // Not clamped while the fingers are down (a panel taken off its snap can sit past the page edge, and pulling it
+                // back would make the page jump); it settles inside the limits when the fingers lift.
+                zoom.set(zoom: z, offset: off)
                 zoom.lastPinch = Date()
             case .ended, .cancelled, .failed:
                 guard let s = start else { return }
@@ -919,7 +921,11 @@ struct ZoomGestures: UIViewRepresentable {
             pinchSeen = false
             panTouches = g.numberOfTouches
             g.setTranslation(.zero, in: stage)
-            panBase = zoom.offset
+            // If the page is resting past its edge (a snapped panel that was just released), start the drag from the
+            // point whose stretched position equals where the page is now, so nothing jumps when the finger moves.
+            let h = zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size)
+            panBase = CGSize(width: h.width + (zoom.offset.width - h.width) / 0.3,
+                             height: h.height + (zoom.offset.height - h.height) / 0.3)
             // Only a drag that starts against a side of the page can carry on into a swipe to the next one.
             let maxX = zoom.limits(zoom: zoom.zoom, size: size).width
             startedAtLeftEdge = zoom.offset.width >= maxX - 2
