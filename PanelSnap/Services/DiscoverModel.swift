@@ -2,7 +2,7 @@ import Foundation
 import WebKit
 
 /// One comic on the weekly release list.
-struct DiscoverComic: Identifiable, Hashable {
+struct DiscoverComic: Identifiable, Hashable, Codable {
     let id: String             // the League of Comic Geeks page address
     var title: String          // "Batman #105"
     var publisher: String
@@ -13,6 +13,9 @@ struct DiscoverComic: Identifiable, Hashable {
     var rating: Int?
 
     var listingURL: URL? { return URL(string: id) }
+
+    /// The series without the issue number, in plain lowercase: "Batman #105" -> "batman".
+    var seriesKey: String { return TitleTools.normal(TitleTools.split(title).name) }
 
     /// What to type into a download site's search box: the series name and issue number, without variant wording.
     var searchTerm: String {
@@ -60,35 +63,93 @@ final class DiscoverModel: ObservableObject {
     @Published var weeks: [ReleaseWeek: [DiscoverComic]] = [:]
     @Published var loadingWeeks = Set<ReleaseWeek>()
     @Published var failedWeeks = Set<ReleaseWeek>()
-    @Published var forYou: [DiscoverComic] = []
+    @Published var forYouSections: [ForYouSection] = []
     @Published var searchResults: [DiscoverComic] = []
     @Published var searching = false
 
     private var loadedAt: [ReleaseWeek: Date] = [:]
+    private var inflight: [ReleaseWeek: Task<Void, Never>] = [:]
     private let browser = WebJSONFetcher()
     private var recommendedFor = ""
 
+    // MARK: Remembered between launches, so Discover opens already filled in and refreshes quietly behind it
+
+    private struct Saved: Codable {
+        var weeks: [String: [DiscoverComic]]
+        var days: [String: String]
+        var times: [String: Date]
+        var sections: [ForYouSection]
+        var profile: String
+    }
+    private static let file = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("DiscoverCache.json")
+
+    init() {
+        guard let data = try? Data(contentsOf: Self.file),
+              let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return }
+        for w in ReleaseWeek.allCases {
+            // A list saved for another week would show the wrong releases, so only this week's lists are kept.
+            if let list = saved.weeks[w.rawValue], saved.days[w.rawValue] == Self.releaseDay(w) {
+                weeks[w] = list
+                loadedAt[w] = saved.times[w.rawValue]
+            }
+        }
+        forYouSections = saved.sections
+        recommendedFor = saved.profile
+        CoverCache.shared.prefetch(visibleCovers())
+    }
+
+    private func visibleCovers() -> [URL] {
+        var urls: [URL] = []
+        for sec in forYouSections { urls += sec.comics.prefix(8).compactMap { $0.cover } }
+        for w in [ReleaseWeek.current, .next] { urls += (weeks[w] ?? []).sorted { $0.pulls > $1.pulls }.prefix(12).compactMap { $0.cover } }
+        return urls
+    }
+
+    private func save() {
+        var saved = Saved(weeks: [:], days: [:], times: [:], sections: forYouSections, profile: recommendedFor)
+        for (w, list) in weeks {
+            saved.weeks[w.rawValue] = list
+            saved.days[w.rawValue] = Self.releaseDay(w)
+            saved.times[w.rawValue] = loadedAt[w]
+        }
+        let file = Self.file
+        Task.detached(priority: .utility) {
+            if let data = try? JSONEncoder().encode(saved) { try? data.write(to: file, options: .atomic) }
+        }
+    }
+
     func load(_ week: ReleaseWeek, force: Bool = false) async {
         if !force, weeks[week] != nil, let t = loadedAt[week], Date().timeIntervalSince(t) < 3600 { return }
-        loadingWeeks.insert(week)
+        if let running = inflight[week] { await running.value; return }
+        let task = Task { await self.fetchWeek(week) }
+        inflight[week] = task
+        await task.value
+        inflight[week] = nil
+    }
+
+    private func fetchWeek(_ week: ReleaseWeek) async {
+        if weeks[week] == nil { loadingWeeks.insert(week) }
         failedWeeks.remove(week)
         let list = await fetch(Self.url(["list": "releases", "list_option": "thumbs", "view": "list",
                                          "date": Self.releaseDay(week), "date_type": "week"]))
         if let list = list, !list.isEmpty {
             weeks[week] = list
             loadedAt[week] = Date()
+            save()
+            CoverCache.shared.prefetch(list.sorted { $0.pulls > $1.pulls }.prefix(30).compactMap { $0.cover })
         } else if weeks[week] == nil {
             failedWeeks.insert(week)
         }
         loadingWeeks.remove(week)
     }
 
-    /// Loads what the For You page shows. Called when the app opens, so Discover is ready when it is.
+    /// Everything the For You page needs, fetched side by side. Called when the app opens.
     func prefetch(libraryTitles: [String]) async {
         async let a: Void = load(.current)
         async let b: Void = load(.next)
-        _ = await (a, b)
-        await recommend(libraryTitles: libraryTitles)
+        async let c: Void = recommend(libraryTitles: libraryTitles)
+        _ = await (a, b, c)
     }
 
     /// Searches the whole catalogue, old and new.
@@ -97,66 +158,103 @@ final class DiscoverModel: ObservableObject {
         guard q.count >= 2 else { searchResults = []; return }
         searching = true
         let list = await fetch(Self.url(["list": "search", "title": q, "list_option": "series"]))
-        if q == query.trimmingCharacters(in: .whitespaces) { searchResults = list ?? [] }
+        if q == query.trimmingCharacters(in: .whitespaces) {
+            searchResults = list ?? []
+            CoverCache.shared.prefetch((list ?? []).prefix(20).compactMap { $0.cover })
+        }
         searching = false
     }
 
-    /// "You may also like": comics in the same series families as the ones you read, that are not already in your
-    /// library, plus new releases that share words with your titles.
-    func recommend(libraryTitles: [String]) async {
-        let names = Self.seriesNames(from: libraryTitles)
-        let key = names.joined(separator: "|")
-        guard !names.isEmpty, key != recommendedFor else { return }
+    // MARK: Suggestions
+
+    /// Builds the For You shelves from what is in the library:
+    ///  1. new issues of series you already read,
+    ///  2. "Because you read X": other series that share the name of one you read (one entry per series, most popular
+    ///     first, never something you already have),
+    ///  3. popular new releases from the publisher you read most.
+    func recommend(libraryTitles: [String], force: Bool = false) async {
+        let profile = TitleTools.profile(from: libraryTitles)
+        guard !profile.isEmpty else { return }
+        let top = Array(profile.prefix(6))
+        let key = top.map { $0.name }.joined(separator: "|") + "@" + Self.releaseDay(.current)
+        guard force || key != recommendedFor || forYouSections.isEmpty else { return }
         recommendedFor = key
-        var picks: [DiscoverComic] = []
-        let owned = Set(names.map { Self.normal($0) })
-        for name in names.prefix(4) {
-            for c in (await fetch(Self.url(["list": "search", "title": name, "list_option": "series"])) ?? []).prefix(8) {
-                let n = Self.normal(c.title)
-                if owned.contains(n) || picks.contains(where: { $0.id == c.id }) { continue }
-                picks.append(c)
+
+        async let cur: Void = load(.current)
+        async let nxt: Void = load(.next)
+        var found: [String: [DiscoverComic]] = [:]
+        await withTaskGroup(of: (String, [DiscoverComic]).self) { group in
+            for item in top {
+                group.addTask { @MainActor in
+                    (item.name, await self.fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? [])
+                }
+            }
+            for await (name, list) in group { found[name] = list }
+        }
+        _ = await (cur, nxt)
+
+        let ownedSeries = Set(profile.map { TitleTools.normal($0.name) })
+        let ownedIssues = Set(libraryTitles.map { t -> String in
+            let p = TitleTools.split(t)
+            return TitleTools.normal(p.name) + "#" + (p.issue ?? "")
+        })
+        func isOwned(_ c: DiscoverComic) -> Bool {
+            let p = TitleTools.split(c.title)
+            return ownedIssues.contains(TitleTools.normal(p.name) + "#" + (p.issue ?? ""))
+        }
+        let fresh = (weeks[.current] ?? []) + (weeks[.next] ?? [])
+        var used = Set<String>()
+        var sections: [ForYouSection] = []
+
+        // 1. New issues of series you read.
+        var newIssues: [DiscoverComic] = []
+        for c in fresh.sorted(by: { $0.pulls > $1.pulls }) where ownedSeries.contains(c.seriesKey) && !isOwned(c) {
+            if newIssues.contains(where: { $0.seriesKey == c.seriesKey }) { continue }
+            newIssues.append(c)
+        }
+        if !newIssues.isEmpty {
+            sections.append(ForYouSection(title: "New Issues for You", comics: Array(newIssues.prefix(12))))
+            for c in newIssues { used.insert(c.seriesKey) }
+        }
+
+        // 2. Because you read X.
+        var publisherWeight: [String: Int] = [:]
+        for item in top {
+            let words = Set(TitleTools.significantWords(item.name))
+            if let own = found[item.name]?.first(where: { $0.seriesKey == TitleTools.normal(item.name) }), !own.publisher.isEmpty {
+                publisherWeight[own.publisher, default: 0] += item.count
+            }
+            guard !words.isEmpty, sections.count < 4 else { continue }
+            let need = max(1, Int((Double(words.count) * 0.5).rounded(.up)))
+            var best: [String: (DiscoverComic, Int)] = [:]
+            for c in found[item.name] ?? [] {
+                let key = c.seriesKey
+                if key.isEmpty || ownedSeries.contains(key) || used.contains(key) || isOwned(c) { continue }
+                let overlap = Set(TitleTools.significantWords(c.title)).intersection(words).count
+                if overlap < need { continue }
+                if let old = best[key], old.0.pulls >= c.pulls { continue }
+                best[key] = (c, overlap)
+            }
+            let picks = best.values.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.pulls > $1.0.pulls }.prefix(10).map { $0.0 }
+            if picks.count >= 2 {
+                sections.append(ForYouSection(title: "Because You Read \(item.name)", comics: Array(picks)))
+                for c in picks { used.insert(c.seriesKey) }
             }
         }
-        // New releases that mention the same words (a character or a team) as the library.
-        await load(.current)
-        await load(.next)
-        let words = Set(names.flatMap { Self.significantWords($0) })
-        let fresh = ((weeks[.current] ?? []) + (weeks[.next] ?? []))
-            .map { c -> (DiscoverComic, Int) in (c, Self.significantWords(c.title).filter { words.contains($0) }.count) }
-            .filter { $0.1 > 0 && !owned.contains(Self.normal($0.0.title)) }
-            .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.pulls > $1.0.pulls }
-            .map { $0.0 }
-        var out: [DiscoverComic] = []
-        for c in fresh.prefix(6) + picks where !out.contains(where: { $0.id == c.id }) { out.append(c) }
-        forYou = Array(out.prefix(24))
-    }
 
-    // MARK: Library titles
-
-    /// "Avengers Disassembled #3 (2006) (digital)" -> "Avengers Disassembled".
-    static func seriesNames(from titles: [String]) -> [String] {
-        var counts: [String: Int] = [:]
-        var order: [String] = []
-        for t in titles {
-            var s = t.replacingOccurrences(of: "\\(.*?\\)|\\[.*?\\]", with: " ", options: .regularExpression)
-            if let r = s.range(of: "#\\s*\\d", options: .regularExpression) { s = String(s[..<r.lowerBound]) }
-            s = s.replacingOccurrences(of: "\\b(vol(ume)?\\.?|v)\\s*\\d+.*$", with: " ", options: [.regularExpression, .caseInsensitive])
-            s = s.replacingOccurrences(of: "[_\\.]", with: " ", options: .regularExpression)
-            s = s.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: " -–"))
-            if s.count < 3 { continue }
-            if counts[s] == nil { order.append(s) }
-            counts[s, default: 0] += 1
+        // 3. Popular from the publisher you read most.
+        if let pub = publisherWeight.max(by: { $0.value < $1.value })?.key {
+            var seen = Set<String>()
+            let popular = fresh.filter { $0.publisher == pub && !ownedSeries.contains($0.seriesKey) && !used.contains($0.seriesKey) }
+                .sorted { $0.pulls > $1.pulls }
+                .filter { seen.insert($0.seriesKey).inserted }
+                .prefix(10)
+            if popular.count >= 3 { sections.append(ForYouSection(title: "Popular from \(pub)", comics: Array(popular))) }
         }
-        return order
-    }
 
-    static func normal(_ title: String) -> String {
-        return title.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
-    }
-
-    private static let filler: Set<String> = ["the", "and", "of", "a", "an", "to", "in", "vol", "tp", "hc", "comic", "comics", "issue", "all", "one", "new", "marvel", "dc", "image"]
-    static func significantWords(_ title: String) -> [String] {
-        return normal(title).split(separator: " ").map(String.init).filter { $0.count > 2 && !filler.contains($0) && Int($0) == nil }
+        forYouSections = sections
+        save()
+        CoverCache.shared.prefetch(visibleCovers())
     }
 
     // MARK: Requests
@@ -314,5 +412,50 @@ final class WebJSONFetcher: NSObject, WKNavigationDelegate {
         webView?.stopLoading()
         webView = nil
         c.resume(returning: text)
+    }
+}
+
+/// A row of suggestions on the For You page.
+struct ForYouSection: Identifiable, Codable, Hashable {
+    var title: String
+    var comics: [DiscoverComic]
+    var id: String { return title }
+}
+
+/// Reading comic titles: "Avengers Disassembled #3 (2006) (digital)" is the series "Avengers Disassembled", issue 3.
+enum TitleTools {
+    static func split(_ title: String) -> (name: String, issue: String?) {
+        var s = title.replacingOccurrences(of: "\\(.*?\\)|\\[.*?\\]", with: " ", options: .regularExpression)
+        var issue: String?
+        if let r = s.range(of: "#\\s*(\\d+(\\.\\d+)?)", options: .regularExpression) {
+            issue = String(s[r]).replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces)
+            s = String(s[..<r.lowerBound])
+        }
+        s = s.replacingOccurrences(of: "\\b(vol(ume)?\\.?|v)\\s*\\d+.*$", with: " ", options: [.regularExpression, .caseInsensitive])
+        s = s.replacingOccurrences(of: "[_\\.]", with: " ", options: .regularExpression)
+        s = s.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: " -–"))
+        return (s, issue)
+    }
+
+    /// The series in the library, the ones with the most issues first.
+    static func profile(from titles: [String]) -> [(name: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        var order: [String] = []
+        for t in titles {
+            let s = split(t).name
+            if s.count < 3 { continue }
+            if counts[s] == nil { order.append(s) }
+            counts[s, default: 0] += 1
+        }
+        return order.map { (name: $0, count: counts[$0] ?? 0) }.sorted { $0.count > $1.count }
+    }
+
+    static func normal(_ title: String) -> String {
+        return title.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+    }
+
+    private static let filler: Set<String> = ["the", "and", "of", "a", "an", "to", "in", "vol", "tp", "hc", "comic", "comics", "issue", "all", "one", "new", "marvel", "dc", "image"]
+    static func significantWords(_ title: String) -> [String] {
+        return normal(title).split(separator: " ").map(String.init).filter { $0.count > 2 && !filler.contains($0) && Int($0) == nil }
     }
 }

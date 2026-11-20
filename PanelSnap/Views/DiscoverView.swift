@@ -79,11 +79,7 @@ struct DiscoverView: View {
         .task(id: tab) {
             publisher = nil
             if let w = tab.week { await model.load(w) }
-            else {
-                await model.recommend(libraryTitles: library.comics.map { $0.title })
-                await model.load(.current)
-                await model.load(.next)
-            }
+            else { await model.prefetch(libraryTitles: library.comics.map { $0.title }) }
         }
         .task(id: search) {
             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -186,39 +182,57 @@ struct DiscoverView: View {
     }
 
     private var forYouContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if model.forYou.isEmpty && library.comics.isEmpty {
+        let nothingYet = model.forYouSections.isEmpty && model.weeks[.current] == nil && model.weeks[.next] == nil
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                if model.forYouSections.isEmpty && library.comics.isEmpty {
                     Text("Add a few comics to your library and this page will suggest more like them.")
                         .font(.subheadline).foregroundStyle(Theme.secondary)
                 }
-                shelf("You May Also Like", model.forYou)
+                ForEach(model.forYouSections) { sec in shelf(sec.title, sec.comics) }
                 shelf("Popular This Week", Array((model.weeks[.current] ?? []).sorted { $0.pulls > $1.pulls }.prefix(20)))
                 shelf("Coming Next Week", Array((model.weeks[.next] ?? []).sorted { $0.pulls > $1.pulls }.prefix(20)))
-                if model.forYou.isEmpty && model.weeks[.current] == nil && model.weeks[.next] == nil {
-                    if model.failedWeeks.isEmpty { ProgressView().tint(Theme.accent).frame(maxWidth: .infinity).padding(.top, 40) }
-                    else { failure { Task { await model.load(.current, force: true); await model.load(.next, force: true) } } }
+                if nothingYet {
+                    if model.failedWeeks.isEmpty {
+                        skeletonShelf(); skeletonShelf()
+                    } else {
+                        failure { Task { await model.load(.current, force: true); await model.load(.next, force: true) } }
+                    }
                 }
                 Text("Data from League of Comic Geeks (leagueofcomicgeeks.com).")
                     .font(.caption2).foregroundStyle(Theme.secondary)
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+            .padding(.top, 4)
+            .padding(.bottom, 28)
+        }
+        .refreshable {
+            await model.load(.current, force: true)
+            await model.load(.next, force: true)
+            await model.recommend(libraryTitles: library.comics.map { $0.title }, force: true)
         }
     }
 
     @ViewBuilder private func shelf(_ title: String, _ items: [DiscoverComic]) -> some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title).font(.system(size: 18, weight: .heavy, design: .rounded)).foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 2).fill(Theme.accent).frame(width: 4, height: 18)
+                    Text(title).font(.system(size: 19, weight: .heavy, design: .rounded)).foregroundStyle(.white).lineLimit(1)
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 12) {
+                    LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(items) { c in
                             Button { selected = c } label: {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    CoverThumb(url: c.cover, width: 104)
+                                VStack(alignment: .leading, spacing: 7) {
+                                    CoverThumb(url: c.cover, width: 118)
                                     Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
-                                        .frame(width: 104, alignment: .leading)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(width: 118, alignment: .leading)
+                                    if !c.publisher.isEmpty {
+                                        Text(c.publisher).font(.caption2).foregroundStyle(Theme.secondary).lineLimit(1)
+                                            .frame(width: 118, alignment: .leading)
+                                    }
                                 }
                             }
                             .buttonStyle(.plain)
@@ -226,6 +240,24 @@ struct DiscoverView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Grey placeholders in the shape of a shelf, shown only the very first time, before anything has loaded.
+    private func skeletonShelf() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            RoundedRectangle(cornerRadius: 4).fill(Theme.card2).frame(width: 150, height: 18)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(0..<5, id: \.self) { _ in
+                        VStack(alignment: .leading, spacing: 7) {
+                            RoundedRectangle(cornerRadius: 8).fill(Theme.card).frame(width: 118, height: 177)
+                            RoundedRectangle(cornerRadius: 3).fill(Theme.card).frame(width: 90, height: 10)
+                        }
+                    }
+                }
+            }
+            .disabled(true)
         }
     }
 
@@ -276,20 +308,35 @@ struct DiscoverView: View {
     }
 }
 
-/// A cover picture that falls back to a plain tile when there is none.
+/// A cover picture. It is taken from the cover cache, so it shows at once when it has been seen or fetched ahead.
 private struct CoverThumb: View {
     let url: URL?
     var width: CGFloat = 46
+    @State private var image: UIImage?
+
+    init(url: URL?, width: CGFloat = 46) {
+        self.url = url
+        self.width = width
+        _image = State(initialValue: CoverCache.shared.cached(url))
+    }
+
     var body: some View {
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
+        ZStack {
+            Theme.card2
+            if let image = image {
+                Image(uiImage: image).resizable().scaledToFill().transition(.opacity)
             } else {
-                ZStack { Theme.card2; Image(systemName: "book.closed").foregroundStyle(Theme.secondary) }
+                Image(systemName: "book.closed").foregroundStyle(Theme.secondary)
             }
         }
         .frame(width: width, height: width * 1.5)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: width > 60 ? 8 : 6, style: .continuous))
+        .shadow(color: .black.opacity(width > 60 ? 0.5 : 0), radius: 5, y: 3)
+        .animation(.easeOut(duration: 0.18), value: image != nil)
+        .task(id: url) {
+            guard image == nil, let u = url else { return }
+            image = await CoverCache.shared.load(u)
+        }
     }
 }
 
