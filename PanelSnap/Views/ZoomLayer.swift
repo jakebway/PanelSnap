@@ -97,6 +97,7 @@ struct ZoomGestures: UIViewRepresentable {
         var onEdgeSwipe: (Bool) -> Void = { _ in }
         private var startedAtLeftEdge = false, startedAtRightEdge = false
         private var left = false
+        private var startedOnPanel = false       // the pinch began on a snapped panel
         private var baseScale: CGFloat = 1       // the recogniser's scale when the current two-finger hold began
         private var touches = 2
         private weak var stage: UIView?
@@ -163,6 +164,7 @@ struct ZoomGestures: UIViewRepresentable {
             case .began:
                 stopGlide()
                 left = false
+                startedOnPanel = panelFocused
                 baseScale = 1
                 touches = g.numberOfTouches
                 start = (zoom.zoom, zoom.offset, g.location(in: stage))
@@ -201,7 +203,10 @@ struct ZoomGestures: UIViewRepresentable {
                 guard let s = start else { return }
                 start = nil
                 zoom.lastPinch = Date()
-                if zoom.zoom < 1.05 || (left && g.scale < 0.7) {
+                // Only a quick pinch-out from a snapped panel jumps to the whole page. A slow one is an ordinary zoom out:
+                // the page stays wherever your fingers left it, as long as it is still zoomed in a little.
+                let quickOut = startedOnPanel && g.velocity < -1.8 && g.scale < 0.7
+                if zoom.zoom < 1.05 || quickOut {
                     let showWholePage = s.zoom <= 1.02 && g.scale < 0.85
                     zoom.reset()
                     if showWholePage { onPinchedOut() }
