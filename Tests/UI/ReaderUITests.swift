@@ -109,8 +109,9 @@ final class ReaderUITests: XCTestCase {
 
         // Leave the app and come back: the reader must still be there and responsive.
         XCUIDevice.shared.press(.home); settle(1.5)
-        app.activate(); settle(1.5)
-        XCTAssertEqual(app.state, .runningForeground)
+        app.activate()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15), "the app should come back to the front")
+        settle(1.5)
         shot("11-after-returning")
         at(0.96, 0.5).tap(); settle(1.0)
         shot("12-tap-after-returning")
@@ -127,6 +128,22 @@ final class ReaderUITests: XCTestCase {
         }
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertGreaterThan(diff(a, shot("22-end")), 0.002, "swiping should change what is on screen")
+    }
+
+    /// Pinching on a snapped panel must carry on from exactly what is on screen (zooming a little), not jump elsewhere.
+    func testPinchFromSnappedPanelIsContinuous() {
+        openComic()
+        at(0.96, 0.5).tap(); settle(1.2)                 // make sure a panel is snapped
+        let before = shot("30-snapped-panel")
+        app.windows.firstMatch.pinch(withScale: 1.2, velocity: 0.6); settle(1.0)
+        let after = shot("31-after-small-pinch")
+        let d = diff(before, after)
+        consoleLog("pinch continuity diff: \(d)")
+        XCTAssertLessThan(d, 0.10, "a small pinch on a snapped panel should look like the same view, slightly larger")
+        // And a slow one-finger drag after that should not jump either.
+        at(0.5, 0.5).press(forDuration: 0.05, thenDragTo: at(0.52, 0.5)); settle(0.8)
+        let moved = shot("32-after-tiny-drag")
+        XCTAssertLessThan(diff(after, moved), 0.08, "a tiny drag should move the page a tiny amount")
     }
 
     func consoleLog(_ s: String) { print("UITEST: \(s)") }
