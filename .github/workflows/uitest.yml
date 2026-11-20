@@ -4,8 +4,6 @@ name: UI test (simulator)
 # Simulator. Screenshots of every step go to the ci-report branch: <branch>/ui/*.png and <branch>/ui/status.md
 on:
   workflow_dispatch:
-  push:
-    branches: ['test/**']
 
 permissions:
   contents: write

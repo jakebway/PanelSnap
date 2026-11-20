@@ -3,12 +3,9 @@ name: Check (simulator build + report)
 # Compiles every pushed branch for the iOS Simulator and publishes a short report and the app's source as plain text
 # to the "ci-report" branch, so regular Claude (chat, no terminal) can read the result straight from GitHub:
 #   https://github.com/<repo>/tree/ci-report/<branch-name>
-# Run it by hand from Actions -> "Check" -> Run workflow, or just push to a branch.
+# Manual only: run it from Actions -> "Check" -> Run workflow when a simulator check is wanted.
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches-ignore: [ci-report]
 
 permissions:
   contents: write
