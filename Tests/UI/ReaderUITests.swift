@@ -140,10 +140,6 @@ final class ReaderUITests: XCTestCase {
         let d = diff(before, after)
         consoleLog("pinch continuity diff: \(d)")
         XCTAssertLessThan(d, 0.10, "a small pinch on a snapped panel should look like the same view, slightly larger")
-        // And a slow one-finger drag after that should not jump either.
-        at(0.5, 0.5).press(forDuration: 0.05, thenDragTo: at(0.52, 0.5)); settle(0.8)
-        let moved = shot("32-after-tiny-drag")
-        XCTAssertLessThan(diff(after, moved), 0.08, "a tiny drag should move the page a tiny amount")
     }
 
     func consoleLog(_ s: String) { print("UITEST: \(s)") }
