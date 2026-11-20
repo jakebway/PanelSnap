@@ -1,0 +1,268 @@
+Command line invocation:
+    /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project PanelSnap.xcodeproj -scheme PanelSnap -destination id=D26ED71E-9D97-4E79-B376-C104ABB9517A -derivedDataPath build-ui -resultBundlePath ui.xcresult
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  ZIPFoundation: https://github.com/weichsel/ZIPFoundation @ 0.9.20
+  SevenZip: https://github.com/mtgto/SevenZip.swift @ 0.5.0
+  Unrar: https://github.com/mtgto/Unrar.swift @ 0.5.4
+
+Writing result bundle at path:
+	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:D26ED71E-9D97-4E79-B376-C104ABB9517A, OS:26.5, name:iPhone Air }
+{ platform:iOS Simulator, arch:x86_64, id:D26ED71E-9D97-4E79-B376-C104ABB9517A, OS:26.5, name:iPhone Air }
+2026-11-20 17:34:20.943254+0000 PanelSnapUITests-Runner[8170:29193] [Default] Running tests...
+2026-11-20 17:34:21.016798+0000 PanelSnapUITests-Runner[8170:30496] [General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
+2026-11-20 17:34:21.059258+0000 PanelSnapUITests-Runner[8170:30496] [General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
+objc[8170]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10b4b4310) and /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10a48c398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'All tests' started at 2026-11-20 17:34:30.075.
+Test Suite 'PanelSnapUITests.xctest' started at 2026-11-20 17:34:30.076.
+Test Suite 'ReaderUITests' started at 2026-11-20 17:34:30.076.
+Test Case '-[PanelSnapUITests.ReaderUITests testPageSwipes]' started.
+    t =     0.00s Start Test at 2026-11-20 17:34:30.078
+    t =     0.70s Set Up
+    t =     0.70s     Open com.jakebway.panelsnap
+    t =     0.70s         Launch com.jakebway.panelsnap
+2026-11-20 17:34:31.915 xcodebuild[6944:25727] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-11-20 17:34:31.915 xcodebuild[6944:25727] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    29.46s             Setting up automation session
+    t =    33.10s             Wait for com.jakebway.panelsnap to idle
+    t =    39.54s Added attachment named '01-library'
+    t =    39.56s Waiting 8.0s for StaticText (First Match) to exist
+    t =    40.60s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
+    t =    40.60s         Checking existence of `StaticText (First Match)`
+    t =    40.75s Tap StaticText (First Match)
+    t =    40.75s     Wait for com.jakebway.panelsnap to idle
+    t =    40.75s     Find the StaticText (First Match)
+    t =    40.85s     Check for interrupting elements affecting "UITest Comic #1" StaticText
+    t =    40.92s     Synthesize event
+    t =    41.35s     Wait for com.jakebway.panelsnap to idle
+    t =    44.91s Added attachment named '20-start'
+    t =    44.91s Press Window (First Match)[0.85, 0.50] for 0.0 seconds, then drag to Window (First Match)[0.15, 0.50] with velocity of 750.00 pixels per second, and then hold for 0.0 seconds 
+    t =    44.91s     Wait for com.jakebway.panelsnap to idle
+    t =    44.92s     Find the Window (First Match)
+    t =    44.93s     Check for interrupting elements affecting Window
+    t =    44.98s     Synthesize event
+    t =    44.98s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    45.01s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    45.02s         Find the Window (First Match)
+    t =    45.04s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    45.05s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    45.72s     Wait for com.jakebway.panelsnap to idle
+    t =    51.62s Added attachment named '21-swipe-1'
+    t =    51.62s Press Window (First Match)[0.85, 0.50] for 0.0 seconds, then drag to Window (First Match)[0.15, 0.50] with velocity of 750.00 pixels per second, and then hold for 0.0 seconds 
+    t =    51.62s     Wait for com.jakebway.panelsnap to idle
+    t =    51.62s     Find the Window (First Match)
+    t =    51.67s     Check for interrupting elements affecting Window
+    t =    51.70s     Synthesize event
+    t =    51.70s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    51.72s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    51.88s         Find the Window (First Match)
+    t =    51.90s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    51.92s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    52.58s     Wait for com.jakebway.panelsnap to idle
+    t =    53.74s Added attachment named '21-swipe-2'
+    t =    53.74s Press Window (First Match)[0.85, 0.50] for 0.0 seconds, then drag to Window (First Match)[0.15, 0.50] with velocity of 750.00 pixels per second, and then hold for 0.0 seconds 
+    t =    53.74s     Wait for com.jakebway.panelsnap to idle
+    t =    53.74s     Find the Window (First Match)
+    t =    53.76s     Check for interrupting elements affecting Window
+    t =    53.78s     Synthesize event
+    t =    53.78s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    53.80s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    53.81s         Find the Window (First Match)
+    t =    53.82s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    53.83s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    54.50s     Wait for com.jakebway.panelsnap to idle
+    t =    55.65s Added attachment named '21-swipe-3'
+    t =    55.80s Added attachment named '22-end'
+    t =    55.90s Tear Down
+Test Case '-[PanelSnapUITests.ReaderUITests testPageSwipes]' passed (57.139 seconds).
+Test Case '-[PanelSnapUITests.ReaderUITests testPinchFromSnappedPanelIsContinuous]' started.
+    t =     0.00s Start Test at 2026-11-20 17:35:27.218
+    t =     1.29s Set Up
+    t =     1.29s     Open com.jakebway.panelsnap
+    t =     1.29s         Launch com.jakebway.panelsnap
+    t =     1.29s             Terminate com.jakebway.panelsnap:9504
+2026-11-20 17:35:29.528 xcodebuild[6944:25727] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-11-20 17:35:29.529 xcodebuild[6944:25727] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     6.19s             Setting up automation session
+    t =     8.18s             Wait for com.jakebway.panelsnap to idle
+    t =    12.97s Added attachment named '01-library'
+    t =    12.98s Waiting 8.0s for StaticText (First Match) to exist
+    t =    14.06s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
+    t =    14.06s         Checking existence of `StaticText (First Match)`
+    t =    14.15s Tap StaticText (First Match)
+    t =    14.15s     Wait for com.jakebway.panelsnap to idle
+    t =    14.16s     Find the StaticText (First Match)
+    t =    14.20s     Check for interrupting elements affecting "UITest Comic #1" StaticText
+    t =    14.24s     Synthesize event
+    t =    14.55s     Wait for com.jakebway.panelsnap to idle
+    t =    17.92s Tap Window (First Match)[0.96, 0.50]
+    t =    17.92s     Wait for com.jakebway.panelsnap to idle
+    t =    17.93s     Find the Window (First Match)
+    t =    17.97s     Check for interrupting elements affecting Window
+    t =    18.01s     Synthesize event
+    t =    18.01s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    18.03s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    18.05s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    18.35s     Wait for com.jakebway.panelsnap to idle
+    t =    19.70s Added attachment named '30-snapped-panel'
+    t =    19.71s Pinch with scale 1.2, velocity 0.6 in Window (First Match)
+    t =    19.71s     Wait for com.jakebway.panelsnap to idle
+    t =    19.71s     Find the Window (First Match)
+    t =    19.74s     Check for interrupting elements affecting Window
+    t =    19.79s     Synthesize event
+    t =    19.79s         Pinching with rect {{50, 50}, {320, 812}}
+    t =    22.13s     Wait for com.jakebway.panelsnap to idle
+    t =    23.29s Added attachment named '31-after-small-pinch'
+UITEST: pinch continuity diff: 0.08814814814814814
+    t =    23.38s Press Window (First Match)[0.50, 0.50] for 0.1 seconds, then drag to Window (First Match)[0.52, 0.50] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds 
+    t =    23.38s     Wait for com.jakebway.panelsnap to idle
+    t =    23.39s     Find the Window (First Match)
+    t =    23.40s     Check for interrupting elements affecting Window
+    t =    23.44s     Synthesize event
+    t =    23.44s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    23.46s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    23.47s         Find the Window (First Match)
+    t =    23.48s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    23.51s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    23.83s     Wait for com.jakebway.panelsnap to idle
+    t =    24.79s Added attachment named '32-after-tiny-drag'
+/Users/runner/work/PanelSnap/PanelSnap/Tests/UI/ReaderUITests.swift:146: error: -[PanelSnapUITests.ReaderUITests testPinchFromSnappedPanelIsContinuous] : XCTAssertLessThan failed: ("0.08814814814814814") is not less than ("0.08") - a tiny drag should move the page a tiny amount
+    t =    25.13s Tear Down
+Test Case '-[PanelSnapUITests.ReaderUITests testPinchFromSnappedPanelIsContinuous]' failed (25.376 seconds).
+Test Case '-[PanelSnapUITests.ReaderUITests testReaderGestures]' started.
+    t =     0.00s Start Test at 2026-11-20 17:35:52.593
+    t =     0.03s Set Up
+    t =     0.03s     Open com.jakebway.panelsnap
+    t =     0.03s         Launch com.jakebway.panelsnap
+    t =     0.03s             Terminate com.jakebway.panelsnap:11252
+2026-11-20 17:35:53.647 xcodebuild[6944:25727] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-11-20 17:35:53.647 xcodebuild[6944:25727] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.81s             Setting up automation session
+    t =     2.92s             Wait for com.jakebway.panelsnap to idle
+    t =    11.58s Added attachment named '01-library'
+    t =    11.59s Waiting 8.0s for StaticText (First Match) to exist
+    t =    12.63s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
+    t =    12.64s         Checking existence of `StaticText (First Match)`
+    t =    12.83s Tap StaticText (First Match)
+    t =    12.83s     Wait for com.jakebway.panelsnap to idle
+    t =    12.84s     Find the StaticText (First Match)
+    t =    13.11s     Check for interrupting elements affecting "UITest Comic #1" StaticText
+    t =    13.18s     Synthesize event
+    t =    13.54s     Wait for com.jakebway.panelsnap to idle
+    t =    17.05s Added attachment named '02-reader-open'
+    t =    17.05s Tap Window (First Match)[0.96, 0.50]
+    t =    17.05s     Wait for com.jakebway.panelsnap to idle
+    t =    17.06s     Find the Window (First Match)
+    t =    17.07s     Check for interrupting elements affecting Window
+    t =    17.11s     Synthesize event
+    t =    17.11s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    17.13s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    17.15s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    17.45s     Wait for com.jakebway.panelsnap to idle
+    t =    18.61s Added attachment named '03-edge-tap-next'
+    t =    18.71s Tap Window (First Match)[0.50, 0.50]
+    t =    18.71s     Wait for com.jakebway.panelsnap to idle
+    t =    18.71s     Find the Window (First Match)
+    t =    18.73s     Check for interrupting elements affecting Window
+    t =    18.75s     Synthesize event
+    t =    18.75s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    18.77s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    18.79s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    19.08s     Wait for com.jakebway.panelsnap to idle
+    t =    20.44s Added attachment named '04-centre-tap'
+    t =    20.44s Pinch with scale 2.5, velocity 2 in Window (First Match)
+    t =    20.44s     Wait for com.jakebway.panelsnap to idle
+    t =    20.45s     Find the Window (First Match)
+    t =    20.49s     Check for interrupting elements affecting Window
+    t =    20.51s     Synthesize event
+    t =    20.51s         Pinching with rect {{50, 50}, {320, 812}}
+    t =    22.10s     Wait for com.jakebway.panelsnap to idle
+    t =    23.05s Added attachment named '05-pinched-in'
+    t =    23.14s Press Window (First Match)[0.70, 0.60] for 0.1 seconds, then drag to Window (First Match)[0.30, 0.40] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds 
+    t =    23.14s     Wait for com.jakebway.panelsnap to idle
+    t =    23.14s     Find the Window (First Match)
+    t =    23.15s     Check for interrupting elements affecting Window
+    t =    23.17s     Synthesize event
+    t =    23.17s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    23.19s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    23.20s         Find the Window (First Match)
+    t =    23.21s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    23.22s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    24.01s     Wait for com.jakebway.panelsnap to idle
+    t =    25.01s Added attachment named '06-dragged'
+    t =    25.13s Press Window (First Match)[0.30, 0.50] for 0.0 seconds, then drag to Window (First Match)[0.75, 0.50] with velocity of 750.00 pixels per second, and then hold for 0.0 seconds 
+    t =    25.13s     Wait for com.jakebway.panelsnap to idle
+    t =    25.13s     Find the Window (First Match)
+    t =    25.14s     Check for interrupting elements affecting Window
+    t =    25.17s     Synthesize event
+    t =    25.17s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    25.19s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    25.19s         Find the Window (First Match)
+    t =    25.21s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    25.22s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    25.75s     Wait for com.jakebway.panelsnap to idle
+    t =    25.99s Added attachment named '07-flick-early'
+    t =    27.66s Added attachment named '08-flick-late'
+UITEST: glide movement after release: 0.12509622367465506
+    t =    27.77s Double tap Window (First Match)[0.50, 0.50]
+    t =    27.77s     Wait for com.jakebway.panelsnap to idle
+    t =    27.77s     Find the Window (First Match)
+    t =    27.78s     Check for interrupting elements affecting Window
+    t =    27.81s     Synthesize event
+    t =    27.81s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    27.82s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    27.85s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    28.18s     Wait for com.jakebway.panelsnap to idle
+    t =    29.36s Added attachment named '09-double-tap'
+    t =    29.36s Pinch with scale 0.4, velocity -2 in Window (First Match)
+    t =    29.36s     Wait for com.jakebway.panelsnap to idle
+    t =    29.36s     Find the Window (First Match)
+    t =    29.37s     Check for interrupting elements affecting Window
+    t =    29.40s     Synthesize event
+    t =    29.40s         Pinching with rect {{50, 50}, {320, 812}}
+    t =    29.95s     Wait for com.jakebway.panelsnap to idle
+    t =    31.11s Added attachment named '10-pinched-out'
+    t =    31.11s Pressing Home button
+    t =    33.67s Open com.jakebway.panelsnap
+    t =    33.67s     Activate com.jakebway.panelsnap
+    t =    34.03s         Wait for com.jakebway.panelsnap to idle
+    t =    34.07s Wait for com.jakebway.panelsnap to become Running Foreground
+    t =    36.08s Added attachment named '11-after-returning'
+    t =    36.08s Tap Window (First Match)[0.96, 0.50]
+    t =    36.08s     Wait for com.jakebway.panelsnap to idle
+    t =    36.08s     Find the Window (First Match)
+    t =    36.12s     Check for interrupting elements affecting Window
+    t =    36.16s     Synthesize event
+    t =    36.16s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    36.19s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    36.22s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
+    t =    36.53s     Wait for com.jakebway.panelsnap to idle
+    t =    37.70s Added attachment named '12-tap-after-returning'
+    t =    37.70s Tear Down
+Test Case '-[PanelSnapUITests.ReaderUITests testReaderGestures]' passed (37.968 seconds).
+Test Suite 'ReaderUITests' failed at 2026-11-20 17:36:30.561.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 120.482 (120.485) seconds
+Test Suite 'PanelSnapUITests.xctest' failed at 2026-11-20 17:36:30.562.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 120.482 (120.486) seconds
+Test Suite 'All tests' failed at 2026-11-20 17:36:30.562.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 120.482 (120.487) seconds
+2026-11-20 17:37:02.964 xcodebuild[6944:25727] [MT] IDETestOperationsObserverDebug: 196.647 elapsed -- Testing started completed.
+2026-11-20 17:37:02.964 xcodebuild[6944:25727] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-20 17:37:02.964 xcodebuild[6944:25727] [MT] IDETestOperationsObserverDebug: 196.647 sec, +196.647 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
+
+Failing tests:
+	ReaderUITests.testPinchFromSnappedPanelIsContinuous()
+
+** TEST EXECUTE FAILED **
+
+Testing started
