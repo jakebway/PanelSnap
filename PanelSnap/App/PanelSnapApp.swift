@@ -11,6 +11,8 @@ struct PanelSnapApp: App {
         _ = Paths.comics
         Console.log("PanelSnap launched")
         MLPanelDetector.warmUp()
+        // Wake Discover's saved lists and covers now, so they are in memory before it is ever opened.
+        if UserDefaults.standard.object(forKey: "showDiscover") as? Bool ?? true { _ = DiscoverModel.shared }
         // An older version left a second note beside this one; one is enough.
         try? FileManager.default.removeItem(at: docs.appendingPathComponent("Put your comics in the Comics folder.txt"))
     }

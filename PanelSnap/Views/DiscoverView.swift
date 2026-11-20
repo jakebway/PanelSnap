@@ -206,6 +206,7 @@ struct DiscoverView: View {
             .padding(.top, 4)
             .padding(.bottom, 28)
         }
+        .ignoresSafeArea(.container, edges: .horizontal)      // fill the whole screen width
         .refreshable {
             await model.load(.current, force: true)
             await model.load(.next, force: true)
@@ -221,7 +222,7 @@ struct DiscoverView: View {
                     Text(title).font(.system(size: 19, weight: .heavy, design: .rounded)).foregroundStyle(.white).lineLimit(1)
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 14) {
+                    HStack(alignment: .top, spacing: 14) {
                         ForEach(items) { c in
                             Button { selected = c } label: {
                                 VStack(alignment: .leading, spacing: 7) {
@@ -238,7 +239,9 @@ struct DiscoverView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, 20)
                 }
+                .padding(.horizontal, -20)          // the row slides edge to edge
             }
         }
     }
@@ -287,7 +290,9 @@ struct DiscoverView: View {
             Text("Data from League of Comic Geeks (leagueofcomicgeeks.com).")
                 .font(.caption2).foregroundStyle(Theme.secondary)
                 .padding(.vertical, 18)
+                .padding(.horizontal, 20)
         }
+        .ignoresSafeArea(.container, edges: .horizontal)
         .refreshable { if let r = refresh { await r() } }
     }
 

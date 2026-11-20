@@ -99,10 +99,12 @@ final class DiscoverModel: ObservableObject {
         DiscoverCovers.shared.prefetch(visibleCovers())
     }
 
+    /// Covers in the order they are wanted: your suggestions first, then what is popular this week and next, then the rest.
     private func visibleCovers() -> [URL] {
         var urls: [URL] = []
-        for sec in forYouSections { urls += sec.comics.prefix(8).compactMap { $0.cover } }
-        for w in [ReleaseWeek.current, .next] { urls += (weeks[w] ?? []).sorted { $0.pulls > $1.pulls }.prefix(12).compactMap { $0.cover } }
+        for sec in forYouSections { urls += sec.comics.compactMap { $0.cover } }
+        for w in [ReleaseWeek.current, .next] { urls += (weeks[w] ?? []).sorted { $0.pulls > $1.pulls }.prefix(20).compactMap { $0.cover } }
+        for w in [ReleaseWeek.current, .next, .previous] { urls += (weeks[w] ?? []).sorted { $0.pulls > $1.pulls }.compactMap { $0.cover } }
         return urls
     }
 
@@ -137,7 +139,7 @@ final class DiscoverModel: ObservableObject {
             weeks[week] = list
             loadedAt[week] = Date()
             save()
-            DiscoverCovers.shared.prefetch(list.sorted { $0.pulls > $1.pulls }.prefix(30).compactMap { $0.cover })
+            DiscoverCovers.shared.prefetch(visibleCovers())
         } else if weeks[week] == nil {
             failedWeeks.insert(week)
         }
