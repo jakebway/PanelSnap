@@ -1,0 +1,8 @@
+2026-11-20 17:09:14.599 appintentsmetadataprocessor[4081:15301] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+PanelSnap/Services/BrowserModel.swift:448:22: warning: consider using asynchronous alternative function
+PanelSnap/Services/LibraryStore.swift:132:38: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode
+PanelSnap/Services/ReaderModel.swift:123:38: warning: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+PanelSnap/Services/ReaderModel.swift:139:34: warning: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+PanelSnap/Services/ReaderModel.swift:186:47: warning: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+PanelSnap/Services/ReaderModel.swift:197:38: warning: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+PanelSnap/Services/ReaderModel.swift:61:13: warning: capture of 'cache' with non-Sendable type 'PanelCache' in a '@Sendable' closure
