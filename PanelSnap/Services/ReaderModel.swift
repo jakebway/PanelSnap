@@ -31,6 +31,7 @@ final class ReaderModel: ObservableObject {
     private var loadToken = 0
     private var imageCache: [Int: UIImage] = [:]
     private var panelMemo: [Int: [CGRect]] = [:]
+    private var prefetching = Set<Int>()        // pages already being prepared in the background
     private var snap: Bool
     private var pageFirst: Bool
     private var observers: [NSObjectProtocol] = []
@@ -174,14 +175,19 @@ final class ReaderModel: ObservableObject {
         // Keep only the current page and its two neighbours in memory (each decoded page is tens of MB).
         dropFarPages(keeping: page, window: 1)
         for next in [page + 1, page - 1] where next >= 0 && next < pageCount {
-            if imageCache[next] != nil { continue }
+            if imageCache[next] != nil || prefetching.contains(next) { continue }
+            prefetching.insert(next)
             let src = source
             let cache = panelCache
             let isRTL = rtl
+            let scan = snap            // regular viewer mode never scans for panels
             Task.detached(priority: .utility) { [weak self] in
-                guard let cg = src.pageImage(at: next, maxPixel: 2600) else { return }
+                guard let cg = src.pageImage(at: next, maxPixel: 2600) else {
+                    await MainActor.run { _ = self?.prefetching.remove(next) }
+                    return
+                }
                 var found = cache.panels(for: next)
-                if found == nil, let detected = PanelDetector.detect(image: cg, rtl: isRTL) {
+                if found == nil, scan, let detected = PanelDetector.detect(image: cg, rtl: isRTL) {
                     cache.store(detected, for: next)
                     found = detected
                 }
@@ -189,6 +195,7 @@ final class ReaderModel: ObservableObject {
                 let ui = UIImage(cgImage: cg)
                 await MainActor.run {
                     guard let self = self else { return }
+                    self.prefetching.remove(next)
                     if abs(next - self.pageIndex) <= 1 {
                         self.imageCache[next] = ui
                         self.panelMemo[next] = rects

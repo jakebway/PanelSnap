@@ -320,8 +320,7 @@ struct ReaderView: View {
     }
 
     private func resetZoomInstantly() {
-        zoom.zoom = 1
-        zoom.offset = .zero
+        zoom.set(zoom: 1, offset: .zero)
     }
 
     // MARK: Manual zoom
@@ -342,8 +341,7 @@ struct ReaderView: View {
         t.disablesAnimations = true
         withTransaction(t) {
             model.showOverview()
-            zoom.zoom = newZoom
-            zoom.offset = zoom.clamp(newOffset, zoom: newZoom, size: size)
+            zoom.set(zoom: newZoom, offset: zoom.clamp(newOffset, zoom: newZoom, size: size))
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { zoom.converting = false }
     }
@@ -356,8 +354,7 @@ struct ReaderView: View {
         let off = CGSize(width: (point.x - c.x) * (1 - z), height: (point.y - c.y) * (1 - z))
         hideChrome()
         withAnimation(.easeOut(duration: 0.25)) {
-            zoom.zoom = z
-            zoom.offset = zoom.clamp(off, zoom: z, size: size)
+            zoom.set(zoom: z, offset: zoom.clamp(off, zoom: z, size: size))
         }
     }
 

@@ -4,25 +4,35 @@ import UIKit
 /// The reader's manual zoom (pinch and double-tap). It lives in its own object so that zooming only redraws the page,
 /// not the whole reader, which is what keeps it smooth.
 final class ZoomState: ObservableObject {
-    @Published var zoom: CGFloat = 1
-    @Published var offset: CGSize = .zero
+    private(set) var zoom: CGFloat = 1
+    private(set) var offset: CGSize = .zero
     var lastPinch = Date.distantPast
     var converting = false          // true while switching from a focused panel to the whole page, so the zoom is not reset
 
     var isZoomed: Bool { return zoom > 1.02 }
 
+    /// Changes zoom and offset together, so the page is redrawn once per frame instead of twice.
+    func set(zoom z: CGFloat, offset o: CGSize) {
+        objectWillChange.send()
+        zoom = z
+        offset = o
+    }
+
+    func set(offset o: CGSize) { set(zoom: zoom, offset: o) }
+
     func reset() {
-        withAnimation(.easeOut(duration: 0.22)) {
-            zoom = 1
-            offset = .zero
-        }
+        withAnimation(.easeOut(duration: 0.22)) { set(zoom: 1, offset: .zero) }
+    }
+
+    /// How far the page may be moved either way before its edge shows.
+    func limits(zoom z: CGFloat, size: CGSize) -> CGSize {
+        return CGSize(width: max(z - 1, 0) * size.width / 2, height: max(z - 1, 0) * size.height / 2)
     }
 
     /// Keeps a zoomed page from being dragged completely out of view.
     func clamp(_ o: CGSize, zoom z: CGFloat, size: CGSize) -> CGSize {
-        let maxX = max(z - 1, 0) * size.width / 2
-        let maxY = max(z - 1, 0) * size.height / 2
-        return CGSize(width: min(max(o.width, -maxX), maxX), height: min(max(o.height, -maxY), maxY))
+        let m = limits(zoom: z, size: size)
+        return CGSize(width: min(max(o.width, -m.width), m.width), height: min(max(o.height, -m.height), m.height))
     }
 }
 
@@ -94,6 +104,12 @@ struct ZoomGestures: UIViewRepresentable {
         private lazy var pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
         private var start: (zoom: CGFloat, offset: CGSize, point: CGPoint)?
         private var panBase: CGSize = .zero
+        private var panTouches = 1               // fingers on the pan last frame; a change means the drag must start afresh
+        private var pinchSeen = false            // a pinch ran during this drag, so it is not a swipe
+        private var link: CADisplayLink?
+        private var glideV = CGPoint.zero        // points per second
+        private var glideStamp: CFTimeInterval = 0
+        private var glideSize = CGSize.zero
 
         init(zoom: ZoomState) { self.zoom = zoom }
 
@@ -112,6 +128,7 @@ struct ZoomGestures: UIViewRepresentable {
         }
 
         func detach() {
+            stopGlide()
             window?.removeGestureRecognizer(pinch)
             window?.removeGestureRecognizer(pan)
             window = nil
@@ -131,6 +148,7 @@ struct ZoomGestures: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            if touch.phase == .began { stopGlide() }    // putting a finger down catches a gliding page where it is
             return !(touch.view is UIControl)           // leave sliders and buttons alone
         }
 
@@ -142,6 +160,7 @@ struct ZoomGestures: UIViewRepresentable {
             let c = CGPoint(x: size.width / 2, y: size.height / 2)
             switch g.state {
             case .began:
+                stopGlide()
                 left = false
                 baseScale = 1
                 touches = g.numberOfTouches
@@ -173,8 +192,7 @@ struct ZoomGestures: UIViewRepresentable {
                 let ratio = z / s.zoom
                 let off = CGSize(width: (now.x - c.x) - ratio * (s.point.x - c.x - s.offset.width),
                                  height: (now.y - c.y) - ratio * (s.point.y - c.y - s.offset.height))
-                zoom.zoom = z
-                zoom.offset = zoom.clamp(off, zoom: z, size: size)
+                zoom.set(zoom: z, offset: zoom.clamp(off, zoom: z, size: size))
                 zoom.lastPinch = Date()
             case .ended, .cancelled, .failed:
                 guard let s = start else { return }
@@ -186,7 +204,7 @@ struct ZoomGestures: UIViewRepresentable {
                     if showWholePage { onPinchedOut() }
                 } else {
                     withAnimation(.easeOut(duration: 0.2)) {
-                        zoom.offset = zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size)
+                        zoom.set(offset: zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size))
                     }
                 }
             default:
@@ -194,11 +212,57 @@ struct ZoomGestures: UIViewRepresentable {
             }
         }
 
+        // MARK: Gliding (momentum after a drag, and the spring back from an edge)
+
+        private func stopGlide() {
+            link?.invalidate()
+            link = nil
+        }
+
+        private func startGlide(velocity: CGPoint, size: CGSize) {
+            stopGlide()
+            glideV = velocity
+            glideSize = size
+            glideStamp = 0
+            let l = CADisplayLink(target: self, selector: #selector(glideStep(_:)))
+            l.add(to: .main, forMode: .common)
+            link = l
+        }
+
+        /// One frame of momentum. It moves the real offset (not a pending animation), so a touch can catch it exactly,
+        /// and a page dragged past its edge eases back while the rest of the movement carries on.
+        @objc private func glideStep(_ l: CADisplayLink) {
+            guard zoom.isZoomed else { stopGlide(); return }
+            let dt = glideStamp == 0 ? l.duration : min(l.timestamp - glideStamp, 1.0 / 20)
+            glideStamp = l.timestamp
+            let m = zoom.limits(zoom: zoom.zoom, size: glideSize)
+            let x = Coordinator.advance(zoom.offset.width, limit: m.width, v: &glideV.x, dt: dt)
+            let y = Coordinator.advance(zoom.offset.height, limit: m.height, v: &glideV.y, dt: dt)
+            zoom.set(offset: CGSize(width: x.pos, height: y.pos))
+            if !x.moving && !y.moving { stopGlide() }
+        }
+
+        private static func advance(_ p: CGFloat, limit: CGFloat, v: inout CGFloat, dt: Double) -> (pos: CGFloat, moving: Bool) {
+            if p < -limit || p > limit {                       // past the edge: ease back to it
+                let target = p < 0 ? -limit : limit
+                v = 0
+                let np = p + (target - p) * CGFloat(1 - exp(-dt * 16))
+                return abs(target - np) < 0.5 ? (target, false) : (np, true)
+            }
+            v *= CGFloat(pow(0.998, dt * 1000))                 // the same deceleration as a scroll view
+            var np = p + v * CGFloat(dt)
+            if np < -limit || np > limit {                      // reached the edge: stop there
+                np = min(max(np, -limit), limit)
+                v = 0
+            }
+            return (np, abs(v) > 20)
+        }
+
         // MARK: Pan (zoomed in)
 
         @objc private func panned(_ g: UIPanGestureRecognizer) {
             guard let stage = stage else { return }
-            if pinch.state == .began || pinch.state == .changed { return }
+            if pinch.state == .began || pinch.state == .changed { pinchSeen = true; return }
             let size = stage.bounds.size
             if !zoom.isZoomed && !converted {
                 nudge(g, size: size)
@@ -206,19 +270,17 @@ struct ZoomGestures: UIViewRepresentable {
             }
             switch g.state {
             case .began:
-                g.setTranslation(.zero, in: stage)
-                panBase = zoom.offset
-                // Only a drag that starts against a side of the page can carry on into a swipe to the next one.
-                let maxX = max(zoom.zoom - 1, 0) * size.width / 2
-                startedAtLeftEdge = zoom.offset.width >= maxX - 2
-                startedAtRightEdge = zoom.offset.width <= -maxX + 2
+                rebase(g, size: size)
             case .changed:
+                // After a pinch, or when a finger is added or lifted, carry on from where the page is now
+                // rather than from where the drag first began (which would make the page jump).
+                if pinchSeen || g.numberOfTouches != panTouches { rebase(g, size: size); return }
                 let t = g.translation(in: stage)
                 let raw = CGSize(width: panBase.width + t.x, height: panBase.height + t.y)
                 let held = zoom.clamp(raw, zoom: zoom.zoom, size: size)
                 // Past the edge the page stretches a little and resists, so you can feel that the edge was reached.
-                zoom.offset = CGSize(width: held.width + (raw.width - held.width) * 0.3,
-                                     height: held.height + (raw.height - held.height) * 0.3)
+                zoom.set(offset: CGSize(width: held.width + (raw.width - held.width) * 0.3,
+                                        height: held.height + (raw.height - held.height) * 0.3))
             case .ended:
                 converted = false
                 let v = g.velocity(in: stage)
@@ -229,20 +291,31 @@ struct ZoomGestures: UIViewRepresentable {
                 let horizontal = abs(t.x) > abs(t.y) * 1.3
                 let toNext = startedAtRightEdge && pushed < -40 || startedAtRightEdge && pushed < -8 && v.x < -700
                 let toPrevious = startedAtLeftEdge && pushed > 40 || startedAtLeftEdge && pushed > 8 && v.x > 700
-                if horizontal && (toNext || toPrevious) {
-                    withAnimation(.easeOut(duration: 0.2)) { zoom.offset = held }
+                if !pinchSeen && horizontal && (toNext || toPrevious) {
+                    withAnimation(.easeOut(duration: 0.2)) { zoom.set(offset: held) }
                     onEdgeSwipe(toNext)
                 } else {
-                    let glide = zoom.clamp(CGSize(width: held.width + v.x * 0.18, height: held.height + v.y * 0.18),
-                                           zoom: zoom.zoom, size: size)
-                    withAnimation(.easeOut(duration: 0.45)) { zoom.offset = glide }
+                    startGlide(velocity: v, size: size)
                 }
             case .cancelled:
                 converted = false
-                withAnimation(.easeOut(duration: 0.2)) { zoom.offset = zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size) }
+                startGlide(velocity: .zero, size: size)
             default:
                 break
             }
+        }
+
+        /// Starts (or restarts) a drag from the page's current position.
+        private func rebase(_ g: UIPanGestureRecognizer, size: CGSize) {
+            stopGlide()
+            pinchSeen = false
+            panTouches = g.numberOfTouches
+            g.setTranslation(.zero, in: stage)
+            panBase = zoom.offset
+            // Only a drag that starts against a side of the page can carry on into a swipe to the next one.
+            let maxX = zoom.limits(zoom: zoom.zoom, size: size).width
+            startedAtLeftEdge = zoom.offset.width >= maxX - 2
+            startedAtRightEdge = zoom.offset.width <= -maxX + 2
         }
 
         // MARK: Nudging a snapped panel
@@ -256,6 +329,7 @@ struct ZoomGestures: UIViewRepresentable {
             switch g.state {
             case .began:
                 converted = false
+                pinchSeen = false
                 g.setTranslation(.zero, in: stage)
             case .changed:
                 let t = g.translation(in: stage), v = g.velocity(in: stage)
@@ -263,14 +337,13 @@ struct ZoomGestures: UIViewRepresentable {
                 if hypot(t.x, t.y) > 6 && hypot(v.x, v.y) < 450 {
                     converted = true
                     onLeavePanel()
-                    g.setTranslation(.zero, in: stage)
-                    panBase = zoom.offset
+                    rebase(g, size: size)
                 }
             case .ended:
                 let v = g.velocity(in: stage), t = g.translation(in: stage)
                 zoom.lastPinch = Date()
                 let ax = abs(v.x), ay = abs(v.y)
-                if max(ax, ay) > 700 && max(ax, ay) > 1.3 * min(ax, ay) {
+                if !pinchSeen && max(ax, ay) > 700 && max(ax, ay) > 1.3 * min(ax, ay) {
                     onFlick(CGSize(width: t.x, height: t.y))
                 }
             default:
