@@ -167,11 +167,29 @@ final class ReaderUITests: XCTestCase {
             settle(0.8)
         }
 
+        // The file opens on the cover, which comes before issue #1; move into the first issue.
+        at(0.5, 0.5).tap(); settle(0.8)
+        let early = app.sliders.firstMatch
+        XCTAssertTrue(early.waitForExistence(timeout: 4), "the page slider should be there")
+        early.adjust(toNormalizedSliderPosition: 0.12); settle(2.0)
         let first = openCompanion()
         consoleLog("banner at the start: \(first)")
         XCTAssertTrue(first.contains("#1"), "page 2 onwards is issue #1, got: \(first)")
-        settle(6.0)                                                  // let the lookups fill in
+        settle(8.0)                                                  // let the lookups fill in
         shot("42-companion-issue1")
+
+        // Ask the phone's own model a question (only when this simulator has Apple Intelligence).
+        let chip = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Who is'")).firstMatch
+        if chip.exists {
+            chip.tap()
+            let note = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Answered on your phone'")).firstMatch
+            let got = note.waitForExistence(timeout: 90)
+            settle(1.0)
+            shot("45-ask-answer")
+            consoleLog("ask answered: \(got)")
+        } else {
+            consoleLog("ask not available here")
+        }
         closeCompanion()
 
         // Jump to a page inside issue #3 with the slider, then look again.
