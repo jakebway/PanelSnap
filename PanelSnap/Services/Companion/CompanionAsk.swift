@@ -67,6 +67,8 @@ final class CompanionAsk: ObservableObject {
     Visitors are only the people the pages show arriving from somewhere else. A spouse, parent or child of a resident who is shown \
     at home with the family there lives there too. When the reader pushes back ("I thought X lived there"), check the sources and \
     the page words again and change your answer if they show the reader is right; do not just repeat yourself. \
+    Each person goes in exactly one group. Relatives listed in someone's profile (their sons, parents, exes) are not at the place \
+    unless the sources or page words put them there. Anything marked "FROM THE PLOT" about who is only visiting is certain. \
     Write each person once, with no repeated names and no brackets inside brackets; group people on short lines, for example \
     "Royal family: …" then "Others: …" then "Visiting: …". \
         A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
@@ -275,15 +277,20 @@ final class CompanionAsk: ObservableObject {
     /// Drops sentences the model said twice, which is how "talking in circles" usually shows up.
     static func tidy(_ text: String) -> String {
         var seen = Set<String>()
-        var out: [String] = []
-        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { s, _, _, _ in
-            guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return }
-            let key = s.lowercased().filter { $0.isLetter }
-            if key.count > 12, !seen.insert(key).inserted { return }
-            out.append(s)
+        var lines: [String] = []
+        for line in text.components(separatedBy: "\n") {
+            var out: [String] = []
+            line.enumerateSubstrings(in: line.startIndex..., options: .bySentences) { s, _, _, _ in
+                guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return }
+                let key = s.lowercased().filter { $0.isLetter }
+                if key.count > 12, !seen.insert(key).inserted { return }
+                out.append(s)
+            }
+            if !out.isEmpty { lines.append(out.joined(separator: " ")) }
         }
-        return out.joined(separator: " ")
+        return lines.joined(separator: "\n")
     }
+}
 }
 
 extension CompanionData {

@@ -282,6 +282,8 @@ final class CompanionModel: ObservableObject {
         let keyFacts = ranked.reduce(0) { $0 + $1.count } > 1200 ? await FactNotes.read(question: fixedQuestion, passages: ranked) : ""
         // The sources come first: they are what answers are made from.
         var ctx = ""
+        let visitors = visitorHint(question: fixedQuestion)
+        if !visitors.isEmpty { ctx += "FROM THE PLOT (certain): " + visitors + "\n\n" }
         if !keyFacts.isEmpty { ctx += "KEY FACTS pulled out of the sources for this question:\n" + keyFacts + "\n\n" }
         if !ranked.isEmpty { ctx += "SOURCES - the most relevant passages from the comics wiki, Wikipedia and the web:\n" + ranked.joined(separator: "\n") + "\n\n" }
         ctx += "ABOUT THE COMIC BEING READ:\n" + info
@@ -294,6 +296,36 @@ final class CompanionModel: ObservableObject {
                 + pages.joined(separator: "\n")
         }
         return ctx
+    }
+
+    /// Who the plot says is only visiting the place the question is about ("the Vision and the Scarlet Witch pay a visit to Attilan").
+    /// A small model tends to list everyone in the scene as a resident, so this is stated outright.
+    func visitorHint(question: String) -> String {
+        guard let text = data.issueSynopsis?.text else { return "" }
+        let ts = Knowledge.terms(question).map { $0.lowercased() }.filter { $0.count > 3 }
+        guard !ts.isEmpty else { return "" }
+        var names: [String] = []
+        var place = ""
+        let verbs = ["pay a visit", "visit", "arrive", "travel to", "teleport", "come to", "comes to"]
+        text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .bySentences) { sentence, _, _, _ in
+            guard let s = sentence else { return }
+            let l = s.lowercased()
+            guard let verb = verbs.first(where: { l.contains($0) }), let vr = l.range(of: verb),
+                  let t = ts.first(where: { l.contains($0) }) else { return }
+            let subject = String(l[..<vr.lowerBound])
+            for c in self.data.characters {
+                var options = [c.name]
+                options += (c.facts ?? []).filter { $0.label.lowercased().contains("real") }.map { $0.value }
+                if options.contains(where: { subject.contains($0.lowercased()) }) {
+                    var label = c.name
+                    if let real = (c.facts ?? []).first(where: { $0.label.lowercased().contains("real") })?.value, real.lowercased() != c.name.lowercased() { label += " (" + real + ")" }
+                    if !names.contains(label) { names.append(label) }
+                    place = t
+                }
+            }
+        }
+        guard !names.isEmpty else { return "" }
+        return names.joined(separator: " and ") + " only visit \(place.capitalized) in this issue; they do not live there."
     }
 
     /// The page on screen, as a picture the on-device model can look at.
