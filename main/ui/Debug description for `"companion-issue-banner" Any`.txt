@@ -1,0 +1,4 @@
+Query chain:
+ →Find: Target Application 'com.jakebway.panelsnap'
+  ↪︎Find: Descendants matching type Any
+    ↪︎Find: Elements matching predicate '"companion-issue-banner" IN identifiers'

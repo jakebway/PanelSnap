@@ -1,0 +1,4 @@
+Query chain:
+ →Find: Target Application 'com.jakebway.panelsnap'
+  ↪︎Find: Descendants matching type Button
+    ↪︎Find: Elements matching predicate '"companion-button" IN identifiers'
