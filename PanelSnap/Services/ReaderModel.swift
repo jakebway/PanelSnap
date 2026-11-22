@@ -243,6 +243,19 @@ final class ReaderModel: ObservableObject {
         }
     }
 
+    /// Edge taps and swipes both do this, so they always agree: on a whole page they turn the page and keep it whole
+    /// (never pulling you into a panel); on a panel they move to the next or previous panel, and on across pages.
+    func step(forward: Bool) {
+        if isLoading { return }
+        if panelIndex >= 0 {
+            if forward { goForward() } else { goBack() }
+        } else if forward {
+            if pageIndex + 1 < pageCount { load(page: pageIndex + 1, target: .overview) } else { reachedEnd = true }
+        } else if pageIndex > 0 {
+            load(page: pageIndex - 1, target: .overview)
+        }
+    }
+
     func nextPage() {
         if pageIndex + 1 < pageCount {
             load(page: pageIndex + 1, target: .first)

@@ -244,7 +244,7 @@ struct ReaderView: View {
                          onLeavePanel: { leavePanel(size: size) },
                          onEdgeSwipe: { swipedLeft in
                              hideChrome()
-                             model.turnPage(forward: model.rtl ? !swipedLeft : swipedLeft)
+                             model.step(forward: model.rtl ? !swipedLeft : swipedLeft)
                          })
                 .allowsHitTesting(false)
 
@@ -267,7 +267,7 @@ struct ReaderView: View {
     // MARK: Gestures
 
     /// Tap rules:
-    ///  - the outer edges step to the previous / next panel (and onto the next page),
+    ///  - the outer edges (like a swipe) turn the page on a whole page and step panels when you are on a panel,
     ///  - a tap on a panel inside the middle area jumps straight to that panel,
     ///  - anywhere else in the middle shows or hides the controls.
     private func handleTap(at point: CGPoint, size: CGSize) {
@@ -276,11 +276,13 @@ struct ReaderView: View {
         let edge: CGFloat = model.panelIndex < 0 ? 0.095 : 0.17    // whole page: slim edges so panels near them stay tappable
         // The edges stay instant. Only the middle waits a moment, to see whether a second tap is coming.
         if f < edge {
-            if model.rtl { forward() } else { back() }
+            hideChrome()
+            model.step(forward: model.rtl)
             return
         }
         if f > 1 - edge {
-            if model.rtl { back() } else { forward() }
+            hideChrome()
+            model.step(forward: !model.rtl)
             return
         }
         if let last = lastTap, Date().timeIntervalSince(last.time) < 0.3,
@@ -380,8 +382,9 @@ struct ReaderView: View {
         if abs(dx) > 50 && abs(dx) > abs(dy) * 1.3 {
             let swipedLeft = dx < 0
             hideChrome()
-            // Swiping left brings the next page (right-to-left comics swipe the other way).
-            model.turnPage(forward: model.rtl ? !swipedLeft : swipedLeft)
+            // Swiping left goes forward (right-to-left comics swipe the other way): the next page when the whole page
+            // is showing, the next panel when you are on a panel.
+            model.step(forward: model.rtl ? !swipedLeft : swipedLeft)
         } else if dy < -80 && abs(dx) < 70 {
             if !showCompanion { toggleCompanion() }
         } else if dy > 90 && abs(dx) < 70 {
