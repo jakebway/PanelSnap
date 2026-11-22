@@ -11,17 +11,20 @@ struct CompanionView: View {
     @State private var selected: CharacterCard?
     @State private var showFix = false
     @State private var showChat = false
+    @State private var draft = ""
+    @State private var pending: String?
+    @FocusState private var typing: Bool
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 22) {
                     header
                     issueBanner
                     statusRow
                     if CompanionAsk.isSupported {
-                        AskEntryCard(model: model, ask: model.ask) { showChat = true }
+                        AskEntryCard(model: model, ask: model.ask) { pending = nil; showChat = true }
                     }
 
                     if let t = model.data.issueSummary {
@@ -57,8 +60,11 @@ struct CompanionView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             }
-            .fullScreenCover(isPresented: $showChat) {
-                AskChatView(model: model, ask: model.ask)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if CompanionAsk.isSupported { askBar }
+            }
+            .fullScreenCover(isPresented: $showChat, onDismiss: { pending = nil }) {
+                AskChatView(model: model, ask: model.ask, initialQuestion: pending)
             }
             .navigationTitle("Companion")
             .navigationBarTitleDisplayMode(.inline)
@@ -75,6 +81,45 @@ struct CompanionView: View {
         .sheet(isPresented: $showFix) {
             FixMatchSheet(model: model)
         }
+    }
+
+    // MARK: Ask bar
+
+    /// The message bar is always on the Companion screen. Sending opens the chat with the question already on its way.
+    private var askBar: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "sparkles").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.accent)
+            TextField("Ask about this comic…", text: $draft)
+                .focused($typing)
+                .submitLabel(.send)
+                .onSubmit(sendDraft)
+                .accessibilityIdentifier("ask-field")
+            Button(action: sendDraft) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(width: 32, height: 32)
+                    .background(draftReady ? Theme.accent : Theme.accent.opacity(0.35), in: Circle())
+            }
+            .disabled(!draftReady)
+            .accessibilityIdentifier("ask-send-inline")
+        }
+        .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 6)
+        .background(Theme.card2, in: Capsule())
+        .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+        .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+    }
+
+    private var draftReady: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    private func sendDraft() {
+        let q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        draft = ""
+        typing = false
+        pending = q
+        showChat = true
     }
 
     // MARK: Pieces
@@ -563,30 +608,31 @@ struct AskEntryCard: View {
     @ObservedObject var ask: CompanionAsk
     var open: () -> Void
 
-    private var last: AskExchange? { return ask.history.last(where: { $0.issueKey == model.issueKey }) }
+    private var last: AskExchange? { return ask.history.last(where: { $0.issueKey == model.issueKey && !$0.failed }) }
 
     var body: some View {
-        Button(action: open) {
-            HStack(spacing: 12) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.onAccent)
-                    .frame(width: 38, height: 38)
-                    .background(Theme.accent, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Ask about this comic").font(.headline).foregroundStyle(.white)
-                    Text(last.map { "You asked: \($0.question)" } ?? "Who is…? What's going on? Ask anything about what you're reading.")
-                        .font(.footnote).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
+        if let last = last {
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Your chat", systemImage: "bubble.left.and.text.bubble.right")
+                            .font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
+                        Spacer()
+                        Text("Open").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    Text(last.question).font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
+                    if !last.answer.isEmpty {
+                        Text(last.answer).font(.footnote).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
+                    }
                 }
-                Spacer(minLength: 6)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .padding(14)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("ask-open")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("ask-open")
     }
 }
 
@@ -595,9 +641,11 @@ struct AskEntryCard: View {
 struct AskChatView: View {
     @ObservedObject var model: CompanionModel
     @ObservedObject var ask: CompanionAsk
+    var initialQuestion: String? = nil
     @Environment(\.dismiss) private var dismiss
     @AppStorage("companion.spoilers") private var spoilers = false
     @State private var text = ""
+    @State private var sentInitial = false
     @FocusState private var typing: Bool
 
     private var messages: [AskExchange] {
@@ -654,7 +702,10 @@ struct AskChatView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .task { ask.prewarm(publisher: model.data.publisher) }
+        .task {
+            ask.prewarm(publisher: model.data.publisher)
+            if let q = initialQuestion, !sentInitial { sentInitial = true; send(q) }
+        }
     }
 
     private func toBottom(_ proxy: ScrollViewProxy, animated: Bool) {
@@ -665,31 +716,32 @@ struct AskChatView: View {
     // MARK: Pieces
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Theme.onAccent)
-                .frame(width: 58, height: 58)
-                .background(Theme.accent, in: Circle())
-            Text("Ask about \(title)").font(.title3.weight(.bold)).multilineTextAlignment(.center)
-            Text("Answers come from this comic's pages and the comics wikis, on your phone.")
-                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            VStack(spacing: 8) {
-                ForEach(suggestions, id: \.self) { s in
-                    Button { send(s) } label: {
-                        Text(s).font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 11)
-                            .background(Theme.card2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(width: 34, height: 34)
+                    .background(Theme.accent, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ask about this comic").font(.headline)
+                    Text("From the pages and the comics wikis").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding(.top, 4)
+            ForEach(suggestions, id: \.self) { s in
+                Button { send(s) } label: {
+                    HStack {
+                        Text(s).font(.subheadline)
+                        Spacer(minLength: 6)
+                        Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 30)
-        .padding(.horizontal, 8)
+        .padding(.top, 4)
     }
 
     private func userBubble(_ q: String) -> some View {

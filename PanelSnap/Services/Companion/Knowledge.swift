@@ -52,6 +52,14 @@ enum Knowledge {
         }
     }
 
+    /// DuckDuckGo's instant answer: a short, sourced summary of a topic from the open web.
+    static func instantAnswer(_ query: String) async -> String? {
+        guard let url = HTTP.url("https://api.duckduckgo.com/", [("q", query), ("format", "json"), ("no_html", "1"), ("skip_disambig", "1")]),
+              let root = try? await HTTP.json(url) as? [String: Any] else { return nil }
+        let text = (root["AbstractText"] as? String) ?? ""
+        return text.count > 40 ? TextClean.shorten(text, limit: 700) : nil
+    }
+
     static func lookUp(host: String, query: String, limit: Int) async -> (title: String, text: String)? {
         guard let url = HTTP.url("https://\(host)\(apiPath(host))", [
             ("action", "query"), ("list", "search"), ("srsearch", query), ("srlimit", "3"), ("format", "json")
@@ -96,6 +104,15 @@ enum Knowledge {
                     let query = hasWiki ? q : q + " comics"
                     guard let r = await lookUp(host: host, query: query, limit: 650) else { return nil }
                     return KnowledgeNote(title: name, text: r.text, source: hasWiki ? "Comics wiki" : "Wikipedia")
+                }
+            }
+            // A second opinion from Wikipedia for places, teams and the main characters, to cross-check the comics wiki.
+            if hasWiki {
+                for q in (data.locations.prefix(6) + data.teams.prefix(4) + data.characters.prefix(4).map { $0.name }) {
+                    group.addTask {
+                        guard let r = await lookUp(host: "en.wikipedia.org", query: q + " comics", limit: 650) else { return nil }
+                        return KnowledgeNote(title: q + " (Wikipedia)", text: r.text, source: "Wikipedia")
+                    }
                 }
             }
             for await n in group { if let n = n { notes.append(n) } }
@@ -191,7 +208,7 @@ enum Knowledge {
     }
 
     /// The live search, given at most a few seconds so a slow connection never stalls the answer.
-    static func liveSearch(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 6) async -> String {
+    static func liveSearch(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 8) async -> String {
         let key = terms(query).joined(separator: " ")
         guard !key.isEmpty else { return "" }
         return await withTaskGroup(of: String?.self) { group in
@@ -209,13 +226,29 @@ enum Knowledge {
         let ts = terms(query)
         if !ts.isEmpty { parts = parts.filter { p in ts.contains(where: { p.lowercased().contains($0.prefix(6)) }) } }
         let host = fandomHost(publisher)
+        let house = (publisher ?? "").isEmpty ? "comics" : (publisher ?? "") + " comics"
+        // Every source is asked at once, so more sources cost no extra waiting.
         async let fan: [(title: String, text: String)] = {
             guard let h = host else { return [] }
-            return await lookUpMany(host: h, query: query, count: 2, limit: 1200)
+            return await lookUpMany(host: h, query: query, count: 3, limit: 1200)
         }()
         async let wiki: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query, count: 3, limit: 1100)
-        for f in await fan { parts.append("[\(f.title) – comics wiki] " + f.text) }
-        for w in await wiki { parts.append("[\(w.title) – Wikipedia] " + w.text) }
+        async let wiki2: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query + " " + house, count: 2, limit: 900)
+        async let hero: [(title: String, text: String)] = lookUpMany(host: "superheroes.fandom.com", query: query, count: 1, limit: 900)
+        async let more: [(title: String, text: String)] = lookUpMany(host: "comicvine.fandom.com", query: query, count: 1, limit: 700)
+        async let instant: String? = instantAnswer(query + " " + house)
+        var seen = Set<String>()
+        func add(_ label: String, _ list: [(title: String, text: String)]) {
+            for r in list where seen.insert(r.title.lowercased() + "|" + String(r.text.prefix(60)).lowercased()).inserted {
+                parts.append("[\(r.title) – \(label)] " + r.text)
+            }
+        }
+        add("comics wiki", await fan)
+        add("Wikipedia", await wiki)
+        add("Wikipedia", await wiki2)
+        add("Superhero wiki", await hero)
+        add("Comic Vine wiki", await more)
+        if let i = await instant, !seen.contains(String(i.prefix(60)).lowercased()) { parts.append("[Web summary] " + i) }
         return parts.isEmpty ? "Nothing found for \(query)." : parts.joined(separator: "\n")
     }
 
