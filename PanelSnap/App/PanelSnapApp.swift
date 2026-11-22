@@ -10,6 +10,7 @@ struct PanelSnapApp: App {
         let docs = Paths.documents
         _ = Paths.comics
         Console.log("PanelSnap launched")
+        CrashReporter.shared.start()
         MLPanelDetector.warmUp()
         // Wake Discover's saved lists and covers now, so they are in memory before it is ever opened.
         if UserDefaults.standard.object(forKey: "showDiscover") as? Bool ?? true { _ = DiscoverModel.shared }

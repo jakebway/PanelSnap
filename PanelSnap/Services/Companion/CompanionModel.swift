@@ -168,9 +168,12 @@ final class CompanionModel: ObservableObject {
     private var pageTextFile: URL { return Paths.companionCache.appendingPathComponent(entry.id.uuidString + "-text-v1.json") }
 
     /// Where the issue the reader is in begins (or a sensible stretch back, if that isn't known).
+    /// Never past the current page: right after jumping back into an earlier issue, the issue Companion follows can
+    /// still be the later one for a moment.
     private var readStart: Int {
-        if let m = activeMark { return max(0, max(m.page, currentPage - 40)) }
-        return max(0, currentPage - 20)
+        let cp = max(0, currentPage)
+        if let m = activeMark, m.page <= cp { return max(0, m.page, cp - 40) }
+        return max(0, cp - 20)
     }
 
     /// Reads new pages shortly after the reader settles on one, so a question never has to wait for them.
@@ -198,10 +201,11 @@ final class CompanionModel: ObservableObject {
         readingPages = true
         defer { readingPages = false }
         while !Task.isCancelled {
-            let end = min(pageCount - 1, currentPage + 2)
-            let lo = min(readStart, end)
-            let ahead = Array((currentPage + 1)...max(currentPage + 1, end)).filter { $0 <= end }
-            let order = Array((lo...currentPage).reversed()) + ahead
+            let cp = min(max(0, currentPage), pageCount - 1)
+            let end = min(pageCount - 1, cp + 2)
+            let lo = min(readStart, cp)
+            let ahead = end > cp ? Array((cp + 1)...end) : []
+            let order = Array((lo...cp).reversed()) + ahead
             let want = Array(order.filter { pageText[$0] == nil }.prefix(3))
             if want.isEmpty { break }
             let found: [Int: String] = await Task.detached(priority: .utility) {
