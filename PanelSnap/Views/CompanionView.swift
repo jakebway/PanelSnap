@@ -646,10 +646,12 @@ struct AskChatView: View {
     @AppStorage("companion.spoilers") private var spoilers = false
     @State private var text = ""
     @State private var sentInitial = false
+    @AppStorage("companion.showAllChats") private var showAll = false
     @FocusState private var typing: Bool
 
     private var messages: [AskExchange] {
-        return Array(ask.history.filter { $0.issueKey == model.issueKey }.suffix(40))
+        let all = showAll ? ask.history : ask.history.filter { $0.issueKey == model.issueKey }
+        return Array(all.suffix(60))
     }
 
     private var title: String {
@@ -663,7 +665,12 @@ struct AskChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         if messages.isEmpty { emptyState }
-                        ForEach(messages) { ex in
+                        ForEach(Array(messages.enumerated()), id: \.element.id) { i, ex in
+                            if showAll, i == 0 || messages[i - 1].issueKey != ex.issueKey {
+                                Text(ex.issueKey.isEmpty ? "This comic" : ex.issueKey.replacingOccurrences(of: "#", with: " #"))
+                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .center).padding(.top, 8)
+                            }
                             userBubble(ex.question)
                             assistantBubble(ex, isLast: ex.id == messages.last?.id)
                         }
@@ -673,7 +680,8 @@ struct AskChatView: View {
                     .padding(.top, 14)
                     .padding(.bottom, 8)
                 }
-                .scrollDismissesKeyboard(.interactively)
+                .scrollDismissesKeyboard(.immediately)
+                .onTapGesture { typing = false }
                 .onChange(of: messages.count) { _, _ in toBottom(proxy, animated: true) }
                 .onChange(of: messages.last?.answer) { _, _ in toBottom(proxy, animated: false) }
                 .onChange(of: typing) { _, focused in
@@ -690,6 +698,7 @@ struct AskChatView: View {
                     Button("Done") { typing = false; dismiss() }
                     Menu {
                         Toggle(isOn: $spoilers) { Label("Allow spoilers", systemImage: "eye") }
+                        Toggle(isOn: $showAll) { Label("Show chats from other issues", systemImage: "clock.arrow.circlepath") }
                         Button(role: .destructive) {
                             withAnimation { ask.clear(issueKey: model.issueKey) }
                         } label: { Label("Clear chat", systemImage: "trash") }
@@ -823,6 +832,7 @@ struct AskChatView: View {
         let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !ask.busy else { return }
         text = ""
+        typing = false                     // put the keyboard away so the answer can be read
         let allow = spoilers
         let key = model.issueKey
         let publisher = model.data.publisher
