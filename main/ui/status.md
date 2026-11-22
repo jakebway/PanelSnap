@@ -1,5 +1,4 @@
-# UI test: cancelled
+# UI test: skipped
 
 ```
-Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' started.
 ```
