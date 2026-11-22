@@ -151,12 +151,6 @@ final class ReaderUITests: XCTestCase {
         shot("40-omnibus-open")
 
         func showControls() {
-            let b = app.buttons["companion-button"]
-            if b.waitForExistence(timeout: 1) { return }
-            at(0.5, 0.5).tap()
-            _ = b.waitForExistence(timeout: 4)
-        }
-        func showControls() {
             let bar = app.descendants(matching: .any)["page-scrubber"]
             if bar.waitForExistence(timeout: 1) { return }
             at(0.5, 0.5).tap()
