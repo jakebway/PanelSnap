@@ -1,4 +1,0 @@
-Query chain:
- →Find: Target Application 'com.jakebway.panelsnap'
-  ↪︎Find: Descendants matching type Slider
-    ↪︎Find: First Match
