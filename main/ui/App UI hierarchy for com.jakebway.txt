@@ -1,59 +1,49 @@
-Application, 0x1171d0640, pid: 16532, label: 'PanelSnap' <App element pid: 16532>
-  Window (Main), 0x1171d0500, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4377856000.4>
-    Other, 0x1171d1e00, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4427466240.5>
-      Other, 0x1171d03c0, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4428662016.6>
-        Other, 0x1171d1f40, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4377854976.7>
-          Other, 0x1171d2080, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4426910336.8>
-            StaticText, 0x1171d21c0, {{162.2, 84.5}, {95.7, 23.0}}, label: 'LIBRARY' <AX element pid: 16532, elementOrHash.elementID: 4426875328.9>
-            Button, 0x1171d2300, {{20.0, 76.0}, {40.0, 40.0}}, identifier: 'gearshape.fill', label: 'Settings' <AX element pid: 16532, elementOrHash.elementID: 4426875776.10>
-            Button, 0x1171d2440, {{70.0, 76.0}, {40.0, 40.0}}, label: 'Add Comics' <AX element pid: 16532, elementOrHash.elementID: 4426878016.11>
-              Button, 0x1171d2580, {{70.0, 76.0}, {40.0, 40.0}} <AX element pid: 16532, elementOrHash.elementID: 4425236480.13>
-                Image, 0x1171d26c0, {{83.3, 89.3}, {13.3, 13.3}}, identifier: 'plus', label: 'Add' <AX element pid: 16532, elementOrHash.elementID: 4426876672.16>
-            ScrollView, 0x1171d2800, {{0.0, 130.0}, {420.0, 782.0}} <AX element pid: 16532, elementOrHash.elementID: 4377906176.12>
-              Other, 0x1171d2940, {{0.0, -42.7}, {420.0, 966.0}} <AX element pid: 16532, elementOrHash.elementID: 4427476992.14>
-                Button, 0x1171d2a80, {{20.0, -42.7}, {380.0, 110.0}}, label: 'CONTINUE READING, Amazing Spider-Man Omnibus, Page 7 of 37', value: 17% <AX element pid: 16532, elementOrHash.elementID: 4426948480.75>
-                  Image, 0x1171d2bc0, {{32.0, -31.3}, {58.0, 87.3}} <AX element pid: 16532, elementOrHash.elementID: 4426945344.76>
-                  StaticText, 0x1171d2d00, {{104.0, -20.0}, {117.3, 13.3}}, label: 'CONTINUE READING' <AX element pid: 16532, elementOrHash.elementID: 4426944896.77>
-                  StaticText, 0x1171d2e40, {{104.0, -1.7}, {217.7, 18.0}}, label: 'Amazing Spider-Man Omnibus' <AX element pid: 16532, elementOrHash.elementID: 4426951168.78>
-                  StaticText, 0x1171d2f80, {{104.0, 21.3}, {71.0, 14.3}}, label: 'Page 7 of 37' <AX element pid: 16532, elementOrHash.elementID: 4426944000.79>
-                  ProgressIndicator, 0x1171d30c0, {{104.0, 40.7}, {246.3, 4.0}}, value: 17% <AX element pid: 16532, elementOrHash.elementID: 4426946688.80>
-                    ProgressIndicator, 0x1171d3200, {{104.0, 30.7}, {246.3, 24.0}}, value: 17% <AX element pid: 16532, elementOrHash.elementID: 5551595520.83>
-                  Image, 0x1171d3340, {{380.7, 6.7}, {6.7, 11.7}}, identifier: 'chevron.right', label: 'Forward' <AX element pid: 16532, elementOrHash.elementID: 4426948032.81>
-                ScrollView, 0x1171d3480, {{20.0, 85.3}, {254.7, 38.0}} <AX element pid: 16532, elementOrHash.elementID: 4377903104.23>
-                  Other, 0x1171d35c0, {{20.0, 85.3}, {103.0, 38.0}} <AX element pid: 16532, elementOrHash.elementID: 4427474944.28>
-                    Button, 0x1171d3700, {{20.0, 87.3}, {61.0, 34.0}}, label: 'All, 4' <AX element pid: 16532, elementOrHash.elementID: 4426882944.46>
-                      StaticText, 0x1171d3840, {{34.0, 95.3}, {18.7, 18.0}}, label: 'All' <AX element pid: 16532, elementOrHash.elementID: 4426881600.52>
-                      StaticText, 0x1171d3980, {{58.7, 97.2}, {8.3, 14.3}}, label: '4' <AX element pid: 16532, elementOrHash.elementID: 4426882048.53>
-                    Button, 0x1171d3ac0, {{89.0, 87.3}, {34.0, 34.0}}, identifier: 'plus', label: 'New Shelf' <AX element pid: 16532, elementOrHash.elementID: 4426883392.47>
-                Button, 0x1171d3c00, {{284.7, 86.0}, {115.3, 37.0}}, label: 'Discover new comics' <AX element pid: 16532, elementOrHash.elementID: 4426885184.24>
-                  Image, 0x1171d3d40, {{300.3, 95.0}, {15.7, 19.0}}, identifier: 'sparkles', label: 'Sparkle' <AX element pid: 16532, elementOrHash.elementID: 4426884288.29>
-                  StaticText, 0x1171d3e80, {{323.7, 95.3}, {62.3, 18.0}}, label: 'Discover' <AX element pid: 16532, elementOrHash.elementID: 4426884736.30>
-                Button, 0x106a5fd40, {{20.0, 141.3}, {149.0, 18.0}}, label: 'Recently Read' <AX element pid: 16532, elementOrHash.elementID: 4426887872.25>
-                  Button, 0x106a5fe80, {{20.0, 141.3}, {149.0, 18.0}} <AX element pid: 16532, elementOrHash.elementID: 4425239168.31>
-                    Image, 0x106a5ee40, {{22.0, 143.0}, {18.0, 14.7}}, identifier: 'arrow.up.arrow.down', label: 'Sort' <AX element pid: 16532, elementOrHash.elementID: 4426885632.49>
-                    StaticText, 0x106a5ef80, {{48.0, 141.3}, {102.3, 18.0}}, label: 'Recently Read' <AX element pid: 16532, elementOrHash.elementID: 4426886080.50>
-                    Image, 0x106a5f0c0, {{157.7, 147.3}, {10.0, 6.0}}, identifier: 'chevron.down', label: 'Go Down' <AX element pid: 16532, elementOrHash.elementID: 4426886976.51>
-                Other, 0x106a5f200, {{15.3, 177.3}, {389.3, 705.7}} <AX element pid: 16532, elementOrHash.elementID: 4426909440.26>
-                  Image, 0x106a5f340, {{20.0, 177.3}, {182.0, 273.7}} <AX element pid: 16532, elementOrHash.elementID: 4426201536.38>
-                  ProgressIndicator, 0x106a5f480, {{28.0, 439.0}, {166.0, 4.0}}, value: 17% <AX element pid: 16532, elementOrHash.elementID: 4426949824.82>
-                    ProgressIndicator, 0x106a5f5c0, {{28.0, 429.0}, {166.0, 24.0}}, value: 17% <AX element pid: 16532, elementOrHash.elementID: 5551598080.84>
-                  StaticText, 0x106a5f700, {{20.0, 458.9}, {119.3, 38.0}}, label: 'Amazing Spider-Man Omnibus' <AX element pid: 16532, elementOrHash.elementID: 4426202432.39>
-                  StaticText, 0x106a5f840, {{20.0, 504.9}, {87.0, 14.3}}, label: 'CBZ · 37 pages' <AX element pid: 16532, elementOrHash.elementID: 4425778048.40>
-                  Image, 0x106a5f980, {{213.3, 177.3}, {191.3, 273.0}} <AX element pid: 16532, elementOrHash.elementID: 4426888320.32>
-                  StaticText, 0x117284000, {{213.5, 458.3}, {115.3, 18.0}}, label: 'UITest Comic #1' <AX element pid: 16532, elementOrHash.elementID: 4426888768.33>
-                  StaticText, 0x117284140, {{213.5, 484.3}, {80.0, 14.3}}, label: 'CBZ · 5 pages' <AX element pid: 16532, elementOrHash.elementID: 4426889216.34>
-                  Image, 0x117284280, {{15.3, 541.3}, {191.3, 273.0}} <AX element pid: 16532, elementOrHash.elementID: 4426889664.35>
-                  StaticText, 0x1172843c0, {{15.4, 822.2}, {115.3, 18.0}}, label: 'UITest Comic #1' <AX element pid: 16532, elementOrHash.elementID: 4426890112.36>
-                  StaticText, 0x117284500, {{15.4, 848.2}, {80.0, 14.3}}, label: 'CBZ · 5 pages' <AX element pid: 16532, elementOrHash.elementID: 4426890560.37>
-                  Image, 0x117284640, {{218.0, 541.3}, {182.0, 273.3}} <AX element pid: 16532, elementOrHash.elementID: 4426907648.41>
-                  StaticText, 0x117284780, {{218.0, 822.7}, {119.3, 38.0}}, label: 'Amazing Spider-Man Omnibus' <AX element pid: 16532, elementOrHash.elementID: 4426908096.42>
-                  StaticText, 0x1172848c0, {{218.0, 868.7}, {87.0, 14.3}}, label: 'CBZ · 37 pages' <AX element pid: 16532, elementOrHash.elementID: 4426908544.43>
-              Other, 0x117284a00, {{387.0, 158.0}, {30.0, 692.0}}, label: 'Vertical scroll bar, 2 pages', value: 79% <AX element pid: 16532, elementOrHash.elementID: 4427479552.15>
-                Other, 0x117284b40, {{414.0, 285.0}, {3.0, 562.0}} <AX element pid: 16532, elementOrHash.elementID: 4427462208.27>
-              Other, 0x117284c80, {{387.0, 158.0}, {30.0, 692.0}}, label: 'Vertical scroll bar, 2 pages', value: 79% <AX element pid: 16532, elementOrHash.elementID: 4427479552.15>
-                Other, 0x117284dc0, {{414.0, 285.0}, {3.0, 562.0}} <AX element pid: 16532, elementOrHash.elementID: 4427462208.27>
-    Other, 0x117284f00, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4427474432.55>
-      Other, 0x117285040, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4377859072.56>
-        Other, 0x117285180, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4425900352.57>
-          Image, 0x1172852c0, {{-41.8, -158.0}, {840.8, 1261.3}} <AX element pid: 16532, elementOrHash.elementID: 4426943104.74>
-          Other, 0x117285400, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 16532, elementOrHash.elementID: 4426916160.59>
+Application, 0x117ab0640, pid: 12649, label: 'PanelSnap' <App element pid: 12649>
+  Window (Main), 0x117ab08c0, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4377888768.4>
+    Other, 0x117ab0a00, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4427006976.5>
+      Other, 0x117ab0b40, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4427875584.6>
+        Other, 0x117ab0c80, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4377887744.7>
+          Other, 0x117ab0dc0, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4425515904.8>
+            StaticText, 0x117ab0f00, {{162.2, 84.5}, {95.7, 23.0}}, label: 'LIBRARY' <AX element pid: 12649, elementOrHash.elementID: 4426026496.9>
+            Button, 0x117ab1040, {{20.0, 76.0}, {40.0, 40.0}}, identifier: 'gearshape.fill', label: 'Settings' <AX element pid: 12649, elementOrHash.elementID: 4426023360.10>
+            Button, 0x117ab1180, {{70.0, 76.0}, {40.0, 40.0}}, label: 'Add Comics' <AX element pid: 12649, elementOrHash.elementID: 4426023808.11>
+              Button, 0x117ab12c0, {{70.0, 76.0}, {40.0, 40.0}} <AX element pid: 12649, elementOrHash.elementID: 4425695232.13>
+                Image, 0x117ab1400, {{83.3, 89.3}, {13.3, 13.3}}, identifier: 'plus', label: 'Add' <AX element pid: 12649, elementOrHash.elementID: 4426025600.16>
+            ScrollView, 0x117ab1540, {{0.0, 130.0}, {420.0, 782.0}} <AX element pid: 12649, elementOrHash.elementID: 4377938944.12>
+              Other, 0x117ab1680, {{0.0, 130.0}, {420.0, 576.7}} <AX element pid: 12649, elementOrHash.elementID: 4427017216.14>
+                StaticText, 0x117ab17c0, {{75.0, 148.0}, {16.7, 31.3}}, label: '2' <AX element pid: 12649, elementOrHash.elementID: 4426030080.17>
+                StaticText, 0x117ab1900, {{200.8, 148.0}, {18.3, 31.3}}, label: '0' <AX element pid: 12649, elementOrHash.elementID: 4426031424.18>
+                StaticText, 0x117ab1a40, {{327.5, 148.0}, {18.3, 31.3}}, label: '0' <AX element pid: 12649, elementOrHash.elementID: 4426032320.19>
+                StaticText, 0x117ab1b80, {{62.2, 182.3}, {42.3, 14.3}}, label: 'Comics' <AX element pid: 12649, elementOrHash.elementID: 4426030976.20>
+                StaticText, 0x117ab1cc0, {{187.0, 182.3}, {46.0, 14.3}}, label: 'Reading' <AX element pid: 12649, elementOrHash.elementID: 4426031872.21>
+                StaticText, 0x117ab1e00, {{312.8, 182.3}, {47.7, 14.3}}, label: 'Finished' <AX element pid: 12649, elementOrHash.elementID: 4426032768.22>
+                ScrollView, 0x117ab1f40, {{20.0, 232.7}, {254.7, 38.0}} <AX element pid: 12649, elementOrHash.elementID: 4377935872.23>
+                  Other, 0x117ab2080, {{20.0, 232.7}, {102.7, 38.0}} <AX element pid: 12649, elementOrHash.elementID: 4427015680.28>
+                    Button, 0x117ab21c0, {{20.0, 234.7}, {60.7, 34.0}}, label: 'All, 2' <AX element pid: 12649, elementOrHash.elementID: 4426034112.40>
+                      StaticText, 0x117ab2300, {{34.0, 242.7}, {18.7, 18.0}}, label: 'All' <AX element pid: 12649, elementOrHash.elementID: 4426033216.46>
+                      StaticText, 0x117ab2440, {{58.7, 244.5}, {8.0, 14.3}}, label: '2' <AX element pid: 12649, elementOrHash.elementID: 4426033664.47>
+                    Button, 0x117ab2580, {{88.7, 234.7}, {34.0, 34.0}}, identifier: 'plus', label: 'New Shelf' <AX element pid: 12649, elementOrHash.elementID: 4426035008.41>
+                Button, 0x117ab26c0, {{284.7, 233.3}, {115.3, 36.7}}, label: 'Discover new comics' <AX element pid: 12649, elementOrHash.elementID: 4426036800.24>
+                  Image, 0x117ab2800, {{300.3, 242.3}, {15.7, 19.0}}, identifier: 'sparkles', label: 'Sparkle' <AX element pid: 12649, elementOrHash.elementID: 4426035904.29>
+                  StaticText, 0x117ab2940, {{323.7, 242.7}, {62.3, 18.0}}, label: 'Discover' <AX element pid: 12649, elementOrHash.elementID: 4426036352.30>
+                Button, 0x117ab2a80, {{20.0, 288.7}, {149.0, 18.0}}, label: 'Recently Read' <AX element pid: 12649, elementOrHash.elementID: 4425607680.25>
+                  Button, 0x117ab2bc0, {{20.0, 288.7}, {149.0, 18.0}} <AX element pid: 12649, elementOrHash.elementID: 4425697920.31>
+                    Image, 0x117ab2d00, {{22.0, 290.3}, {18.0, 14.7}}, identifier: 'arrow.up.arrow.down', label: 'Sort' <AX element pid: 12649, elementOrHash.elementID: 4426037248.43>
+                    StaticText, 0x117ab2e40, {{48.0, 288.7}, {102.3, 18.0}}, label: 'Recently Read' <AX element pid: 12649, elementOrHash.elementID: 4426037696.44>
+                    Image, 0x117ab2f80, {{157.7, 294.7}, {10.0, 6.0}}, identifier: 'chevron.down', label: 'Go Down' <AX element pid: 12649, elementOrHash.elementID: 4426038144.45>
+                Other, 0x117ab30c0, {{20.0, 324.7}, {384.7, 341.9}} <AX element pid: 12649, elementOrHash.elementID: 4425348672.26>
+                  Image, 0x117ab3200, {{20.0, 324.7}, {182.0, 273.7}} <AX element pid: 12649, elementOrHash.elementID: 4378753920.35>
+                  StaticText, 0x117ab3340, {{20.0, 606.2}, {119.3, 38.0}}, label: 'Amazing Spider-Man Omnibus' <AX element pid: 12649, elementOrHash.elementID: 4425343296.36>
+                  StaticText, 0x117ab3480, {{20.0, 652.2}, {87.0, 14.3}}, label: 'CBZ · 37 pages' <AX element pid: 12649, elementOrHash.elementID: 4425345536.37>
+                  Image, 0x117ab35c0, {{213.3, 324.7}, {191.3, 273.0}} <AX element pid: 12649, elementOrHash.elementID: 4425605440.32>
+                  StaticText, 0x117ab3700, {{213.4, 605.7}, {115.3, 18.0}}, label: 'UITest Comic #1' <AX element pid: 12649, elementOrHash.elementID: 4425612608.33>
+                  StaticText, 0x117ab3840, {{213.4, 631.7}, {80.0, 14.3}}, label: 'CBZ · 5 pages' <AX element pid: 12649, elementOrHash.elementID: 4425609472.34>
+              Other, 0x117ab3980, {{387.0, 158.0}, {30.0, 692.0}}, label: 'Vertical scroll bar, 1 page', value: 0% <AX element pid: 12649, elementOrHash.elementID: 4427019776.15>
+                Other, 0x117ab3ac0, {{414.0, 332.3}, {3.0, 514.7}} <AX element pid: 12649, elementOrHash.elementID: 4426689920.27>
+              Other, 0x117ab3c00, {{387.0, 158.0}, {30.0, 692.0}}, label: 'Vertical scroll bar, 1 page', value: 0% <AX element pid: 12649, elementOrHash.elementID: 4427019776.15>
+                Other, 0x117ab3d40, {{414.0, 332.3}, {3.0, 514.7}} <AX element pid: 12649, elementOrHash.elementID: 4426689920.27>
+    Other, 0x117ab3e80, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4614945792.49>
+      Other, 0x117a15540, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4377897984.50>
+        Other, 0x117ab8000, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4426082816.51>
+          Image, 0x117ab8140, {{0.0, 141.0}, {420.0, 630.0}} <AX element pid: 12649, elementOrHash.elementID: 4426076096.52>
+          Other, 0x117ab8280, {{0.0, 0.0}, {420.0, 912.0}} <AX element pid: 12649, elementOrHash.elementID: 4426061504.53>

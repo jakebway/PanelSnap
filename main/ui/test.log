@@ -1,293 +1,74 @@
-    t =    51.74s     Wait for com.jakebway.panelsnap to idle
-    t =    52.76s Waiting 90.0s for "companion-issue-banner" Any to exist
-    t =    53.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    53.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    53.86s         Capturing element debug description
-    t =    54.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    54.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    54.91s         Capturing element debug description
-    t =    55.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    55.78s         Checking existence of `"companion-issue-banner" Any`
-    t =    55.83s         Capturing element debug description
-    t =    56.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    56.79s         Checking existence of `"companion-issue-banner" Any`
-    t =    56.86s         Capturing element debug description
-    t =    57.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    57.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    57.85s         Capturing element debug description
-    t =    58.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    58.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    58.89s         Capturing element debug description
-    t =    59.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    59.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    59.87s         Capturing element debug description
-    t =    60.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    60.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    60.88s         Capturing element debug description
-    t =    61.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    61.83s         Checking existence of `"companion-issue-banner" Any`
-    t =    61.90s         Capturing element debug description
-    t =    62.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    62.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    62.86s         Capturing element debug description
-    t =    63.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    63.79s         Checking existence of `"companion-issue-banner" Any`
-    t =    63.85s         Capturing element debug description
-    t =    64.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    64.79s         Checking existence of `"companion-issue-banner" Any`
-    t =    64.86s         Capturing element debug description
-    t =    65.80s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    65.80s         Checking existence of `"companion-issue-banner" Any`
-    t =    65.84s         Capturing element debug description
-    t =    66.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    66.78s         Checking existence of `"companion-issue-banner" Any`
-    t =    66.83s         Capturing element debug description
-    t =    67.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    67.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    67.86s         Capturing element debug description
-    t =    68.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    68.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    68.87s         Capturing element debug description
-    t =    69.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    69.78s         Checking existence of `"companion-issue-banner" Any`
-    t =    69.87s         Capturing element debug description
-    t =    70.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    70.79s         Checking existence of `"companion-issue-banner" Any`
-    t =    70.88s         Capturing element debug description
-    t =    71.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    71.83s         Checking existence of `"companion-issue-banner" Any`
-    t =    71.92s         Capturing element debug description
-    t =    72.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    72.78s         Checking existence of `"companion-issue-banner" Any`
-    t =    72.85s         Capturing element debug description
-    t =    73.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    73.79s         Checking existence of `"companion-issue-banner" Any`
-    t =    73.86s         Capturing element debug description
-    t =    74.83s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    74.84s         Checking existence of `"companion-issue-banner" Any`
-    t =    74.95s         Capturing element debug description
-    t =    75.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    75.77s         Checking existence of `"companion-issue-banner" Any`
-    t =    75.82s         Capturing element debug description
-    t =    76.83s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    76.83s         Checking existence of `"companion-issue-banner" Any`
-    t =    76.89s         Capturing element debug description
-    t =    77.84s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    77.84s         Checking existence of `"companion-issue-banner" Any`
-    t =    77.90s         Capturing element debug description
-    t =    78.87s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    78.87s         Checking existence of `"companion-issue-banner" Any`
-    t =    78.93s         Capturing element debug description
-    t =    79.85s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    79.86s         Checking existence of `"companion-issue-banner" Any`
-    t =    79.92s         Capturing element debug description
-    t =    80.84s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    80.84s         Checking existence of `"companion-issue-banner" Any`
-    t =    80.90s         Capturing element debug description
-    t =    81.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    81.82s         Checking existence of `"companion-issue-banner" Any`
-    t =    81.89s         Capturing element debug description
-    t =    82.84s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    82.84s         Checking existence of `"companion-issue-banner" Any`
-    t =    82.93s         Capturing element debug description
-    t =    83.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    83.78s         Checking existence of `"companion-issue-banner" Any`
-    t =    83.99s         Capturing element debug description
-    t =    84.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    84.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    84.86s         Capturing element debug description
-    t =    85.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    85.79s         Checking existence of `"companion-issue-banner" Any`
-    t =    85.88s         Capturing element debug description
-    t =    86.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    86.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    86.86s         Capturing element debug description
-    t =    87.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    87.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    87.89s         Capturing element debug description
-    t =    88.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    88.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    88.86s         Capturing element debug description
-    t =    89.83s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    89.83s         Checking existence of `"companion-issue-banner" Any`
-    t =    89.88s         Capturing element debug description
-    t =    90.83s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    90.83s         Checking existence of `"companion-issue-banner" Any`
-    t =    90.90s         Capturing element debug description
-    t =    91.83s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    91.83s         Checking existence of `"companion-issue-banner" Any`
-    t =    91.91s         Capturing element debug description
-    t =    92.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    92.82s         Checking existence of `"companion-issue-banner" Any`
-    t =    92.89s         Capturing element debug description
-    t =    93.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    93.83s         Checking existence of `"companion-issue-banner" Any`
-    t =    93.91s         Capturing element debug description
-    t =    94.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    94.82s         Checking existence of `"companion-issue-banner" Any`
-    t =    94.88s         Capturing element debug description
-    t =    95.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    95.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    95.88s         Capturing element debug description
-    t =    96.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    96.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    96.88s         Capturing element debug description
-    t =    97.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    97.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    97.86s         Capturing element debug description
-    t =    98.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    98.81s         Checking existence of `"companion-issue-banner" Any`
-    t =    98.90s         Capturing element debug description
-    t =    99.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =    99.82s         Checking existence of `"companion-issue-banner" Any`
-    t =    99.87s         Capturing element debug description
-    t =   100.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   100.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   100.87s         Capturing element debug description
-    t =   101.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   101.79s         Checking existence of `"companion-issue-banner" Any`
-    t =   101.89s         Capturing element debug description
-    t =   102.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   102.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   102.93s         Capturing element debug description
-    t =   103.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   103.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   103.86s         Capturing element debug description
-    t =   104.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   104.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   104.88s         Capturing element debug description
-    t =   105.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   105.82s         Checking existence of `"companion-issue-banner" Any`
-    t =   105.88s         Capturing element debug description
-    t =   106.83s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   106.83s         Checking existence of `"companion-issue-banner" Any`
-    t =   106.88s         Capturing element debug description
-    t =   107.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   107.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   107.92s         Capturing element debug description
-    t =   108.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   108.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   108.91s         Capturing element debug description
-    t =   109.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   109.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   109.87s         Capturing element debug description
-    t =   110.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   110.82s         Checking existence of `"companion-issue-banner" Any`
-    t =   110.95s         Capturing element debug description
-    t =   111.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   111.79s         Checking existence of `"companion-issue-banner" Any`
-    t =   111.87s         Capturing element debug description
-    t =   112.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   112.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   112.91s         Capturing element debug description
-    t =   113.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   113.82s         Checking existence of `"companion-issue-banner" Any`
-    t =   113.88s         Capturing element debug description
-    t =   114.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   114.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   114.86s         Capturing element debug description
-    t =   115.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   115.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   115.86s         Capturing element debug description
-    t =   116.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   116.77s         Checking existence of `"companion-issue-banner" Any`
-    t =   116.82s         Capturing element debug description
-    t =   117.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   117.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   117.93s         Capturing element debug description
-    t =   118.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   118.82s         Checking existence of `"companion-issue-banner" Any`
-    t =   118.91s         Capturing element debug description
-    t =   119.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   119.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   119.95s         Capturing element debug description
-    t =   120.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   120.77s         Checking existence of `"companion-issue-banner" Any`
-    t =   120.85s         Capturing element debug description
-    t =   121.79s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   121.79s         Checking existence of `"companion-issue-banner" Any`
-    t =   121.86s         Capturing element debug description
-    t =   122.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   122.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   122.93s         Capturing element debug description
-    t =   123.77s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   123.77s         Checking existence of `"companion-issue-banner" Any`
-    t =   123.89s         Capturing element debug description
-    t =   124.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   124.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   124.87s         Capturing element debug description
-    t =   125.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   125.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   125.92s         Capturing element debug description
-    t =   126.84s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   126.84s         Checking existence of `"companion-issue-banner" Any`
-    t =   126.93s         Capturing element debug description
-    t =   127.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   127.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   127.83s         Capturing element debug description
-    t =   128.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   128.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   128.87s         Capturing element debug description
-    t =   129.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   129.82s         Checking existence of `"companion-issue-banner" Any`
-    t =   129.88s         Capturing element debug description
-    t =   130.82s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   130.82s         Checking existence of `"companion-issue-banner" Any`
-    t =   130.86s         Capturing element debug description
-    t =   131.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   131.78s         Checking existence of `"companion-issue-banner" Any`
-    t =   131.90s         Capturing element debug description
-    t =   132.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   132.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   132.92s         Capturing element debug description
-    t =   133.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   133.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   133.86s         Capturing element debug description
-    t =   134.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   134.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   134.87s         Capturing element debug description
-    t =   135.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   135.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   135.87s         Capturing element debug description
-    t =   136.80s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   136.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   136.90s         Capturing element debug description
-    t =   137.84s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   137.84s         Checking existence of `"companion-issue-banner" Any`
-    t =   137.90s         Capturing element debug description
-    t =   138.81s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   138.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   138.90s         Capturing element debug description
-    t =   139.80s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   139.81s         Checking existence of `"companion-issue-banner" Any`
-    t =   139.89s         Capturing element debug description
-    t =   140.84s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   140.84s         Checking existence of `"companion-issue-banner" Any`
-    t =   140.90s         Capturing element debug description
-    t =   141.80s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   141.80s         Checking existence of `"companion-issue-banner" Any`
-    t =   141.86s         Capturing element debug description
-    t =   142.78s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   142.79s         Checking existence of `"companion-issue-banner" Any`
-    t =   142.87s         Capturing element debug description
-    t =   142.87s     Checking existence of `"companion-issue-banner" Any`
-    t =   142.92s Collecting debug information to assist test failure triage
-    t =   142.92s     Requesting snapshot of accessibility hierarchy for app with pid 16532
-    t =   144.80s Added attachment named '41-companion'
-    t =   144.81s Checking existence of `"companion-issue-banner" Any`
-UITEST: banner at the start: (no banner)
-/Users/runner/work/PanelSnap/PanelSnap/Tests/UI/ReaderUITests.swift:180: error: -[PanelSnapUITests.ReaderUITests testOmnibusCompanion] : XCTAssertTrue failed - page 2 onwards is issue #1, got: (no banner)
-    t =   145.71s Tear Down
-Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' failed (146.316 seconds).
-Test Suite 'ReaderUITests' failed at 2026-11-22 17:58:38.279.
-	 Executed 1 test, with 1 failure (0 unexpected) in 146.316 (146.321) seconds
-Test Suite 'PanelSnapUITests.xctest' failed at 2026-11-22 17:58:38.280.
-	 Executed 1 test, with 1 failure (0 unexpected) in 146.316 (146.323) seconds
-Test Suite 'Selected tests' failed at 2026-11-22 17:58:38.280.
-	 Executed 1 test, with 1 failure (0 unexpected) in 146.316 (146.325) seconds
-2026-11-22 17:59:50.838 xcodebuild[12845:41011] [MT] IDETestOperationsObserverDebug: 298.883 elapsed -- Testing started completed.
-2026-11-22 17:59:50.838 xcodebuild[12845:41011] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
-2026-11-22 17:59:50.838 xcodebuild[12845:41011] [MT] IDETestOperationsObserverDebug: 298.883 sec, +298.883 sec -- end
+Command line invocation:
+    /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project PanelSnap.xcodeproj -scheme PanelSnap -destination id=CE12A219-9F8C-4450-97EA-8C58715BECFC -derivedDataPath build-ui "-only-testing:PanelSnapUITests/ReaderUITests/testOmnibusCompanion" -resultBundlePath ui.xcresult
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  SevenZip: https://github.com/mtgto/SevenZip.swift @ 0.5.0
+  Unrar: https://github.com/mtgto/Unrar.swift @ 0.5.4
+  ZIPFoundation: https://github.com/weichsel/ZIPFoundation @ 0.9.20
+
+Writing result bundle at path:
+	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:CE12A219-9F8C-4450-97EA-8C58715BECFC, OS:26.5, name:iPhone Air }
+{ platform:iOS Simulator, arch:x86_64, id:CE12A219-9F8C-4450-97EA-8C58715BECFC, OS:26.5, name:iPhone Air }
+2026-11-22 18:12:07.042216+0000 PanelSnapUITests-Runner[11636:40168] [Default] Running tests...
+objc[11636]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x107360310) and /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10a1dc398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-11-22 18:12:20.108.
+Test Suite 'PanelSnapUITests.xctest' started at 2026-11-22 18:12:20.109.
+Test Suite 'ReaderUITests' started at 2026-11-22 18:12:20.109.
+Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' started.
+    t =     0.00s Start Test at 2026-11-22 18:12:20.110
+2026-11-22 18:12:24.386 xcodebuild[10413:35707] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-11-22 18:12:24.387 xcodebuild[10413:35707] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.71s Set Up
+    t =     0.78s     Open com.jakebway.panelsnap
+    t =     0.78s         Launch com.jakebway.panelsnap
+    t =    11.21s             Setting up automation session
+    t =    13.16s             Wait for com.jakebway.panelsnap to idle
+    t =    18.30s Waiting 10.0s for StaticText (First Match) to exist
+    t =    19.36s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
+    t =    19.36s         Checking existence of `StaticText (First Match)`
+    t =    23.28s Tap StaticText (First Match)
+    t =    23.28s     Wait for com.jakebway.panelsnap to idle
+    t =    23.36s     Find the StaticText (First Match)
+    t =    24.87s     Check for interrupting elements affecting "Amazing Spider-Man Omnibus" StaticText
+    t =    25.20s     Synthesize event
+    t =    25.66s     Wait for com.jakebway.panelsnap to idle
+    t =    29.34s Added attachment named '40-omnibus-open'
+    t =    29.38s Checking existence of `Slider (First Match)`
+    t =    29.75s Waiting 4.0s for Slider (First Match) to exist
+    t =    30.76s     Checking `Expect predicate `existsNoRetry == 1` for object Slider (First Match)`
+    t =    30.76s         Checking existence of `Slider (First Match)`
+    t =    30.99s Checking existence of `Slider (First Match)`
+    t =    31.16s Press Slider (First Match)[0.02, 0.50] for 0.3 seconds, then drag to Slider (First Match)[0.12, 0.50] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds 
+    t =    31.16s     Wait for com.jakebway.panelsnap to idle
+    t =    31.17s     Find the Slider (First Match)
+    t =    31.68s     Check for interrupting elements affecting "0" Slider
+    t =    31.99s     Synthesize event
+    t =    31.99s         Find the "0" Slider
+    t =    33.76s             Find the "0" Slider (retry 1)
+    t =    35.10s             Find the "0" Slider (retry 2)
+    t =    35.24s             Collecting debug information to assist test failure triage
+    t =    35.24s                 Requesting snapshot of accessibility hierarchy for app with pid 12649
+    t =    35.33s             Requesting snapshot of accessibility hierarchy for app with pid 12649
+    t =    35.36s             Requesting snapshot of accessibility hierarchy for app with pid 12649
+/Users/runner/work/PanelSnap/PanelSnap/Tests/UI/ReaderUITests.swift:159: error: -[PanelSnapUITests.ReaderUITests testOmnibusCompanion] : Failed to get matching snapshot: No matches found for first query match sequence: `Descendants matching type Slider`, given input App element pid: 12649
+    t =    43.08s Tear Down
+Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' failed (43.823 seconds).
+Test Suite 'ReaderUITests' failed at 2026-11-22 18:13:03.934.
+	 Executed 1 test, with 1 failure (0 unexpected) in 43.823 (43.825) seconds
+Test Suite 'PanelSnapUITests.xctest' failed at 2026-11-22 18:13:03.936.
+	 Executed 1 test, with 1 failure (0 unexpected) in 43.823 (43.827) seconds
+Test Suite 'Selected tests' failed at 2026-11-22 18:13:03.938.
+	 Executed 1 test, with 1 failure (0 unexpected) in 43.823 (43.830) seconds
+2026-11-22 18:13:57.583 xcodebuild[10413:35707] [MT] IDETestOperationsObserverDebug: 145.940 elapsed -- Testing started completed.
+2026-11-22 18:13:57.583 xcodebuild[10413:35707] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-22 18:13:57.583 xcodebuild[10413:35707] [MT] IDETestOperationsObserverDebug: 145.940 sec, +145.940 sec -- end
 
 Test session results, code coverage, and logs:
 	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
