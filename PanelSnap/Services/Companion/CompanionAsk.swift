@@ -62,15 +62,17 @@ final class CompanionAsk: ObservableObject {
     If the information still does not say, reply exactly: "I couldn't find that in my sources," and add the closest fact you do have. \
     People who live somewhere are the ones the sources say belong there; people only shown visiting are visitors, not residents. \
     For a "who lives at / who is in" question, name every resident or member the sources or the page words mention (for example people \
-    greeted as family, rulers, doctors or guards there), group them, and then say who is only visiting. Do not answer with just the \
+    greeted as family, rulers, doctors or guards there), say who is only visiting. Do not answer with just the \
     people in the scene. \
     Visitors are only the people the pages show arriving from somewhere else. A spouse, parent or child of a resident who is shown \
     at home with the family there lives there too. When the reader pushes back ("I thought X lived there"), check the sources and \
     the page words again and change your answer if they show the reader is right; do not just repeat yourself. \
     Each person goes in exactly one group. Relatives listed in someone's profile (their sons, parents, exes) are not at the place \
     unless the sources or page words put them there. Anything marked "FROM THE PLOT" about who is only visiting is certain. \
-    Write each person once, with no repeated names and no brackets inside brackets; group people on short lines, for example \
-    "Royal family: …" then "Others: …" then "Visiting: …". \
+    Write each person once, with no repeated names and no brackets inside brackets. \
+    ONLY when the reader asks who lives at or belongs to a place or group, put people on short lines such as "Royal family: …", \
+    "Others: …" and "Visiting: …". For any other question, answer in one to three plain sentences about exactly what was asked. \
+    The earlier conversation is only context: answer the newest question and never repeat or reuse an earlier answer. \
         A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
     Do not reveal events the reader has not reached unless spoilers are allowed. At most four sentences unless asked for more. \
     The page words and any attached picture only show who is in the scene and what they say; they do not tell you where \
@@ -124,7 +126,7 @@ final class CompanionAsk: ObservableObject {
         busy = true
         defer { busy = false; save(); prewarm(publisher: publisher) }
         let earlier = history.filter { $0.issueKey == issueKey && !$0.failed }.suffix(2)
-            .map { "Reader: \($0.question)\nYou: \(TextClean.shorten($0.answer, limit: 400))" }.joined(separator: "\n")
+            .map { "Reader: \($0.question)\nYou: \(TextClean.shorten($0.answer, limit: 160))" }.joined(separator: "\n")
         history.append(AskExchange(question: q, answer: "", issueKey: issueKey))
         let index = history.count - 1
         func set(_ text: String, failed: Bool = false, engine: String? = nil) {
@@ -135,7 +137,7 @@ final class CompanionAsk: ObservableObject {
         }
         var usedPrompt = ""
         func makePrompt(_ ctx: String) -> String {
-            let p = ctx + "\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
+            let p = ctx + "\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION (context only; do not repeat these answers):\n\(earlier)\n\n") + "QUESTION: \(q)"
             Self.writeDebug(question: q, prompt: p, notes: notes)
             usedPrompt = p
             return p
@@ -180,7 +182,21 @@ final class CompanionAsk: ObservableObject {
                         latest = snap.content
                         set(latest)
                     }
-                    set(Self.ground(Self.tidy(latest), context: usedPrompt))
+                    var final = Self.ground(Self.tidy(latest), context: usedPrompt)
+                    // The same answer as last time to a different question: ask again without the earlier answers in view.
+                    if let prev = history.dropLast().last(where: { $0.issueKey == issueKey && !$0.failed })?.answer,
+                       Self.similar(final, prev), !earlier.isEmpty, attempt == 0 {
+                        let again = Self.makeSession(publisher: publisher, permissive: permissive, notes: notes)
+                        let fresh = ctx + "\n\nQUESTION: \(q)\nAnswer only this question, in one to three plain sentences."
+                        usedPrompt = fresh
+                        var second = ""
+                        for try await snap in again.streamResponse(to: fresh, options: GenerationOptions(temperature: 0.3, maximumResponseTokens: 320)) {
+                            second = snap.content
+                            set(second)
+                        }
+                        final = Self.ground(Self.tidy(second), context: fresh)
+                    }
+                    set(final)
                     return
                 } catch let e as LanguageModelSession.GenerationError {
                     switch e {
@@ -199,6 +215,14 @@ final class CompanionAsk: ObservableObject {
         }
         #endif
         set("", failed: true)
+    }
+
+    /// True when two answers use mostly the same words.
+    static func similar(_ a: String, _ b: String) -> Bool {
+        func words(_ s: String) -> Set<String> { Set(s.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init).filter { $0.count > 2 }) }
+        let x = words(a), y = words(b)
+        guard x.count >= 4, y.count >= 4 else { return false }
+        return Double(x.intersection(y).count) / Double(min(x.count, y.count)) > 0.7
     }
 
     static func needsPage(_ q: String) -> Bool {
