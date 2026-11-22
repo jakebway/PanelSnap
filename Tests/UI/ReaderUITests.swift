@@ -150,6 +150,15 @@ final class ReaderUITests: XCTestCase {
         title.tap(); settle(3.0)
         shot("40-omnibus-open")
 
+        func dragSlider(to position: Double) {
+            showControls()
+            let slider = app.sliders.firstMatch
+            // Dragging the knob (rather than setting a value) is what makes the reader jump to that page.
+            let from = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
+            let to = slider.coordinate(withNormalizedOffset: CGVector(dx: position, dy: 0.5))
+            from.press(forDuration: 0.3, thenDragTo: to)
+            settle(2.0)
+        }
         func showControls() {
             if !app.sliders.firstMatch.exists { at(0.5, 0.5).tap(); settle(0.8) }
         }
@@ -159,7 +168,7 @@ final class ReaderUITests: XCTestCase {
             if button.waitForExistence(timeout: 4) { button.tap() } else { at(0.93, 0.93).tap() }
             settle(1.0)
             let banner = app.descendants(matching: .any)["companion-issue-banner"]
-            _ = banner.waitForExistence(timeout: 90)                // the page text is read in the background first
+            _ = banner.waitForExistence(timeout: 60)                // the page text is read in the background first
             settle(1.5)
             shot("41-companion")
             return banner.exists ? banner.label : "(no banner)"
@@ -174,7 +183,8 @@ final class ReaderUITests: XCTestCase {
         showControls()
         let early = app.sliders.firstMatch
         XCTAssertTrue(early.waitForExistence(timeout: 4), "the page slider should be there")
-        early.adjust(toNormalizedSliderPosition: 0.12); settle(2.0)
+        _ = early
+        dragSlider(to: 0.12)
         let first = openCompanion()
         consoleLog("banner at the start: \(first)")
         XCTAssertTrue(first.contains("#1"), "page 2 onwards is issue #1, got: \(first)")
@@ -199,7 +209,8 @@ final class ReaderUITests: XCTestCase {
         showControls()
         let slider = app.sliders.firstMatch
         XCTAssertTrue(slider.waitForExistence(timeout: 4), "the page slider should be there")
-        slider.adjust(toNormalizedSliderPosition: 0.85); settle(2.0)
+        _ = slider
+        dragSlider(to: 0.85)
         shot("43-jumped")
         let later = openCompanion()
         consoleLog("banner after jumping: \(later)")

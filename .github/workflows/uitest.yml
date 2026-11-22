@@ -103,6 +103,8 @@ jobs:
             echo '```'
           } > report/ui/status.md
           tail -n 300 test-ui.log > report/ui/test.log
+          DATA=$(xcrun simctl get_app_container ${{ steps.sim.outputs.udid }} com.jakebway.panelsnap data 2>/dev/null || true)
+          find "$DATA/Library/Caches" -name "scan-log.txt" -exec cp {} report/ui/scan-log.txt \; 2>/dev/null || true
       - name: Keep the report as a download too
         if: always()
         uses: actions/upload-artifact@v4

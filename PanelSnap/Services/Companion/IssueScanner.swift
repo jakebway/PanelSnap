@@ -129,11 +129,19 @@ enum IssueScanner {
     /// Reads every page, one after another, at low priority, reporting what it has found as it goes.
     static func scan(source: ComicSource, progress: @escaping ([IssueMark]) -> Void) async -> [IssueMark] {
         var found: [Candidate] = []
+        var log = ""
+        defer { try? log.write(to: Paths.companionCache.appendingPathComponent("scan-log.txt"), atomically: true, encoding: .utf8) }
         for p in 0..<source.pageCount {
             if Task.isCancelled { break }
             autoreleasepool {
                 if let image = source.pageImage(at: p, maxPixel: 1500) {
-                    if let c = candidate(page: p, lines: recognize(image)) { found.append(c) }
+                    let lines = recognize(image)
+                    let c = candidate(page: p, lines: lines)
+                    if let c = c { found.append(c) }
+                    log += "page \(p + 1): " + lines.prefix(6).map { "\($0.text)(\(String(format: "%.3f", $0.height)))" }.joined(separator: " | ")
+                        + (c.map { "  => issue \($0.issue) series \($0.series ?? "-") strong \($0.strong)" } ?? "") + "\n"
+                } else {
+                    log += "page \(p + 1): could not be read\n"
                 }
             }
             if found.count >= 2, p % 10 == 0 { progress(marks(from: found)) }
