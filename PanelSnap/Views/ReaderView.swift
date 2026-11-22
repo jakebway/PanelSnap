@@ -308,6 +308,10 @@ struct ReaderView: View {
                                y: size.height / 2 + (point.y - size.height / 2 - zoom.offset.height) / z)
             if let hit = PanelCanvas.panel(at: base, image: img, panels: model.panels,
                                            panelIndex: model.panelIndex, size: size, fill: 0.96) {
+                if hit == model.panelIndex && chromeVisible {
+                    hideChrome()          // menu and page bar are up: the first tap just puts them away
+                    return
+                }
                 hideChrome()
                 if hit != model.panelIndex {
                     // Zoom back and fly to the panel as one movement (same spring as the camera), so it does not skip.
