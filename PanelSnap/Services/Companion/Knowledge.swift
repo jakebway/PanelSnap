@@ -16,9 +16,12 @@ enum Knowledge {
         return FandomProvider.host(for: publisher)?.host
     }
 
+    /// Wikipedia keeps its API under /w/; Fandom wikis keep it at the root.
+    static func apiPath(_ host: String) -> String { host.hasSuffix("wikipedia.org") ? "/w/api.php" : "/api.php" }
+
     /// The plain-text introduction of a wiki page.
     static func extract(host: String, title: String, limit: Int) async -> String? {
-        guard let url = HTTP.url("https://\(host)/api.php", [
+        guard let url = HTTP.url("https://\(host)\(apiPath(host))", [
             ("action", "query"), ("prop", "extracts"), ("exintro", "1"), ("explaintext", "1"),
             ("redirects", "1"), ("titles", title), ("format", "json"), ("formatversion", "2")
         ]), let root = try? await HTTP.json(url) as? [String: Any],
@@ -30,10 +33,13 @@ enum Knowledge {
 
     /// Searches a wiki and returns the introduction of the best matching page.
     static func lookUp(host: String, query: String, limit: Int) async -> (title: String, text: String)? {
-        guard let url = HTTP.url("https://\(host)/api.php", [
+        guard let url = HTTP.url("https://\(host)\(apiPath(host))", [
             ("action", "query"), ("list", "search"), ("srsearch", query), ("srlimit", "3"), ("format", "json")
         ]), let root = try? await HTTP.json(url) as? [String: Any],
-              let q = root["query"] as? [String: Any], let hits = q["search"] as? [[String: Any]], !hits.isEmpty else { return nil }
+              let q = root["query"] as? [String: Any], let hits = q["search"] as? [[String: Any]], !hits.isEmpty else {
+            Diagnostics.add("NO RESULTS \(host) for \"\(query)\"")
+            return nil
+        }
         let titles = hits.compactMap { $0["title"] as? String }
         let want = query.lowercased()
         let best = titles.first(where: { $0.lowercased().hasPrefix(want) }) ?? titles.first
