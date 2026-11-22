@@ -376,6 +376,7 @@ struct WikiPageTool: Tool {
     }
 }
 
+@available(iOS 26.0, *)
 struct KnowledgeSearchTool: Tool {
     let name = "searchKnowledge"
     let description = "Searches the fact sheets for this comic, the comics wiki and Wikipedia. Use it for any question about who someone is, who lives somewhere, or what a place, team or group is."
