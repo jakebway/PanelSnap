@@ -315,8 +315,12 @@ struct ReaderView: View {
                         zoom.set(zoom: 1, offset: .zero)
                         model.focus(panel: hit)
                     }
-                } else if isZoomed {
-                    zoom.reset()          // already on this panel but nudged or zoomed: snap it back
+                } else {
+                    // A single tap on the panel you are already on: back out to the whole page.
+                    withAnimation(.spring(response: 0.46, dampingFraction: 0.9)) {
+                        zoom.set(zoom: 1, offset: .zero)
+                        model.showOverview()
+                    }
                 }
                 return
             }
