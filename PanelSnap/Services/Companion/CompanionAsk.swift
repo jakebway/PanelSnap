@@ -291,7 +291,6 @@ final class CompanionAsk: ObservableObject {
         return lines.joined(separator: "\n")
     }
 }
-}
 
 extension CompanionData {
     /// Everything the model may use, as plain text. The plot of the issue is left out unless spoilers are allowed.
