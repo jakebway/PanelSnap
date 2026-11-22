@@ -248,12 +248,16 @@ enum FandomProvider {
         return nil
     }
 
-    static func lookup(publisher: String?, series: String, volume: String?, issue: String) async -> CompanionData? {
+    static func lookup(publisher: String?, series: String, volume: String?, issue: String, year: Int? = nil) async -> CompanionData? {
         guard let site = host(for: publisher) else { return nil }
         let vol = (volume?.isEmpty == false) ? volume! : "1"
 
         var candidates: [String] = ["\(series) Vol \(vol) \(issue)"]
         if vol != "1" { candidates.append("\(series) Vol 1 \(issue)") }
+        if year != nil {
+            // The same name was reused for later runs ("Vision and the Scarlet Witch" 1982 is Vol 1, 1985 is Vol 2).
+            for v in 2...5 where !candidates.contains("\(series) Vol \(v) \(issue)") { candidates.append("\(series) Vol \(v) \(issue)") }
+        }
 
         // Fall back to the wiki's search if the guessed page name is wrong.
         if let searchURL = HTTP.url("https://\(site.host)/api.php", [
@@ -283,6 +287,10 @@ enum FandomProvider {
                 wikitext = o["*"] as? String
             }
             guard let text = wikitext else { continue }
+            if let want = year, let r = text.range(of: "\\|\\s*Year\\s*=\\s*(\\d{4})", options: .regularExpression) {
+                let found = Int(text[r].filter { $0.isNumber }.suffix(4)) ?? want
+                if found < want - 1 || found > want + 4 { continue }      // a different run with the same name
+            }
             let synopsis = extractSynopsis(text)
             let pageTitle = (parse["title"] as? String) ?? title
             let slug = pageTitle.replacingOccurrences(of: " ", with: "_")

@@ -21,7 +21,10 @@ struct CompanionView: View {
                     header
                     issueBanner
                     statusRow
-                    if CompanionAsk.isSupported { askSection }
+                    if CompanionAsk.isSupported {
+                        askSection
+                            .task(id: (model.activeMark?.issue ?? "") + (model.activeMark?.series ?? "")) { await model.readRecentPages() }
+                    }
 
                     if let t = model.data.issueSummary {
                         section("About this issue") { textBlock(t) }
@@ -147,11 +150,13 @@ struct CompanionView: View {
         if let mark = model.activeMark {
             VStack(alignment: .leading, spacing: 4) {
                 let name = (mark.series ?? "").isEmpty ? "issue" : "\(mark.series ?? "") "
-                Label("Following your place: you're in \(name)#\(mark.issue)", systemImage: "bookmark.fill")
+                Label((mark.estimated == true ? "Probably in " : "Following your place: you're in ") + "\(name)#\(mark.issue)", systemImage: "bookmark.fill")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Theme.accent)
-                if model.scanning {
-                    Text("Still reading the other pages · \(Int(model.scanFraction * 100))%")
+                if model.readingPages {
+                    Text("Reading the pages you've read so you can ask about them…").font(.caption2).foregroundStyle(.secondary)
+                } else if model.scanning {
+                    Text((mark.estimated == true ? "Checking the pages to be sure" : "Still reading the other pages") + " · \(Int(model.scanFraction * 100))%")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
@@ -228,9 +233,11 @@ struct CompanionView: View {
     }
 
     private func send(_ text: String) {
-        let context = model.data.llmContext(spoilers: spoilers, mark: model.activeMark,
-                                            page: model.currentPage, pageCount: model.pageCount)
-        Task { await ask.ask(text, context: context) }
+        let allow = spoilers
+        Task {
+            let context = await model.askContext(spoilers: allow)
+            await ask.ask(text, context: context)
+        }
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

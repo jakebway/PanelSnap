@@ -21,8 +21,9 @@ final class CompanionAsk: ObservableObject {
     }
 
     private static let instructions = """
-    You help someone who is reading a comic book. You are given information about the comic, the issue and its characters. \
-    Answer using only that information and plain common sense. If the information does not say, answer that you don't \
+    You help someone who is reading a comic book. You are given information about the comic, the issue, its characters, \
+    and the words printed on the pages the reader has already read. Use the page words to work out who is with whom, who \
+    is talking to whom and what is going on. Answer using only that information and plain common sense. If the information does not say, answer that you don't \
     know from what is available. Never invent plot details, powers or relationships. Do not reveal anything beyond what \
     the information contains. Keep answers short: at most four sentences, friendly and clear.
     """
@@ -50,7 +51,7 @@ final class CompanionAsk: ObservableObject {
 
 extension CompanionData {
     /// Everything the model may use, as plain text. The plot of the issue is left out unless spoilers are allowed.
-    func llmContext(spoilers: Bool, mark: IssueMark?, page: Int, pageCount: Int) -> String {
+    func llmContext(spoilers: Bool, mark: IssueMark?, page: Int, pageCount: Int, progress: Double? = nil, limit: Int = 6500) -> String {
         var out: [String] = []
         var title = series ?? "an unknown comic"
         if let i = issue, !i.isEmpty { title += " #\(i)" }
@@ -58,13 +59,15 @@ extension CompanionData {
         if let p = publisher { line += " (\(p)\(year.map { ", \($0)" } ?? ""))" }
         out.append(line)
         if let m = mark {
-            out.append("This file is a collected edition. The reader is on page \(page + 1) of \(pageCount), which is inside issue #\(m.issue).")
+            out.append("This file is a collected edition. The reader is on page \(page + 1) of \(pageCount), inside \(m.series ?? "issue") #\(m.issue)\(m.year.map { " (\($0) series)" } ?? "").")
         }
         if let s = seriesSummary?.text { out.append("About the series: " + TextClean.shorten(s, limit: 500)) }
         if let s = issueSummary?.text { out.append("About this issue: " + TextClean.shorten(s, limit: 600)) }
         if let s = issueSynopsis?.text {
             if spoilers { out.append("Plot of this issue (spoilers): " + TextClean.shorten(s, limit: 1300)) }
-            else { out.append("A plot summary exists but is hidden to avoid spoilers; do not guess the plot.") }
+            else if let f = progress, f > 0.03 {
+                out.append("What happens in this issue up to roughly where the reader is (do not go beyond it): " + Self.firstPart(s, fraction: min(1, f + 0.1), limit: 1300))
+            } else { out.append("The rest of the plot is hidden to avoid spoilers; do not guess what happens next.") }
         }
         if !characters.isEmpty {
             out.append("Characters in this issue:")
@@ -81,6 +84,18 @@ extension CompanionData {
         if !locations.isEmpty { out.append("Places: " + locations.prefix(8).joined(separator: ", ")) }
         if !arcs.isEmpty { out.append("Story arc: " + arcs.joined(separator: ", ")) }
         if !creators.isEmpty { out.append("Creators: " + creators.prefix(8).map { "\($0.role) \($0.name)" }.joined(separator: ", ")) }
-        return String(out.joined(separator: "\n").prefix(6500))
+        return String(out.joined(separator: "\n").prefix(limit))
+    }
+
+    /// The opening part of a synopsis, cut at a sentence end.
+    static func firstPart(_ text: String, fraction: Double, limit: Int) -> String {
+        let clean = TextClean.shorten(text, limit: 4000)
+        let want = min(limit, max(120, Int(Double(clean.count) * fraction)))
+        if clean.count <= want { return clean }
+        let head = String(clean.prefix(want))
+        if let r = head.range(of: ". ", options: .backwards), head.distance(from: head.startIndex, to: r.lowerBound) > 60 {
+            return String(head[..<r.upperBound])
+        }
+        return head + "…"
     }
 }

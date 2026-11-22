@@ -115,8 +115,10 @@ final class CompanionModel: ObservableObject {
         let id = entry.id
         let start = currentPage
         let initial = scanState
+        var seen = Set<String>()
+        let titles = plan.map { $0.series }.filter { seen.insert($0).inserted }
         scanTask = Task.detached(priority: .utility) { [weak self] in
-            let final = await IssueScanner.scan(source: source, id: id, from: start, state: initial) { partial in
+            let final = await IssueScanner.scan(source: source, id: id, from: start, state: initial, titles: titles) { partial in
                 Task { @MainActor in
                     guard let self = self else { return }
                     self.scanState = partial
@@ -140,6 +142,75 @@ final class CompanionModel: ObservableObject {
         scanTask = nil
         scanning = false
         pageTask?.cancel()
+    }
+
+    // MARK: What the reader has read (for Ask)
+
+    @Published private(set) var readingPages = false
+    private var pageText: [Int: String] = [:]
+    private var pageTextLoaded = false
+
+    private var pageTextFile: URL { return Paths.companionCache.appendingPathComponent(entry.id.uuidString + "-text-v1.json") }
+
+    /// Where the issue the reader is in begins (or a sensible stretch back, if that isn't known).
+    private var readStart: Int {
+        if let m = activeMark { return max(0, max(m.page, currentPage - 40)) }
+        return max(0, currentPage - 20)
+    }
+
+    /// Reads the lettering on the pages of this issue up to the current page, newest first, and remembers it.
+    func readRecentPages() async {
+        guard let source = scanSource, currentPage >= 0 else { return }
+        if !pageTextLoaded {
+            pageTextLoaded = true
+            if let data = try? Data(contentsOf: pageTextFile), let saved = try? JSONDecoder().decode([String: String].self, from: data) {
+                for (k, v) in saved { if let i = Int(k) { pageText[i] = v } }
+            }
+        }
+        let want = Array((readStart...currentPage).reversed()).filter { pageText[$0] == nil }
+        guard !want.isEmpty, !readingPages else { return }
+        readingPages = true
+        defer { readingPages = false }
+        let found: [Int: String] = await Task.detached(priority: .userInitiated) {
+            var out: [Int: String] = [:]
+            for p in want {
+                if Task.isCancelled { break }
+                autoreleasepool {
+                    if let img = source.pageImage(at: p, maxPixel: 1800) { out[p] = IssueScanner.readDialogue(img) }
+                }
+            }
+            return out
+        }.value
+        for (k, v) in found { pageText[k] = v }
+        let saved = Dictionary(uniqueKeysWithValues: pageText.map { (String($0.key), $0.value) })
+        if let data = try? JSONEncoder().encode(saved) { try? data.write(to: pageTextFile, options: .atomic) }
+    }
+
+    /// Everything the on-device model gets: the issue's details, the plot up to where you are (or all of it with
+    /// spoilers on) and the words on the pages you have read in this issue.
+    func askContext(spoilers: Bool) async -> String {
+        await readRecentPages()
+        var progress: Double?
+        if let m = activeMark {
+            let next = issueMarks.first(where: { $0.page > m.page })?.page ?? pageCount
+            progress = Double(currentPage - m.page + 1) / Double(max(1, next - m.page))
+        }
+        var ctx = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: 4200)
+        var chunks: [String] = []
+        var total = 0
+        for p in (readStart...max(readStart, currentPage)).reversed() {
+            guard let t = pageText[p], !t.isEmpty else { continue }
+            let piece = "[page \(p + 1)] " + t
+            if total + piece.count > 5200 { break }
+            chunks.insert(piece, at: 0)
+            total += piece.count
+        }
+        if !chunks.isEmpty {
+            ctx += "\n\nWORDS ON THE PAGES THE READER HAS READ IN THIS ISSUE, oldest first, the last one is the page on screen "
+                + "(read by machine from the lettering, so expect some misspellings; names in balloons and captions tell you who is talking and to whom):\n"
+                + chunks.joined(separator: "\n")
+        }
+        return ctx
     }
 
     // MARK: The description's list of issues
@@ -174,11 +245,15 @@ final class CompanionModel: ObservableObject {
         plan = p
         plannedCount = p.count
         applyMarks()
+        if scanTask != nil {                    // restart so the scan also looks for the series titles it now knows
+            scanTask?.cancel()
+            scanTask = nil
+        }
         startScanIfWorthwhile()
     }
 
     private func applyMarks() {
-        let marks = IssueScanner.marks(from: scanState.candidates, plan: plan)
+        let marks = IssueScanner.marks(from: scanState.candidates, plan: plan, pageCount: pageCount)
         if marks != issueMarks { issueMarks = marks }
         pageChanged(currentPage)
     }
@@ -189,6 +264,10 @@ final class CompanionModel: ObservableObject {
         guard !issueMarks.isEmpty else { return }
         let mark = issueMarks.last(where: { $0.page <= page })
         if mark == activeMark { return }
+        if let m = mark, let a = activeMark, m.issue == a.issue, m.series == a.series {
+            activeMark = m                      // same issue, just pinned down more exactly: nothing to look up again
+            return
+        }
         pageTask?.cancel()
         pageTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 700_000_000)      // wait until the reader settles on a page
@@ -344,7 +423,7 @@ final class CompanionModel: ObservableObject {
 
         // 2. Marvel / DC fan wikis: issue synopsis, creators and who appears.
         if let number = id.issue ?? d.issue, d.issueSynopsis == nil || d.creators.isEmpty || d.characters.isEmpty {
-            if let wiki = await FandomProvider.lookup(publisher: d.publisher ?? id.publisher, series: d.series ?? seriesName, volume: id.volume, issue: number) {
+            if let wiki = await FandomProvider.lookup(publisher: d.publisher ?? id.publisher, series: d.series ?? seriesName, volume: id.volume, issue: number, year: id.year) {
                 guard gen == generation else { return }
                 d.fill(from: wiki)
                 data = d
