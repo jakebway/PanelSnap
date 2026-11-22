@@ -1,18 +1,18 @@
 import SwiftUI
 import UIKit
 
-/// The bar at the bottom of the reader for moving through the pages. Drag the knob, or tap anywhere on the bar.
-/// The page changes while you drag (after a short pause on a page, so a fast scrub stays smooth) and once more
-/// when you let go. It is built from a plain drag gesture instead of the system slider, because the system slider
-/// loses its "finished" signal if the controls hide or another gesture takes the touch, and then never jumps.
+/// The bar at the bottom of the reader for moving through the pages, in the style of Kindle: the page you are on stays
+/// put while you drag, a small preview of the page under your finger floats above the bar, and the reader goes there
+/// when you let go. Tapping the bar jumps to that spot. It is a plain drag gesture rather than the system slider, because
+/// the system slider loses its "finished" signal if the controls hide or another gesture takes the touch.
 struct PageScrubber: View {
     @Binding var value: Double                 // 0-based page shown on the knob
     var pageCount: Int
+    var thumbnail: (Int) async -> UIImage?     // a small picture of a page, for the preview
     var onActive: (Bool) -> Void               // true while a finger is down
     var onJump: (Int) -> Void                  // go to this page
 
     @State private var dragging = false
-    @State private var pending: Task<Void, Never>?
     private let tick = UISelectionFeedbackGenerator()
 
     private var maxValue: Double { return Double(max(1, pageCount - 1)) }
@@ -47,16 +47,24 @@ struct PageScrubber: View {
                         if page != value {
                             value = page
                             tick.selectionChanged()
-                            schedule(Int(page), after: 0.18)
                         }
                     }
                     .onEnded { _ in
                         dragging = false
-                        pending?.cancel()
                         onJump(Int(value))
                         onActive(false)
                     }
             )
+            .overlay(alignment: .topLeading) {
+                if dragging {
+                    let w: CGFloat = 130
+                    ScrubPreview(page: Int(value), total: pageCount, load: thumbnail)
+                        .frame(width: w)
+                        .offset(x: min(max(knob / 2 + span * fraction - w / 2, 0), max(0, g.size.width - w)), y: -(w * 1.55 + 46))
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
         }
         .frame(height: 40)
         .accessibilityElement()
@@ -71,16 +79,38 @@ struct PageScrubber: View {
         }
         .onDisappear {
             // If the controls go away mid-drag, still go where the knob was.
-            if dragging { pending?.cancel(); onJump(Int(value)); onActive(false); dragging = false }
+            if dragging { onJump(Int(value)); onActive(false); dragging = false }
         }
     }
+}
 
-    private func schedule(_ page: Int, after seconds: Double) {
-        pending?.cancel()
-        pending = Task {
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+/// The floating picture of the page under your finger. The last picture stays until the next one is ready, so it never flashes.
+private struct ScrubPreview: View {
+    let page: Int
+    let total: Int
+    let load: (Int) async -> UIImage?
+    @State private var image: UIImage?
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Rectangle().fill(Color.black.opacity(0.55))
+                if let image = image {
+                    Image(uiImage: image).resizable().scaledToFit()
+                }
+            }
+            .frame(width: 112, height: 168)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text("Page \(page + 1) of \(total)")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white)
+        }
+        .padding(8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .task(id: page) {
+            try? await Task.sleep(nanoseconds: 50_000_000)       // skip pages you are only passing over
             if Task.isCancelled { return }
-            onJump(page)
+            if let img = await load(page), !Task.isCancelled { image = img }
         }
     }
 }

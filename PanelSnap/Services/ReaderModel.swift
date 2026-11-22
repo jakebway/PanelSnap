@@ -257,6 +257,21 @@ final class ReaderModel: ObservableObject {
         }
     }
 
+    private let thumbCache = NSCache<NSNumber, UIImage>()
+
+    /// A small picture of any page, for the preview over the page bar. Cached, and made off the main thread.
+    func thumbnail(page: Int) async -> UIImage? {
+        let key = NSNumber(value: page)
+        if let hit = thumbCache.object(forKey: key) { return hit }
+        let src = source
+        let img: UIImage? = await Task.detached(priority: .userInitiated) {
+            guard let cg = src.pageImage(at: page, maxPixel: 420) else { return nil }
+            return UIImage(cgImage: cg)
+        }.value
+        if let img = img { thumbCache.setObject(img, forKey: key) }
+        return img
+    }
+
     func jump(toPage page: Int) {
         let p = max(0, min(page, pageCount - 1))
         if p == pageIndex { return }

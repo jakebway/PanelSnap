@@ -7,6 +7,14 @@ struct IssueMark: Codable, Hashable {
     var page: Int          // 0-based page where the issue begins
     var issue: String      // "3"
     var series: String?    // the series name printed on that page, if it could be read ("THE AMAZING SPIDER-MAN")
+    var year: Int? = nil   // the year of that run, when the collection's description says
+}
+
+/// What the page scan has read so far. Saved as it goes, so closing the comic never loses the work.
+struct ScanState: Codable {
+    var done: Set<Int> = []
+    var candidates: [IssueScanner.Candidate] = []
+    var finished = false
 }
 
 /// Finds the issue boundaries inside a collected edition by reading the printed text on each page: a title or credits
@@ -18,7 +26,7 @@ enum IssueScanner {
         var height: CGFloat          // 0...1, how tall the line is compared to the page
     }
 
-    struct Candidate: Hashable {
+    struct Candidate: Hashable, Codable {
         var page: Int
         var issue: Int
         var series: String?
@@ -77,29 +85,74 @@ enum IssueScanner {
         return best
     }
 
-    /// Keeps the candidates that form a rising run of issue numbers (the real issue openers) and drops stray "#2" mentions.
+    /// Drops the second sighting of an issue (cover and title page of the same issue sit close together), and any
+    /// stray mention that is neither the next number up nor a restart at #1-#3 (a new series inside the collection).
     static func choose(_ all: [Candidate]) -> [Candidate] {
         var seq: [Candidate] = []
         for c in all.sorted(by: { $0.page < $1.page }) {
-            if let last = seq.last, last.issue == c.issue, c.page - last.page <= 8 { continue }   // cover and title page of the same issue
+            if let last = seq.last {
+                if last.issue == c.issue, c.page - last.page <= 8 { continue }
+                if !(c.issue > last.issue || c.issue <= 3) { continue }
+            }
             seq.append(c)
         }
-        guard !seq.isEmpty else { return [] }
-        // Longest strictly rising run of issue numbers.
-        var length = [Int](repeating: 1, count: seq.count)
-        var from = [Int](repeating: -1, count: seq.count)
-        for i in 0..<seq.count {
-            for j in 0..<i where seq[j].issue < seq[i].issue && length[j] + 1 > length[i] {
-                length[i] = length[j] + 1
-                from[i] = j
+        return seq
+    }
+
+    /// Lines the sightings up with the issues the description promised, in order. Numbers can repeat (#1-4 then #1-12),
+    /// so this matches the two lists as sequences instead of trusting numbers alone.
+    static func align(_ all: [Candidate], plan: [PlannedIssue]) -> [IssueMark] {
+        var cands: [Candidate] = []
+        for c in all.sorted(by: { $0.page < $1.page }) {
+            if let last = cands.last, last.issue == c.issue, c.page - last.page <= 8 { continue }
+            cands.append(c)
+        }
+        let n = cands.count, m = plan.count
+        guard n > 0, m > 0 else { return [] }
+        var dp = [[Double]](repeating: [Double](repeating: 0, count: m + 1), count: n + 1)
+        for i in 1...n {
+            for j in 1...m {
+                var best = max(dp[i - 1][j], dp[i][j - 1])
+                if cands[i - 1].issue == plan[j - 1].issue {
+                    let bonus = similar(cands[i - 1].series, plan[j - 1].series) ? 0.5 : 0
+                    best = max(best, dp[i - 1][j - 1] + 1 + bonus)
+                }
+                dp[i][j] = best
             }
         }
-        var bestEnd = 0
-        for i in 0..<seq.count where length[i] > length[bestEnd] { bestEnd = i }
-        var out: [Candidate] = []
-        var k = bestEnd
-        while k >= 0 { out.append(seq[k]); k = from[k] }
+        var out: [IssueMark] = []
+        var i = n, j = m
+        while i > 0 && j > 0 {
+            if cands[i - 1].issue == plan[j - 1].issue,
+               abs(dp[i][j] - (dp[i - 1][j - 1] + 1 + (similar(cands[i - 1].series, plan[j - 1].series) ? 0.5 : 0))) < 0.0001 {
+                out.append(IssueMark(page: cands[i - 1].page, issue: String(cands[i - 1].issue), series: plan[j - 1].series, year: plan[j - 1].year))
+                i -= 1; j -= 1
+            } else if dp[i - 1][j] >= dp[i][j - 1] {
+                i -= 1
+            } else {
+                j -= 1
+            }
+        }
         return out.reversed()
+    }
+
+    private static func words(_ s: String?) -> Set<String> {
+        guard let s = s else { return [] }
+        let parts = s.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+        return Set(parts.filter { $0.count > 3 })
+    }
+
+    private static func similar(_ a: String?, _ b: String?) -> Bool {
+        return !words(a).isDisjoint(with: words(b))
+    }
+
+    /// With the description's list: any match counts. Without it: needs two sightings so one stray "#2" is not believed.
+    static func marks(from candidates: [Candidate], plan: [PlannedIssue]) -> [IssueMark] {
+        if plan.count >= 2 {
+            let aligned = align(candidates, plan: plan)
+            if !aligned.isEmpty { return aligned }
+        }
+        return marks(from: candidates)
     }
 
     static func marks(from candidates: [Candidate]) -> [IssueMark] {
@@ -126,43 +179,57 @@ enum IssueScanner {
         }
     }
 
-    /// Reads every page, one after another, at low priority, reporting what it has found as it goes.
-    static func scan(source: ComicSource, progress: @escaping ([IssueMark]) -> Void) async -> [IssueMark] {
-        var found: [Candidate] = []
+    /// Reads pages starting at the one you are on and working backwards (the issue you are in began before it), then
+    /// forwards, then whatever is left. Reports as it finds things, and keeps going from where it stopped next time.
+    static func scan(source: ComicSource, id: UUID, from start: Int, state: ScanState, progress: @escaping (ScanState) -> Void) async -> ScanState {
+        var st = state
+        let n = source.pageCount
+        guard n > 0 else { st.finished = true; return st }
+        let s0 = max(0, min(start, n - 1))
+        let order = (Array(stride(from: s0, through: 0, by: -1)) + Array(stride(from: s0 + 1, to: n, by: 1))).filter { !st.done.contains($0) }
         var log = ""
-        defer { try? log.write(to: Paths.companionCache.appendingPathComponent("scan-log.txt"), atomically: true, encoding: .utf8) }
-        for p in 0..<source.pageCount {
+        var sinceReport = 0
+        for p in order {
             if Task.isCancelled { break }
+            var foundNew = false
             autoreleasepool {
                 if let image = source.pageImage(at: p, maxPixel: 1100) {
                     let lines = recognize(image)
-                    let c = candidate(page: p, lines: lines)
-                    if let c = c { found.append(c) }
+                    if let c = candidate(page: p, lines: lines) { st.candidates.append(c); foundNew = true }
                     log += "page \(p + 1): " + lines.prefix(6).map { "\($0.text)(\(String(format: "%.3f", $0.height)))" }.joined(separator: " | ")
-                        + (c.map { "  => issue \($0.issue) series \($0.series ?? "-") strong \($0.strong)" } ?? "") + "\n"
+                        + (foundNew ? "  => issue \(st.candidates.last?.issue ?? 0)" : "") + "\n"
                 } else {
                     log += "page \(p + 1): could not be read\n"
                 }
             }
-            if found.count >= 2, p % 10 == 0 { progress(marks(from: found)) }
+            st.done.insert(p)
+            sinceReport += 1
+            if foundNew || sinceReport >= 8 {
+                progress(st)
+                sinceReport = 0
+                if st.done.count % 16 == 0 { writeState(id, st) }
+            }
             await Task.yield()
         }
-        return marks(from: found)
+        if !Task.isCancelled { st.finished = true }
+        writeState(id, st)
+        try? log.write(to: Paths.companionCache.appendingPathComponent("scan-log.txt"), atomically: true, encoding: .utf8)
+        progress(st)
+        return st
     }
 
     // MARK: Remembering the result
 
-    private static func file(_ id: UUID) -> URL {
-        return Paths.companionCache.appendingPathComponent(id.uuidString + "-issues-v1.json")
+    private static func stateFile(_ id: UUID) -> URL {
+        return Paths.companionCache.appendingPathComponent(id.uuidString + "-scan-v2.json")
     }
 
-    /// nil = never scanned; an empty list = scanned and no issues were found.
-    static func read(_ id: UUID) -> [IssueMark]? {
-        guard let data = try? Data(contentsOf: file(id)) else { return nil }
-        return try? JSONDecoder().decode([IssueMark].self, from: data)
+    static func readState(_ id: UUID) -> ScanState? {
+        guard let data = try? Data(contentsOf: stateFile(id)) else { return nil }
+        return try? JSONDecoder().decode(ScanState.self, from: data)
     }
 
-    static func write(_ id: UUID, _ marks: [IssueMark]) {
-        if let data = try? JSONEncoder().encode(marks) { try? data.write(to: file(id), options: .atomic) }
+    static func writeState(_ id: UUID, _ state: ScanState) {
+        if let data = try? JSONEncoder().encode(state) { try? data.write(to: stateFile(id), options: .atomic) }
     }
 }

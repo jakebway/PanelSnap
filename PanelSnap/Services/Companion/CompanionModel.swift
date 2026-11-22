@@ -27,6 +27,9 @@ final class CompanionModel: ObservableObject {
     @Published private(set) var issueMarks: [IssueMark] = []
     @Published private(set) var activeMark: IssueMark?
     @Published private(set) var scanning = false
+    @Published private(set) var scanFraction: Double = 0
+    @Published private(set) var scanFinished = false
+    @Published private(set) var plannedCount = 0                 // issues the collection's description says it contains
     private(set) var currentPage = 0
     private(set) var pageCount = 0
     private let baseIdentity: ComicIdentity
@@ -35,6 +38,10 @@ final class CompanionModel: ObservableObject {
     private var generation = 0                // bumped whenever a new lookup starts, so an older one stops writing
     private var pageTask: Task<Void, Never>?
     private var scanTask: Task<Void, Never>?
+    private var scanState = ScanState()
+    private var plan: [PlannedIssue] = []
+    private var scanSource: ComicSource?
+    private var planModelTried = Set<String>()
 
     init(entry: ComicEntry, identity: ComicIdentity, settings: AppSettings, coverURL: URL) {
         self.entry = entry
@@ -84,37 +91,95 @@ final class CompanionModel: ObservableObject {
 
     // MARK: Following the reader through a collected edition
 
-    /// Called once when the comic opens. Reads the page text in the background to find where each issue starts.
+    /// Called once when the comic opens. Reads the description for the list of issues, then reads page text (starting at
+    /// the page you are on) to find where each of them starts.
     func attach(source: ComicSource, page: Int) {
         currentPage = page
         pageCount = source.pageCount
-        let id = entry.id
-        if let known = IssueScanner.read(id) {
-            if !known.isEmpty { applyMarks(known) }
+        scanSource = source
+        scanState = IssueScanner.readState(entry.id) ?? ScanState()
+        refreshPlan()
+        if scanState.finished {
+            scanFinished = true
+            applyMarks()
             return
         }
-        guard IssueScanner.looksLikeCollection(baseIdentity, pageCount: source.pageCount) else { return }
+        applyMarks()
+        startScanIfWorthwhile()
+    }
+
+    private func startScanIfWorthwhile() {
+        guard scanTask == nil, !scanState.finished, let source = scanSource else { return }
+        guard plan.count >= 2 || IssueScanner.looksLikeCollection(baseIdentity, pageCount: source.pageCount) else { return }
         scanning = true
+        let id = entry.id
+        let start = currentPage
+        let initial = scanState
         scanTask = Task.detached(priority: .utility) { [weak self] in
-            let marks = await IssueScanner.scan(source: source) { partial in
-                Task { @MainActor in self?.applyMarks(partial) }
+            let final = await IssueScanner.scan(source: source, id: id, from: start, state: initial) { partial in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    self.scanState = partial
+                    self.scanFraction = Double(partial.done.count) / Double(max(1, source.pageCount))
+                    self.applyMarks()
+                }
             }
-            if Task.isCancelled { return }
-            IssueScanner.write(id, marks)
             await MainActor.run {
-                self?.scanning = false
-                self?.applyMarks(marks)
+                guard let self = self else { return }
+                self.scanTask = nil
+                self.scanState = final
+                self.scanning = false
+                self.scanFinished = final.finished
+                self.applyMarks()
             }
         }
     }
 
     func stopScanning() {
         scanTask?.cancel()
+        scanTask = nil
+        scanning = false
         pageTask?.cancel()
     }
 
-    private func applyMarks(_ marks: [IssueMark]) {
-        issueMarks = marks
+    // MARK: The description's list of issues
+
+    /// Looks for "Collects X #1-4, Y #1-12 ..." in the comic's own description and in what Companion has fetched.
+    func refreshPlan() {
+        var texts: [String] = []
+        if let t = baseIdentity.summary { texts.append(t) }
+        let whole = wholeData ?? (variant.isEmpty ? data : nil)
+        for block in [whole?.issueSummary, whole?.issueSynopsis, whole?.seriesSummary] {
+            if let t = block?.text { texts.append(t) }
+        }
+        for t in texts {
+            let p = IssuePlan.parse(t)
+            if p.count >= 2 { setPlan(p); return }
+        }
+        // Nothing the plain reader understood: ask the on-device model about a text that looks like a contents list.
+        for t in texts where plan.isEmpty && !planModelTried.contains(t) {
+            let lower = t.lowercased()
+            guard lower.contains("collect") || lower.contains("reprint") || lower.contains("issues") else { continue }
+            planModelTried.insert(t)
+            Task { [weak self] in
+                let p = await IssuePlan.askModel(t)
+                if p.count >= 2 { self?.setPlan(p) }
+            }
+            break
+        }
+    }
+
+    private func setPlan(_ p: [PlannedIssue]) {
+        if p == plan { return }
+        plan = p
+        plannedCount = p.count
+        applyMarks()
+        startScanIfWorthwhile()
+    }
+
+    private func applyMarks() {
+        let marks = IssueScanner.marks(from: scanState.candidates, plan: plan)
+        if marks != issueMarks { issueMarks = marks }
         pageChanged(currentPage)
     }
 
@@ -149,6 +214,7 @@ final class CompanionModel: ObservableObject {
         if pretty.lowercased().hasPrefix("the ") { pretty = String(pretty.dropFirst(4)) }
         id.series = pretty
         id.issue = mark.issue
+        id.year = mark.year
         id.title = nil
         id.summary = nil
         id.characters = []
@@ -189,6 +255,7 @@ final class CompanionModel: ObservableObject {
             applyGlossary()
             phase = .done
             updateTip()
+            refreshPlan()
             return
         }
         applyGlossary()
@@ -320,6 +387,7 @@ final class CompanionModel: ObservableObject {
         phase = .done
         updateTip()
         CompanionCache.write(entry.id, variant: cacheVariant, d)
+        if cacheVariant.isEmpty { refreshPlan() }
 
         // 7. Character blurbs (quietly, in the background).
         await enrichCharacters(gen)

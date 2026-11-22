@@ -145,18 +145,34 @@ struct CompanionView: View {
     @ViewBuilder
     private var issueBanner: some View {
         if let mark = model.activeMark {
-            Label("Following your place: you're in issue #\(mark.issue)", systemImage: "bookmark.fill")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Theme.accent)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .accessibilityIdentifier("companion-issue-banner")
+            VStack(alignment: .leading, spacing: 4) {
+                let name = (mark.series ?? "").isEmpty ? "issue" : "\(mark.series ?? "") "
+                Label("Following your place: you're in \(name)#\(mark.issue)", systemImage: "bookmark.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                if model.scanning {
+                    Text("Still reading the other pages · \(Int(model.scanFraction * 100))%")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("companion-issue-banner")
         } else if model.scanning {
             HStack(spacing: 8) {
                 ProgressView()
-                Text("Finding the issues in this collection…").font(.footnote).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.plannedCount >= 2 ? "This collection has \(model.plannedCount) issues. Finding where yours starts…" : "Finding the issues in this collection…")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Text("Reading page text on this phone · \(Int(model.scanFraction * 100))%")
+                        .font(.caption2).foregroundStyle(.tertiary)
+                }
             }
+        } else if model.scanFinished && model.issueMarks.isEmpty && model.plannedCount >= 0 {
+            Text("Couldn't find printed issue numbers in this one, so Companion is showing the whole book.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

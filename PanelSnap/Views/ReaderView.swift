@@ -515,6 +515,7 @@ struct ReaderView: View {
                     PageScrubber(
                         value: $scrub,
                         pageCount: model.pageCount,
+                        thumbnail: { page in await model.thumbnail(page: page) },
                         onActive: { active in
                             scrubbing = active
                             if active { hideTask?.cancel() } else { scheduleHide() }
