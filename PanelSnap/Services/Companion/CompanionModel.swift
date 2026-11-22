@@ -158,6 +158,29 @@ final class CompanionModel: ObservableObject {
         pageTask?.cancel()
     }
 
+    // MARK: Fact sheets for Ask
+
+    @Published private(set) var notes: [KnowledgeNote] = []
+
+    /// Reads the saved fact sheets for what is on screen, or fetches them all at once (every character, place and team
+    /// in parallel) and saves them, so the next time this comic opens they are already there.
+    private func loadKnowledge(gen: Int) async {
+        let key = variant
+        if let saved = Knowledge.read(entry.id, variant: key) {
+            guard gen == generation else { return }
+            notes = saved
+            ask.notes = saved
+            return
+        }
+        let snapshot = data
+        let built = await Knowledge.gather(data: snapshot, publisher: snapshot.publisher ?? identity.publisher,
+                                           series: snapshot.series ?? identity.series ?? "", collection: baseIdentity.summary)
+        guard gen == generation, !built.isEmpty else { return }
+        notes = built
+        ask.notes = built
+        Knowledge.write(entry.id, variant: key, built)
+    }
+
     // MARK: What the reader has read (for Ask)
 
     @Published private(set) var readingPages = false
@@ -237,8 +260,12 @@ final class CompanionModel: ObservableObject {
             let next = issueMarks.first(where: { $0.page > m.page })?.page ?? pageCount
             progress = Double(currentPage - m.page + 1) / Double(max(1, next - m.page))
         }
-        let infoBudget = budget * 2 / 5
+        let infoBudget = budget * 3 / 10
         var ctx = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: infoBudget)
+        // Fact sheets about the people and places in this issue. The plot sheet follows the spoiler setting.
+        let usable = notes.filter { spoilers || !$0.title.hasPrefix("Plot") }
+        let facts = Knowledge.relevant(usable, to: question, budget: budget / 4)
+        if !facts.isEmpty { ctx += "\n\nFACT SHEETS (from the comics wiki and Wikipedia):\n" + facts.joined(separator: "\n") }
         let pages = choosePages(question: question, budget: budget - ctx.count - 300)
         if !pages.isEmpty {
             ctx += "\n\nWORDS ON PAGES THE READER HAS READ IN THIS ISSUE, in page order; page \(currentPage + 1) is on screen now "
@@ -384,6 +411,8 @@ final class CompanionModel: ObservableObject {
             applyGlossary()
             phase = .done
             updateTip()
+            let g = generation
+            Task { [weak self] in await self?.loadKnowledge(gen: g) }
             return
         }
         var fresh = CompanionModel.baseline(id)
@@ -411,6 +440,8 @@ final class CompanionModel: ObservableObject {
             phase = .done
             updateTip()
             refreshPlan()
+            let g = generation
+            Task { [weak self] in await self?.loadKnowledge(gen: g) }
             return
         }
         applyGlossary()
@@ -490,47 +521,45 @@ final class CompanionModel: ObservableObject {
             return
         }
 
-        // 1. Grand Comics Database: credits, cast and sometimes a synopsis.
-        if let gcd = await GCDProvider.lookup(series: seriesName, issue: id.issue, year: id.year, publisher: d.publisher ?? id.publisher) {
+        // Every source at once: the Grand Comics Database, the Marvel / DC wiki for this issue, Wikipedia and (manga) AniList.
+        let pub = d.publisher ?? id.publisher
+        let issueNumber = id.issue ?? d.issue
+        let year = id.year
+        let volume = id.volume
+        let seriesForWiki = d.series ?? seriesName
+        let dataPublisher = d.publisher
+        let manga = id.isManga
+        let needFandom = issueNumber != nil && (d.issueSynopsis == nil || d.creators.isEmpty || d.characters.isEmpty)
+        let needWiki = d.seriesSummary == nil
+        var results: [(Int, CompanionData)] = []
+        await withTaskGroup(of: (Int, CompanionData?).self) { group in
+            group.addTask { (0, await GCDProvider.lookup(series: seriesName, issue: id.issue, year: year, publisher: pub)) }
+            if needFandom, pub != nil, let number = issueNumber {
+                group.addTask { (1, await FandomProvider.lookup(publisher: pub, series: seriesForWiki, volume: volume, issue: number, year: year)) }
+            }
+            if needWiki { group.addTask { (2, await WikipediaProvider.series(name: seriesForWiki, publisher: dataPublisher)) } }
+            if manga { group.addTask { (4, await AniListProvider.lookup(series: seriesName, strict: false)) } }
+            for await (i, r) in group { if let r = r { results.append((i, r)) } }
+        }
+        guard gen == generation else { return }
+        for (_, r) in results.sorted(by: { $0.0 < $1.0 }) { d.fill(from: r) }
+        data = d
+        // The publisher was unknown until the Grand Comics Database answered: now the wiki can be asked.
+        if needFandom, pub == nil, d.publisher != nil, let number = issueNumber,
+           let wiki = await FandomProvider.lookup(publisher: d.publisher, series: seriesForWiki, volume: volume, issue: number, year: year) {
             guard gen == generation else { return }
-            d.fill(from: gcd)
+            d.fill(from: wiki)
             data = d
         }
-
-        // 2. Marvel / DC fan wikis: issue synopsis, creators and who appears.
-        if let number = id.issue ?? d.issue, d.issueSynopsis == nil || d.creators.isEmpty || d.characters.isEmpty {
-            if let wiki = await FandomProvider.lookup(publisher: d.publisher ?? id.publisher, series: d.series ?? seriesName, volume: id.volume, issue: number, year: id.year) {
-                guard gen == generation else { return }
-                d.fill(from: wiki)
-                data = d
-            }
+        if d.seriesSummary == nil, let ol = await OpenLibraryProvider.lookup(series: d.series ?? seriesName, publisher: d.publisher) {
+            guard gen == generation else { return }
+            d.fill(from: ol)
+            data = d
         }
-
-        // 3. Wikipedia series background.
-        if d.seriesSummary == nil {
-            if let wp = await WikipediaProvider.series(name: d.series ?? seriesName, publisher: d.publisher) {
-                guard gen == generation else { return }
-                d.fill(from: wp)
-                data = d
-            }
-        }
-
-        // 4. Open Library, for graphic novels and collected editions.
-        if d.seriesSummary == nil {
-            if let ol = await OpenLibraryProvider.lookup(series: d.series ?? seriesName, publisher: d.publisher) {
-                guard gen == generation else { return }
-                d.fill(from: ol)
-                data = d
-            }
-        }
-
-        // 5. AniList for manga (or as a last resort with a strict name match).
-        if id.isManga || d.seriesSummary == nil {
-            if let al = await AniListProvider.lookup(series: seriesName, strict: !id.isManga) {
-                guard gen == generation else { return }
-                d.fill(from: al)
-                data = d
-            }
+        if d.seriesSummary == nil, !manga, let al = await AniListProvider.lookup(series: seriesName, strict: true) {
+            guard gen == generation else { return }
+            d.fill(from: al)
+            data = d
         }
 
         guard gen == generation else { return }
@@ -543,6 +572,7 @@ final class CompanionModel: ObservableObject {
         updateTip()
         CompanionCache.write(entry.id, variant: cacheVariant, d)
         if cacheVariant.isEmpty { refreshPlan() }
+        Task { [weak self] in await self?.loadKnowledge(gen: gen) }
 
         // 7. Character blurbs (quietly, in the background).
         await enrichCharacters(gen)

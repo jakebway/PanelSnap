@@ -52,17 +52,26 @@ final class CompanionAsk: ObservableObject {
     }
 
     private static let instructions = """
-    You are a sharp, well-read comics expert sitting beside someone while they read. \
-    Answer the question directly in your first sentence, naming names. Then add only what helps: who those characters are, \
-    how they relate to each other, and why it matters here. Use the words printed on the pages (names in speech balloons \
-    and captions show who is present and who is talking to whom), the cast list and the plot notes. You may add well-known \
-    facts about famous comic characters and places when they fit the information, for example that the Inhumans live on the Moon. \
-    If a character is named but not explained, use the lookUpCharacter tool. \
-    A picture of the page on screen may be attached: look at it to see who is in the panels and what they are doing. \
-    Never repeat yourself, never restate the question, no filler and no apologies. Only if the information really does not \
-    contain the answer, say so in one short sentence and give the best clue you have. Never reveal events the reader has not \
-    reached unless the information marks them as allowed spoilers. At most four sentences unless the reader asks for more.
+    You are a careful comics expert sitting beside someone while they read. You only state facts that appear in the \
+    provided information: the fact sheets, the cast and plot notes, the words printed on the pages, or what the \
+    searchKnowledge and lookUpCharacter tools return. Never fill gaps from memory and never guess. \
+    For any question about who someone is, who lives somewhere, what a place or group is, or how people are connected, \
+    FIRST call searchKnowledge with the key words (for example "Moon Inhumans"), then answer from what it returns together \
+    with the page words (names in balloons and captions show who is present and who is talking to whom). \
+    Answer in your first sentence, naming names, then add only what helps. Never repeat yourself, no filler, no apologies. \
+    If the information still does not say, reply exactly: "I couldn't find that in my sources," and add the closest fact you do have. \
+    Do not reveal events the reader has not reached unless spoilers are allowed. At most four sentences unless asked for more. \
+    A picture of the page on screen may be attached; use it to see who is in the panels.
     """
+
+    /// The fact sheets for what is on screen. Changing them restarts the warmed-up session so it carries the new tools.
+    var notes: [KnowledgeNote] = [] {
+        didSet {
+            #if canImport(FoundationModels)
+            warm = nil
+            #endif
+        }
+    }
 
     #if canImport(FoundationModels)
     private var warm: AnyObject?          // a session made and warmed up ahead of time, so the first words come sooner
@@ -74,7 +83,7 @@ final class CompanionAsk: ObservableObject {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             guard Self.isSupported, warm == nil || warmPublisher != publisher else { return }
-            let session = Self.makeSession(publisher: publisher, permissive: false)
+            let session = Self.makeSession(publisher: publisher, permissive: false, notes: notes)
             session.prewarm()
             warm = session
             warmPublisher = publisher
@@ -84,9 +93,10 @@ final class CompanionAsk: ObservableObject {
 
     #if canImport(FoundationModels)
     @available(iOS 26.0, *)
-    private static func makeSession(publisher: String?, permissive: Bool) -> LanguageModelSession {
+    private static func makeSession(publisher: String?, permissive: Bool, notes: [KnowledgeNote]) -> LanguageModelSession {
         let model = permissive ? SystemLanguageModel(guardrails: .permissiveContentTransformations) : SystemLanguageModel.default
-        return LanguageModelSession(model: model, tools: [CharacterLookupTool(publisher: publisher)], instructions: Instructions(Self.instructions))
+        let tools: [any Tool] = [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher)]
+        return LanguageModelSession(model: model, tools: tools, instructions: Instructions(Self.instructions))
     }
     #endif
 
@@ -119,7 +129,7 @@ final class CompanionAsk: ObservableObject {
             let ctx = await makeContext(60_000)
             do {
                 let text = try await ModernAsk.cloud(prompt: makePrompt(ctx), instructions: Self.instructions,
-                                                     tools: [CharacterLookupTool(publisher: publisher)])
+                                                     tools: [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher)])
                 set(Self.tidy(text), engine: "cloud")
                 return
             } catch {
@@ -138,9 +148,9 @@ final class CompanionAsk: ObservableObject {
                 let prompt = makePrompt(ctx)
                 let session: LanguageModelSession
                 if attempt == 0, let w = warm as? LanguageModelSession { session = w; warm = nil }
-                else { session = Self.makeSession(publisher: publisher, permissive: permissive) }
+                else { session = Self.makeSession(publisher: publisher, permissive: permissive, notes: notes) }
                 do {
-                    let options = GenerationOptions(temperature: 0.3, maximumResponseTokens: 320)
+                    let options = GenerationOptions(temperature: 0.1, maximumResponseTokens: 320)
                     var latest = ""
                     if #available(iOS 27.0, *), let page = page, attempt == 0 {
                         latest = try await ModernAsk.withPage(session: session, prompt: prompt, page: page, options: options) { set($0) }
@@ -310,6 +320,28 @@ enum ModernAsk {
             update(latest)
         }
         return latest
+    }
+}
+#endif
+
+
+#if canImport(FoundationModels)
+/// Lets the model search before it answers: the facts gathered for this comic first, then the comics wiki and Wikipedia, live.
+@available(iOS 26.0, *)
+struct KnowledgeSearchTool: Tool {
+    let name = "searchKnowledge"
+    let description = "Searches the fact sheets for this comic, the comics wiki and Wikipedia. Use it for any question about who someone is, who lives somewhere, or what a place, team or group is."
+    let publisher: String?
+    let notes: [KnowledgeNote]
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Key words to look up, for example: Inhumans Moon, or Black Bolt")
+        var query: String
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        return await Knowledge.search(arguments.query, publisher: publisher, notes: notes)
     }
 }
 #endif

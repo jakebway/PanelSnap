@@ -300,11 +300,12 @@ enum FandomProvider {
             var out = CompanionData()
             out.links.append(LinkItem(title: "\(site.name): \(pageTitle)", url: pageURL))
             if let s = synopsis {
-                out.issueSynopsis = TextBlock(text: TextClean.shorten(s, limit: 2200), source: site.name, url: pageURL)
+                out.issueSynopsis = TextBlock(text: TextClean.shorten(s, limit: 4500), source: site.name, url: pageURL)
             }
             out.sources.append(site.name)
             out.creators = credits(in: text)
             out.characters = appearances(in: text, host: site.host)
+            out.locations = locations(in: text)
             return out
         }
         return nil
@@ -352,7 +353,7 @@ enum FandomProvider {
     /// The "Appearing in" lists: featured characters first, then supporting, then villains.
     static func appearances(in wikitext: String, host: String) -> [CharacterCard] {
         var out: [CharacterCard] = []
-        let pattern = "(?:Featured|Supporting|Antagonists|Villains)\\s*Characters?:?\\s*\\n(.*?)(?=\\n\\s*(?:Featured|Supporting|Antagonists|Villains|Other|Races|Locations|Items|Vehicles|Synopsis|Solicit|Notes|Trivia|\\|)|\\n==|\\z)"
+        let pattern = "(?:Featured|Supporting|Antagonists|Villains|Other)\\s*Characters?:?\\s*\\n(.*?)(?=\\n\\s*(?:Featured|Supporting|Antagonists|Villains|Other|Races|Locations|Items|Vehicles|Synopsis|Solicit|Notes|Trivia|\\|)|\\n==|\\z)"
         guard let re = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators, .caseInsensitive]) else { return [] }
         let ns = wikitext as NSString
         for m in re.matches(in: wikitext, range: NSRange(location: 0, length: ns.length)) where m.numberOfRanges > 1 {
@@ -361,6 +362,18 @@ enum FandomProvider {
             }
         }
         return Array(out.prefix(20))
+    }
+
+    /// The "Locations" list of an issue page ("Moon", "Attilan", "Peru"...).
+    static func locations(in wikitext: String) -> [String] {
+        let pattern = "Locations?:?\\s*\\n(.*?)(?=\\n\\s*(?:Featured|Supporting|Antagonists|Villains|Other|Races|Items|Vehicles|Synopsis|Solicit|Notes|Trivia|\\|)|\\n==|\\z)"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators, .caseInsensitive]) else { return [] }
+        let ns = wikitext as NSString
+        var out: [String] = []
+        for m in re.matches(in: wikitext, range: NSRange(location: 0, length: ns.length)) where m.numberOfRanges > 1 {
+            for n in linkNames(ns.substring(with: m.range(at: 1))) where !out.contains(n) { out.append(n) }
+        }
+        return Array(out.prefix(10))
     }
 
     /// Pulls the "Synopsis" parts out of the wiki page's source.
