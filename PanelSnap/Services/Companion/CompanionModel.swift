@@ -276,7 +276,7 @@ final class CompanionModel: ObservableObject {
         let found = await live
         // Everything found goes into one pool, and only the sentences closest in meaning to the question are kept.
         let pool = found + facts
-        let cap = budget * 4 / 10
+        let cap = budget * 45 / 100
         let q = fixedQuestion
         let ranked = await Task.detached(priority: .userInitiated) { Passages.best(parts: pool, question: q, maxChars: cap) }.value
         let keyFacts = ranked.reduce(0) { $0 + $1.count } > 1200 ? await FactNotes.read(question: fixedQuestion, passages: ranked) : ""

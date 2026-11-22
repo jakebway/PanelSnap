@@ -243,7 +243,6 @@ enum Knowledge {
         async let wiki: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query, count: 3, limit: 1100)
         async let wiki2: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query + " " + house, count: 2, limit: 900)
         async let hero: [(title: String, text: String)] = lookUpMany(host: "superheroes.fandom.com", query: query, count: 1, limit: 900)
-        async let more: [(title: String, text: String)] = lookUpMany(host: "comicvine.fandom.com", query: query, count: 1, limit: 700)
         async let instant: String? = instantAnswer(query + " " + house)
         // "Who lives there / who is in it / what is its history" is answered by the full page and its member lists, not the intro.
         async let deepFan: [(title: String, text: String)] = {
@@ -270,7 +269,6 @@ enum Knowledge {
         add("Wikipedia", await people)
         add("Wikipedia", await wiki2)
         add("Superhero wiki", await hero)
-        add("Comic Vine wiki", await more)
         if let i = await instant, !seen.contains(String(i.prefix(60)).lowercased()) { parts.append("[Web summary] " + i) }
         return parts
     }

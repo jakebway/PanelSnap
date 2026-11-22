@@ -31,6 +31,8 @@ enum Passages {
         guard !parts.isEmpty else { return [] }
         let keys = Knowledge.terms(question).map { String($0.prefix(6)) }
         let qv = embedding?.vector(for: question)
+        let ql = question.lowercased()
+        let wantsList = ["who", "which", "members", "live", "lives", "resident", "team", "list", "all"].contains { ql.contains($0) }
         var labels: [String] = []
         var sents: [[String]] = []
         for p in parts {
@@ -49,14 +51,19 @@ enum Passages {
                 let kw = keys.isEmpty ? 0 : Double(hit) / Double(keys.count)
                 var sem = 0.0
                 if let e = embedding, let qv = qv, let sv = e.vector(for: s) { sem = max(0, cosine(qv, sv)) }
-                items.append(Item(part: pi, idx: si, score: 0.55 * kw + 0.45 * sem + (si == 0 ? 0.08 : 0)))
+                // Member and resident lists read as a run of capitalised names; they rarely look like the question itself.
+                var listBonus = 0.0
+                if wantsList {
+                    let names = s.split(separator: " ").filter { $0.first?.isUppercase == true }.count
+                    if names >= 4 && s.contains(",") { listBonus = 0.25 } else if names >= 3 { listBonus = 0.1 }
+                }
+                items.append(Item(part: pi, idx: si, score: 0.55 * kw + 0.45 * sem + (si == 0 ? 0.15 : 0) + listBonus))
             }
         }
-        guard let top = items.map({ $0.score }).max(), top > 0 else { return Array(parts.prefix(3)) }
+        guard let top = items.map({ $0.score }).max(), top >= 0 else { return Array(parts.prefix(3)) }
         var picked = [Set<Int>](repeating: [], count: parts.count)
         var used = 0
         for it in items.sorted(by: { $0.score > $1.score }) {
-            if it.score < top * 0.35 { break }
             let ss = sents[it.part]
             var add: [Int] = []
             for j in max(0, it.idx - 1)...min(ss.count - 1, it.idx + 1) where !picked[it.part].contains(j) { add.append(j) }
