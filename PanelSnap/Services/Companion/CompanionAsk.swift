@@ -3,13 +3,30 @@ import Foundation
 import FoundationModels
 #endif
 
+/// One question and its answer, kept per comic so they are still there next time.
+struct AskExchange: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var question: String
+    var answer: String
+    var issueKey: String           // which issue of a collection it was asked in ("" = the whole book)
+    var failed = false
+    var date = Date()
+}
+
 /// Answers questions about the comic with the language model built into the phone (Apple Intelligence). Nothing is sent
-/// anywhere and no key is needed. The model is only given what Companion has gathered, and told to stick to it.
+/// anywhere and no key is needed. The model is given what Companion has gathered plus the words on the pages read so far.
 @MainActor
 final class CompanionAsk: ObservableObject {
-    @Published var answer = ""
-    @Published var busy = false
-    @Published var failed = false
+    @Published private(set) var history: [AskExchange] = []
+    @Published private(set) var busy = false
+    private let file: URL
+
+    init(comicID: UUID) {
+        file = Paths.companionCache.appendingPathComponent(comicID.uuidString + "-ask-v1.json")
+        if let data = try? Data(contentsOf: file), let saved = try? JSONDecoder().decode([AskExchange].self, from: data) {
+            history = saved
+        }
+    }
 
     static var isSupported: Bool {
         #if canImport(FoundationModels)
@@ -21,31 +38,72 @@ final class CompanionAsk: ObservableObject {
     }
 
     private static let instructions = """
-    You help someone who is reading a comic book. You are given information about the comic, the issue, its characters, \
-    and the words printed on the pages the reader has already read. Use the page words to work out who is with whom, who \
-    is talking to whom and what is going on. Answer using only that information and plain common sense. If the information does not say, answer that you don't \
-    know from what is available. Never invent plot details, powers or relationships. Do not reveal anything beyond what \
-    the information contains. Keep answers short: at most four sentences, friendly and clear.
+    You are a sharp, well-read comics expert sitting beside someone while they read. \
+    Answer the question directly in your first sentence, naming names. Then add only what helps: who those characters are, \
+    how they relate to each other, and why it matters here. Use the words printed on the pages (names in speech balloons \
+    and captions show who is present and who is talking to whom), the cast list and the plot notes. You may add well-known \
+    facts about famous comic characters and places when they fit the information, for example that the Inhumans live on the Moon. \
+    Never repeat yourself, never restate the question, no filler and no apologies. Only if the information really does not \
+    contain the answer, say so in one short sentence and give the best clue you have. Never reveal events the reader has not \
+    reached unless the information marks them as allowed spoilers. At most four sentences unless the reader asks for more.
     """
 
-    func ask(_ question: String, context: String) async {
+    func ask(_ question: String, issueKey: String, context makeContext: () async -> String) async {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !busy, !q.isEmpty else { return }
         busy = true
-        failed = false
-        answer = ""
-        defer { busy = false }
+        defer { busy = false; save() }
+        var item = AskExchange(question: q, answer: "", issueKey: issueKey)
+        // Earlier questions in this issue, so follow-ups like "and who is she?" make sense.
+        let earlier = history.filter { $0.issueKey == issueKey && !$0.failed }.suffix(2)
+            .map { "Reader: \($0.question)\nYou: \($0.answer)" }.joined(separator: "\n")
+        history.append(item)
+        let index = history.count - 1
+        let context = await makeContext()
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            do {
-                let session = LanguageModelSession(instructions: Self.instructions)
-                let response = try await session.respond(to: "COMIC INFORMATION:\n\(context)\n\nQUESTION: \(q)")
-                answer = response.content
-            } catch {
-                failed = true
+            var ctx = context
+            for attempt in 0..<2 {
+                let prompt = "COMIC INFORMATION:\n\(ctx)\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
+                do {
+                    let session = LanguageModelSession(instructions: Self.instructions)
+                    let options = GenerationOptions(temperature: 0.3, maximumResponseTokens: 260)
+                    let response = try await session.respond(to: prompt, options: options)
+                    item.answer = Self.tidy(response.content)
+                    break
+                } catch {
+                    if attempt == 0 { ctx = String(ctx.prefix(ctx.count / 2)); continue }     // too long for the model: try with less
+                    item.failed = true
+                }
             }
-        }
+        } else { item.failed = true }
+        #else
+        item.failed = true
         #endif
+        if index < history.count { history[index] = item }
+    }
+
+    func clear(issueKey: String) {
+        history.removeAll { $0.issueKey == issueKey }
+        save()
+    }
+
+    private func save() {
+        let keep = Array(history.suffix(60))
+        if let data = try? JSONEncoder().encode(keep) { try? data.write(to: file, options: .atomic) }
+    }
+
+    /// Drops sentences the model said twice, which is how "talking in circles" usually shows up.
+    static func tidy(_ text: String) -> String {
+        var seen = Set<String>()
+        var out: [String] = []
+        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { s, _, _, _ in
+            guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return }
+            let key = s.lowercased().filter { $0.isLetter }
+            if key.count > 12, !seen.insert(key).inserted { return }
+            out.append(s)
+        }
+        return out.joined(separator: " ")
     }
 }
 

@@ -53,7 +53,14 @@ final class CompanionModel: ObservableObject {
         self.data = base
         self.fixSeries = identity.series ?? ""
         self.fixIssue = identity.issue ?? ""
+        self.ask = CompanionAsk(comicID: entry.id)
     }
+
+    /// The question box. Lives here (not in the panel) so questions and answers survive closing the panel.
+    let ask: CompanionAsk
+
+    /// Which issue questions belong to.
+    var issueKey: String { return activeMark.map { "\($0.series ?? "")#\($0.issue)" } ?? "" }
 
     /// What we already know from the file itself, with no internet.
     static func baseline(_ id: ComicIdentity) -> CompanionData {
@@ -98,7 +105,13 @@ final class CompanionModel: ObservableObject {
         pageCount = source.pageCount
         scanSource = source
         scanState = IssueScanner.readState(entry.id) ?? ScanState()
+        load()                                   // fetch (or read the saved) details now, not when the panel opens
         refreshPlan()
+        prepareTask?.cancel()
+        prepareTask = Task { [weak self] in      // get ready for questions straight away, quietly
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            await self?.readRecentPages()
+        }
         if scanState.finished {
             scanFinished = true
             applyMarks()
@@ -138,6 +151,7 @@ final class CompanionModel: ObservableObject {
     }
 
     func stopScanning() {
+        prepareTask?.cancel()
         scanTask?.cancel()
         scanTask = nil
         scanning = false
@@ -149,6 +163,7 @@ final class CompanionModel: ObservableObject {
     @Published private(set) var readingPages = false
     private var pageText: [Int: String] = [:]
     private var pageTextLoaded = false
+    private var prepareTask: Task<Void, Never>?
 
     private var pageTextFile: URL { return Paths.companionCache.appendingPathComponent(entry.id.uuidString + "-text-v1.json") }
 
@@ -158,38 +173,61 @@ final class CompanionModel: ObservableObject {
         return max(0, currentPage - 20)
     }
 
-    /// Reads the lettering on the pages of this issue up to the current page, newest first, and remembers it.
+    /// Reads new pages shortly after the reader settles on one, so a question never has to wait for them.
+    private func schedulePrepare() {
+        guard !readingPages else { return }
+        prepareTask?.cancel()
+        prepareTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            if Task.isCancelled { return }
+            await self?.readRecentPages()
+        }
+    }
+
+    /// Reads the lettering of this issue's pages up to two pages past the current one (newest first), a few pages at a
+    /// time, saving after each batch so nothing is lost and a question can use whatever is ready.
     func readRecentPages() async {
-        guard let source = scanSource, currentPage >= 0 else { return }
+        guard let source = scanSource, currentPage >= 0, pageCount > 0 else { return }
         if !pageTextLoaded {
             pageTextLoaded = true
             if let data = try? Data(contentsOf: pageTextFile), let saved = try? JSONDecoder().decode([String: String].self, from: data) {
                 for (k, v) in saved { if let i = Int(k) { pageText[i] = v } }
             }
         }
-        let want = Array((readStart...currentPage).reversed()).filter { pageText[$0] == nil }
-        guard !want.isEmpty, !readingPages else { return }
+        guard !readingPages else { return }
         readingPages = true
         defer { readingPages = false }
-        let found: [Int: String] = await Task.detached(priority: .userInitiated) {
-            var out: [Int: String] = [:]
-            for p in want {
-                if Task.isCancelled { break }
-                autoreleasepool {
-                    if let img = source.pageImage(at: p, maxPixel: 1800) { out[p] = IssueScanner.readDialogue(img) }
+        while !Task.isCancelled {
+            let end = min(pageCount - 1, currentPage + 2)
+            let lo = min(readStart, end)
+            let ahead = Array((currentPage + 1)...max(currentPage + 1, end)).filter { $0 <= end }
+            let order = Array((lo...currentPage).reversed()) + ahead
+            let want = Array(order.filter { pageText[$0] == nil }.prefix(3))
+            if want.isEmpty { break }
+            let found: [Int: String] = await Task.detached(priority: .utility) {
+                var out: [Int: String] = [:]
+                for p in want {
+                    autoreleasepool {
+                        if let img = source.pageImage(at: p, maxPixel: 1800) { out[p] = IssueScanner.readDialogue(img) }
+                    }
                 }
-            }
-            return out
-        }.value
-        for (k, v) in found { pageText[k] = v }
-        let saved = Dictionary(uniqueKeysWithValues: pageText.map { (String($0.key), $0.value) })
-        if let data = try? JSONEncoder().encode(saved) { try? data.write(to: pageTextFile, options: .atomic) }
+                return out
+            }.value
+            for p in want { pageText[p] = found[p] ?? "" }
+            let saved = Dictionary(uniqueKeysWithValues: pageText.map { (String($0.key), $0.value) })
+            if let data = try? JSONEncoder().encode(saved) { try? data.write(to: pageTextFile, options: .atomic) }
+        }
     }
 
     /// Everything the on-device model gets: the issue's details, the plot up to where you are (or all of it with
     /// spoilers on) and the words on the pages you have read in this issue.
     func askContext(spoilers: Bool) async -> String {
-        await readRecentPages()
+        if !readingPages { await readRecentPages() }               // usually already done in the background
+        else {
+            for _ in 0..<15 where readingPages && pageText[currentPage] == nil {   // just this page, if it's still being read
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
         var progress: Double?
         if let m = activeMark {
             let next = issueMarks.first(where: { $0.page > m.page })?.page ?? pageCount
@@ -261,18 +299,25 @@ final class CompanionModel: ObservableObject {
     /// Called as the reader turns pages. Switches Companion to the issue the page belongs to.
     func pageChanged(_ page: Int) {
         currentPage = page
-        guard !issueMarks.isEmpty else { return }
+        guard !issueMarks.isEmpty else { schedulePrepare(); return }
         let mark = issueMarks.last(where: { $0.page <= page })
         if mark == activeMark { return }
         if let m = mark, let a = activeMark, m.issue == a.issue, m.series == a.series {
             activeMark = m                      // same issue, just pinned down more exactly: nothing to look up again
+            schedulePrepare()
             return
         }
         pageTask?.cancel()
+        if activeMark == nil {                  // the first answer on opening: no reason to wait
+            activate(mark)
+            schedulePrepare()
+            return
+        }
         pageTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 700_000_000)      // wait until the reader settles on a page
             if Task.isCancelled { return }
             self?.activate(mark)
+            self?.schedulePrepare()
         }
     }
 
