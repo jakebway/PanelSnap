@@ -64,7 +64,12 @@ final class CompanionAsk: ObservableObject {
     For a "who lives at / who is in" question, name every resident or member the sources or the page words mention (for example people \
     greeted as family, rulers, doctors or guards there), group them, and then say who is only visiting. Do not answer with just the \
     people in the scene. \
-    A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
+    Visitors are only the people the pages show arriving from somewhere else. A spouse, parent or child of a resident who is shown \
+    at home with the family there lives there too. When the reader pushes back ("I thought X lived there"), check the sources and \
+    the page words again and change your answer if they show the reader is right; do not just repeat yourself. \
+    Write each person once, with no repeated names and no brackets inside brackets; group people on short lines, for example \
+    "Royal family: …" then "Others: …" then "Visiting: …". \
+        A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
     Do not reveal events the reader has not reached unless spoilers are allowed. At most four sentences unless asked for more. \
     The page words and any attached picture only show who is in the scene and what they say; they do not tell you where \
     anyone lives or what a place or group is. For that, use only the live search results and fact sheets.

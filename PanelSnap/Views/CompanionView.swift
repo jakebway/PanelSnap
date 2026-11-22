@@ -748,7 +748,7 @@ struct AskChatView: View {
         HStack {
             Spacer(minLength: 50)
             Text(q)
-                .font(.body.weight(.medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(Theme.onAccent)
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -769,7 +769,7 @@ struct AskChatView: View {
                 } else if ex.answer.isEmpty {
                     TypingDots()
                 } else {
-                    Text(ex.answer).font(.body).textSelection(.enabled)
+                    Text(ex.answer).font(.callout).lineSpacing(2).textSelection(.enabled)
                     if let e = ex.engine {
                         Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
                               systemImage: e == "cloud" ? "icloud" : "eye")
@@ -826,9 +826,12 @@ struct AskChatView: View {
         let allow = spoilers
         let key = model.issueKey
         let publisher = model.data.publisher
+        // A short follow-up ("I thought Pietro lived there") is searched together with the question before it.
+        let earlier = messages.last(where: { !$0.failed })?.question
+        let searchText = (q.split(separator: " ").count < 9 && earlier != nil) ? earlier! + " " + q : q
         Task {
             await ask.ask(q, issueKey: key, publisher: publisher, context: { budget in
-                await model.askContext(spoilers: allow, question: q, budget: budget)
+                await model.askContext(spoilers: allow, question: searchText, budget: budget)
             }, pageImage: { await model.currentPageImage() })
         }
     }
