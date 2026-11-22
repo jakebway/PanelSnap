@@ -160,7 +160,10 @@ final class ReaderUITests: XCTestCase {
             settle(2.0)
         }
         func showControls() {
-            if !app.sliders.firstMatch.exists { at(0.5, 0.5).tap(); settle(0.8) }
+            let s = app.sliders.firstMatch
+            if s.waitForExistence(timeout: 1) { return }
+            at(0.5, 0.5).tap()
+            _ = s.waitForExistence(timeout: 4)
         }
         func openCompanion() -> String {
             showControls()                                          // bring the controls up
