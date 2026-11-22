@@ -27,7 +27,8 @@ def cover():
 
 def issue_page(n, writer, artist):
     im = Image.new("RGB", (W, H), (240, 230, 200)); d = ImageDraw.Draw(im)
-    centered(d, 260, "THE AMAZING SPIDER-MAN #%d" % n, font(92), "black")
+    centered(d, 200, "THE AMAZING SPIDER-MAN", font(60), "black")
+    centered(d, 330, "#%d" % n, font(150), "black")
     centered(d, 520, "WRITER: " + writer, font(52), "black")
     centered(d, 600, "ARTIST: " + artist, font(52), "black")
     centered(d, 680, "LETTERER: ART SIMEK", font(52), "black")
