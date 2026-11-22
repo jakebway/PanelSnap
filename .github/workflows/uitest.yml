@@ -97,6 +97,12 @@ jobs:
             echo '```'
           } > report/ui/status.md
           tail -n 300 test-ui.log > report/ui/test.log
+      - name: Keep the report as a download too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-report
+          path: report/ui
       - name: Publish to ci-report
         if: always()
         env:
@@ -119,7 +125,7 @@ jobs:
             if git push -q origin ci-report; then exit 0; fi
             cd /; sleep $((attempt * 3))
           done
-          exit 1
+          echo "could not publish to ci-report (the report is still attached to the run)"
       - name: Fail if the tests failed
         if: steps.test.outcome == 'failure'
         run: exit 1

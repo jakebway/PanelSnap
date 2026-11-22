@@ -150,8 +150,11 @@ final class ReaderUITests: XCTestCase {
         title.tap(); settle(3.0)
         shot("40-omnibus-open")
 
+        func showControls() {
+            if !app.sliders.firstMatch.exists { at(0.5, 0.5).tap(); settle(0.8) }
+        }
         func openCompanion() -> String {
-            at(0.5, 0.5).tap(); settle(0.8)                         // bring the controls up
+            showControls()                                          // bring the controls up
             let button = app.buttons["companion-button"]
             if button.waitForExistence(timeout: 4) { button.tap() } else { at(0.93, 0.93).tap() }
             settle(1.0)
@@ -168,7 +171,7 @@ final class ReaderUITests: XCTestCase {
         }
 
         // The file opens on the cover, which comes before issue #1; move into the first issue.
-        at(0.5, 0.5).tap(); settle(0.8)
+        showControls()
         let early = app.sliders.firstMatch
         XCTAssertTrue(early.waitForExistence(timeout: 4), "the page slider should be there")
         early.adjust(toNormalizedSliderPosition: 0.12); settle(2.0)
@@ -193,7 +196,7 @@ final class ReaderUITests: XCTestCase {
         closeCompanion()
 
         // Jump to a page inside issue #3 with the slider, then look again.
-        at(0.5, 0.5).tap(); settle(0.8)
+        showControls()
         let slider = app.sliders.firstMatch
         XCTAssertTrue(slider.waitForExistence(timeout: 4), "the page slider should be there")
         slider.adjust(toNormalizedSliderPosition: 0.85); settle(2.0)
