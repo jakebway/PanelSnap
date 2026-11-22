@@ -2,12 +2,12 @@
 
 ```
 Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' started.
-Tests/UI/ReaderUITests.swift:159: error: -[PanelSnapUITests.ReaderUITests testOmnibusCompanion] : Failed to get matching snapshot: No matches found for first query match sequence: `Descendants matching type Slider`, given input App element pid: 12649
-Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' failed (43.823 seconds).
-Test Suite 'ReaderUITests' failed at 2026-11-22 18:13:03.934.
-	 Executed 1 test, with 1 failure (0 unexpected) in 43.823 (43.825) seconds
-Test Suite 'PanelSnapUITests.xctest' failed at 2026-11-22 18:13:03.936.
-	 Executed 1 test, with 1 failure (0 unexpected) in 43.823 (43.827) seconds
-Test Suite 'Selected tests' failed at 2026-11-22 18:13:03.938.
-	 Executed 1 test, with 1 failure (0 unexpected) in 43.823 (43.830) seconds
+Tests/UI/ReaderUITests.swift:188: error: -[PanelSnapUITests.ReaderUITests testOmnibusCompanion] : XCTAssertTrue failed - the page slider should be there
+Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' failed (34.210 seconds).
+Test Suite 'ReaderUITests' failed at 2026-11-22 18:27:09.958.
+	 Executed 1 test, with 1 failure (0 unexpected) in 34.210 (34.211) seconds
+Test Suite 'PanelSnapUITests.xctest' failed at 2026-11-22 18:27:09.958.
+	 Executed 1 test, with 1 failure (0 unexpected) in 34.210 (34.212) seconds
+Test Suite 'Selected tests' failed at 2026-11-22 18:27:09.958.
+	 Executed 1 test, with 1 failure (0 unexpected) in 34.210 (34.213) seconds
 ```
