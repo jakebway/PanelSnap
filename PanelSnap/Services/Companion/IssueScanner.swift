@@ -30,7 +30,7 @@ enum IssueScanner {
     static func looksLikeCollection(_ id: ComicIdentity, pageCount: Int) -> Bool {
         if pageCount >= 70 { return true }
         let name = ((id.series ?? "") + " " + (id.title ?? "") + " " + (id.volume ?? "")).lowercased()
-        return ["omnibus", "collection", "compendium", "treasury", "complete", "epic", "library", "tpb", "vol"].contains { name.contains($0) } && pageCount >= 40
+        return ["omnibus", "collection", "compendium", "treasury", "complete", "epic", "library", "tpb", "vol"].contains { name.contains($0) } && pageCount >= 30
     }
 
     /// "Amazing Spider-Man Omnibus Vol. 1" -> "Amazing Spider-Man".
