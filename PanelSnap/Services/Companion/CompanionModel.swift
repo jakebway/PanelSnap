@@ -220,11 +220,11 @@ final class CompanionModel: ObservableObject {
     }
 
     /// Everything the on-device model gets: the issue's details, the plot up to where you are (or all of it with
-    /// spoilers on) and the words on the pages you have read in this issue.
-    func askContext(spoilers: Bool) async -> String {
+    /// spoilers on) and the words on the pages you have read, choosing the pages that matter most for the question.
+    func askContext(spoilers: Bool, question: String, budget: Int) async -> String {
         if !readingPages { await readRecentPages() }               // usually already done in the background
         else {
-            for _ in 0..<15 where readingPages && pageText[currentPage] == nil {   // just this page, if it's still being read
+            for _ in 0..<15 where readingPages && pageText[currentPage] == nil {
                 try? await Task.sleep(nanoseconds: 200_000_000)
             }
         }
@@ -233,22 +233,42 @@ final class CompanionModel: ObservableObject {
             let next = issueMarks.first(where: { $0.page > m.page })?.page ?? pageCount
             progress = Double(currentPage - m.page + 1) / Double(max(1, next - m.page))
         }
-        var ctx = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: 4200)
-        var chunks: [String] = []
-        var total = 0
-        for p in (readStart...max(readStart, currentPage)).reversed() {
-            guard let t = pageText[p], !t.isEmpty else { continue }
-            let piece = "[page \(p + 1)] " + t
-            if total + piece.count > 5200 { break }
-            chunks.insert(piece, at: 0)
-            total += piece.count
-        }
-        if !chunks.isEmpty {
-            ctx += "\n\nWORDS ON THE PAGES THE READER HAS READ IN THIS ISSUE, oldest first, the last one is the page on screen "
-                + "(read by machine from the lettering, so expect some misspellings; names in balloons and captions tell you who is talking and to whom):\n"
-                + chunks.joined(separator: "\n")
+        let infoBudget = budget * 2 / 5
+        var ctx = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: infoBudget)
+        let pages = choosePages(question: question, budget: budget - ctx.count - 300)
+        if !pages.isEmpty {
+            ctx += "\n\nWORDS ON PAGES THE READER HAS READ IN THIS ISSUE, in page order; page \(currentPage + 1) is on screen now "
+                + "(read by machine from the lettering, so expect misspellings; names in balloons and captions show who is talking and to whom):\n"
+                + pages.joined(separator: "\n")
         }
         return ctx
+    }
+
+    /// The last few pages always, then the pages that share the most words with the question, then the rest newest first.
+    private func choosePages(question: String, budget: Int) -> [String] {
+        guard budget > 200, currentPage >= 0 else { return [] }
+        let range = Array(readStart...max(readStart, currentPage)).filter { !(pageText[$0] ?? "").isEmpty }
+        if range.isEmpty { return [] }
+        let stop: Set<String> = ["what", "who", "whom", "where", "when", "which", "that", "this", "with", "they", "their", "there",
+                                 "have", "does", "about", "from", "were", "into", "issue", "page", "comic", "going", "happening", "wanna", "want"]
+        let terms = question.lowercased().components(separatedBy: CharacterSet.letters.inverted)
+            .filter { $0.count > 3 && !stop.contains($0) }.map { String($0.prefix(5)) }
+        func score(_ p: Int) -> Int {
+            guard !terms.isEmpty, let t = pageText[p]?.lowercased() else { return 0 }
+            return terms.reduce(0) { $0 + (t.contains($1) ? 1 : 0) }
+        }
+        var chosen: [Int] = []
+        var used = 0
+        func take(_ p: Int) {
+            guard !chosen.contains(p), let t = pageText[p] else { return }
+            let piece = min(t.count, 1400) + 12
+            if used + piece > budget { return }
+            chosen.append(p); used += piece
+        }
+        for p in range.suffix(3).reversed() { take(p) }
+        for p in range.sorted(by: { score($0) > score($1) }) where score(p) > 0 { take(p) }
+        for p in range.reversed() { take(p) }
+        return chosen.sorted().map { "[page \($0 + 1)] " + String((pageText[$0] ?? "").prefix(1400)) }
     }
 
     // MARK: The description's list of issues

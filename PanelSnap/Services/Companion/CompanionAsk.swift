@@ -37,50 +37,108 @@ final class CompanionAsk: ObservableObject {
         return false
     }
 
+    /// How much text the model can take, in characters, after room for its instructions, tools and answer.
+    /// The phone says how big the model's window is (4K tokens on iOS 26, 8K on newer phones with iOS 27).
+    static func contextBudget() async -> Int {
+        var tokens = 4096
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            tokens = (try? await SystemLanguageModel.default.contextSize) ?? 4096
+        }
+        #endif
+        return max(3000, Int(Double(tokens - 1400) * 2.9))
+    }
+
     private static let instructions = """
     You are a sharp, well-read comics expert sitting beside someone while they read. \
     Answer the question directly in your first sentence, naming names. Then add only what helps: who those characters are, \
     how they relate to each other, and why it matters here. Use the words printed on the pages (names in speech balloons \
     and captions show who is present and who is talking to whom), the cast list and the plot notes. You may add well-known \
     facts about famous comic characters and places when they fit the information, for example that the Inhumans live on the Moon. \
+    If a character is named but not explained, use the lookUpCharacter tool. \
     Never repeat yourself, never restate the question, no filler and no apologies. Only if the information really does not \
     contain the answer, say so in one short sentence and give the best clue you have. Never reveal events the reader has not \
     reached unless the information marks them as allowed spoilers. At most four sentences unless the reader asks for more.
     """
 
-    func ask(_ question: String, issueKey: String, context makeContext: () async -> String) async {
+    #if canImport(FoundationModels)
+    private var warm: AnyObject?          // a session made and warmed up ahead of time, so the first words come sooner
+    #endif
+    private var warmPublisher: String?
+
+    /// Loads the model into memory before a question is asked (Apple recommends this when there is a second or more).
+    func prewarm(publisher: String?) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            guard Self.isSupported, warm == nil || warmPublisher != publisher else { return }
+            let session = Self.makeSession(publisher: publisher, permissive: false)
+            session.prewarm()
+            warm = session
+            warmPublisher = publisher
+        }
+        #endif
+    }
+
+    #if canImport(FoundationModels)
+    @available(iOS 26.0, *)
+    private static func makeSession(publisher: String?, permissive: Bool) -> LanguageModelSession {
+        let model = permissive ? SystemLanguageModel(guardrails: .permissiveContentTransformations) : SystemLanguageModel.default
+        return LanguageModelSession(model: model, tools: [CharacterLookupTool(publisher: publisher)], instructions: Instructions(Self.instructions))
+    }
+    #endif
+
+    /// Asks one question. The question shows straight away; `makeContext` gathers what the model should read
+    /// (given the space available) and the answer appears as it is written.
+    func ask(_ question: String, issueKey: String, publisher: String?, context makeContext: (Int) async -> String) async {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !busy, !q.isEmpty else { return }
         busy = true
-        defer { busy = false; save() }
-        var item = AskExchange(question: q, answer: "", issueKey: issueKey)
-        // Earlier questions in this issue, so follow-ups like "and who is she?" make sense.
+        defer { busy = false; save(); prewarm(publisher: publisher) }
         let earlier = history.filter { $0.issueKey == issueKey && !$0.failed }.suffix(2)
-            .map { "Reader: \($0.question)\nYou: \($0.answer)" }.joined(separator: "\n")
-        history.append(item)
+            .map { "Reader: \($0.question)\nYou: \(TextClean.shorten($0.answer, limit: 400))" }.joined(separator: "\n")
+        history.append(AskExchange(question: q, answer: "", issueKey: issueKey))
         let index = history.count - 1
-        let context = await makeContext()
+        func set(_ text: String, failed: Bool = false) {
+            guard index < history.count else { return }
+            history[index].answer = text
+            history[index].failed = failed
+        }
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            var ctx = context
-            for attempt in 0..<2 {
+            var budget = await Self.contextBudget() - earlier.count - q.count
+            var permissive = false
+            for attempt in 0..<3 {
+                let ctx = await makeContext(budget)
                 let prompt = "COMIC INFORMATION:\n\(ctx)\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
+                let session: LanguageModelSession
+                if attempt == 0, let w = warm as? LanguageModelSession { session = w; warm = nil }
+                else { session = Self.makeSession(publisher: publisher, permissive: permissive) }
                 do {
-                    let session = LanguageModelSession(instructions: Self.instructions)
-                    let options = GenerationOptions(temperature: 0.3, maximumResponseTokens: 260)
-                    let response = try await session.respond(to: prompt, options: options)
-                    item.answer = Self.tidy(response.content)
-                    break
+                    let options = GenerationOptions(temperature: 0.3, maximumResponseTokens: 320)
+                    var latest = ""
+                    for try await snap in session.streamResponse(to: prompt, options: options) {
+                        latest = snap.content
+                        set(latest)
+                    }
+                    set(Self.tidy(latest))
+                    return
+                } catch let e as LanguageModelSession.GenerationError {
+                    switch e {
+                    case .exceededContextWindowSize: budget = budget * 6 / 10          // too much to read: try with less
+                    case .guardrailViolation: permissive = true                       // comic fights can trip the filter
+                    default: if attempt >= 1 { set("", failed: true); return }
+                    }
+                    set("")
                 } catch {
-                    if attempt == 0 { ctx = String(ctx.prefix(ctx.count / 2)); continue }     // too long for the model: try with less
-                    item.failed = true
+                    if attempt >= 1 { set("", failed: true); return }
+                    set("")
                 }
             }
-        } else { item.failed = true }
-        #else
-        item.failed = true
+            set("", failed: true)
+            return
+        }
         #endif
-        if index < history.count { history[index] = item }
+        set("", failed: true)
     }
 
     func clear(issueKey: String) {
@@ -129,7 +187,7 @@ extension CompanionData {
         }
         if !characters.isEmpty {
             out.append("Characters in this issue:")
-            for c in characters.prefix(10) {
+            for c in characters.prefix(limit > 7000 ? 18 : 10) {
                 var l = "- " + c.name
                 if let r = c.role, !r.isEmpty { l += " (\(r))" }
                 if let b = c.blurb, !b.isEmpty { l += ": " + TextClean.shorten(b, limit: 260) }
@@ -157,3 +215,37 @@ extension CompanionData {
         return head + "…"
     }
 }
+
+
+#if canImport(FoundationModels)
+/// Lets the model look up a character it doesn't know, from the built-in guide and then Wikipedia.
+@available(iOS 26.0, *)
+struct CharacterLookupTool: Tool {
+    let name = "lookUpCharacter"
+    let description = "Looks up who a comic book character is: real name, first appearance, family, team and a short bio."
+    let publisher: String?
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "The character's name, for example Black Bolt or Quicksilver")
+        var name: String
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        let name = arguments.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var parts: [String] = []
+        if let e = CharacterGlossary.shared.find(name: name) {
+            var l = e.n
+            if let r = e.r, !r.isEmpty { l += ", real name " + r }
+            if let fa = e.fa, !fa.isEmpty { l += ", first appeared in " + fa }
+            if let rel = e.rel, !rel.isEmpty { l += ". Family: " + rel }
+            if let occ = e.occ, !occ.isEmpty { l += ". Occupation: " + occ }
+            parts.append(l + ".")
+        }
+        if let card = await WikipediaProvider.character(name: name, publisher: publisher), let b = card.blurb {
+            parts.append(TextClean.shorten(b, limit: 700))
+        }
+        return parts.isEmpty ? "No information found about \(name)." : parts.joined(separator: " ")
+    }
+}
+#endif

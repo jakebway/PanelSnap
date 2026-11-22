@@ -609,7 +609,7 @@ struct AskPanel: View {
                             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     Group {
-                        if ex.answer.isEmpty && !ex.failed {
+                        if ex.answer.isEmpty && !ex.failed && ask.busy {
                             HStack(spacing: 8) {
                                 ProgressView()
                                 Text(model.readingPages ? "Reading the pages…" : "Thinking…").font(.footnote).foregroundStyle(.secondary)
@@ -631,7 +631,8 @@ struct AskPanel: View {
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: exchanges)
+        .animation(.easeOut(duration: 0.2), value: exchanges.map { $0.id })
+        .task { ask.prewarm(publisher: model.data.publisher) }
     }
 
     private var suggestions: [String] {
@@ -647,8 +648,11 @@ struct AskPanel: View {
         question = ""
         let allow = spoilers
         let key = model.issueKey
+        let publisher = model.data.publisher
         Task {
-            await ask.ask(q, issueKey: key) { await model.askContext(spoilers: allow) }
+            await ask.ask(q, issueKey: key, publisher: publisher) { budget in
+                await model.askContext(spoilers: allow, question: q, budget: budget)
+            }
         }
     }
 }
