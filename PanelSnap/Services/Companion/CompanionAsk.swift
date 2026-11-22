@@ -61,6 +61,9 @@ final class CompanionAsk: ObservableObject {
     Answer in your first sentence, naming names, then add only what helps. Never repeat yourself, no filler, no apologies. \
     If the information still does not say, reply exactly: "I couldn't find that in my sources," and add the closest fact you do have. \
     People who live somewhere are the ones the sources say belong there; people only shown visiting are visitors, not residents. \
+    For a "who lives at / who is in" question, name every resident or member the sources or the page words mention (for example people \
+    greeted as family, rulers, doctors or guards there), group them, and then say who is only visiting. Do not answer with just the \
+    people in the scene. \
     A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
     Do not reveal events the reader has not reached unless spoilers are allowed. At most four sentences unless asked for more. \
     The page words and any attached picture only show who is in the scene and what they say; they do not tell you where \

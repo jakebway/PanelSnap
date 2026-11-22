@@ -32,6 +32,26 @@ enum Knowledge {
     }
 
     /// Searches a wiki and returns the introduction of the best matching page.
+    /// The top few pages for a topic (a place like Attilan is covered by its own page and by its people's pages).
+    static func lookUpMany(host: String, query: String, count: Int, limit: Int) async -> [(title: String, text: String)] {
+        guard let url = HTTP.url("https://\(host)\(apiPath(host))", [
+            ("action", "query"), ("list", "search"), ("srsearch", query), ("srlimit", String(count)), ("format", "json")
+        ]), let root = try? await HTTP.json(url) as? [String: Any],
+              let q = root["query"] as? [String: Any], let hits = q["search"] as? [[String: Any]] else { return [] }
+        let titles = hits.compactMap { $0["title"] as? String }.prefix(count)
+        return await withTaskGroup(of: (Int, String, String)?.self) { group in
+            for (i, t) in titles.enumerated() {
+                group.addTask {
+                    guard let text = await extract(host: host, title: t, limit: limit) else { return nil }
+                    return (i, t, text)
+                }
+            }
+            var out: [(Int, String, String)] = []
+            for await r in group { if let r = r { out.append(r) } }
+            return out.sorted { $0.0 < $1.0 }.map { ($0.1, $0.2) }
+        }
+    }
+
     static func lookUp(host: String, query: String, limit: Int) async -> (title: String, text: String)? {
         guard let url = HTTP.url("https://\(host)\(apiPath(host))", [
             ("action", "query"), ("list", "search"), ("srsearch", query), ("srlimit", "3"), ("format", "json")
@@ -189,13 +209,13 @@ enum Knowledge {
         let ts = terms(query)
         if !ts.isEmpty { parts = parts.filter { p in ts.contains(where: { p.lowercased().contains($0.prefix(6)) }) } }
         let host = fandomHost(publisher)
-        async let fan: (title: String, text: String)? = {
-            guard let h = host else { return nil }
-            return await lookUp(host: h, query: query, limit: 800)
+        async let fan: [(title: String, text: String)] = {
+            guard let h = host else { return [] }
+            return await lookUpMany(host: h, query: query, count: 2, limit: 1200)
         }()
-        async let wiki: (title: String, text: String)? = lookUp(host: "en.wikipedia.org", query: query + " comics", limit: 600)
-        if let f = await fan { parts.append("[\(f.title) – comics wiki] " + f.text) }
-        if let w = await wiki { parts.append("[\(w.title) – Wikipedia] " + w.text) }
+        async let wiki: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query, count: 3, limit: 1100)
+        for f in await fan { parts.append("[\(f.title) – comics wiki] " + f.text) }
+        for w in await wiki { parts.append("[\(w.title) – Wikipedia] " + w.text) }
         return parts.isEmpty ? "Nothing found for \(query)." : parts.joined(separator: "\n")
     }
 
