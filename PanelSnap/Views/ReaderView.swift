@@ -75,6 +75,7 @@ struct ReaderHost: View {
                 pageFirst: settings.showFullPageFirst
             )
             let companion = CompanionModel(entry: entry, identity: pair.1, settings: settings, coverURL: library.coverURL(for: entry))
+            companion.attach(source: pair.0, page: model.pageIndex)
             session = ReaderSession(model: model, companion: companion)
         case .failure(let error):
             failure = error.localizedDescription
@@ -151,6 +152,7 @@ struct ReaderView: View {
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
+            companion.stopScanning()
             saveProgress()
             model.finish()
         }
@@ -160,6 +162,7 @@ struct ReaderView: View {
         }
         .onChange(of: model.pageIndex) { _, newValue in
             if !scrubbing { scrub = Double(newValue) }
+            companion.pageChanged(newValue)
             saveProgress()
         }
         .onChange(of: model.pageCount) { _, _ in syncSlider() }

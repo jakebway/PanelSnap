@@ -10,13 +10,18 @@ struct CompanionView: View {
     @State private var revealed = false
     @State private var selected: CharacterCard?
     @State private var showFix = false
+    @StateObject private var ask = CompanionAsk()
+    @State private var question = ""
+    @State private var spoilers = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     header
+                    issueBanner
                     statusRow
+                    if CompanionAsk.isSupported { askSection }
 
                     if let t = model.data.issueSummary {
                         section("About this issue") { textBlock(t) }
@@ -134,6 +139,82 @@ struct CompanionView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+    }
+
+    /// Shown for a collected edition: which issue Companion is following.
+    @ViewBuilder
+    private var issueBanner: some View {
+        if let mark = model.activeMark {
+            Label("Following your place: you're in issue #\(mark.issue)", systemImage: "bookmark.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityIdentifier("companion-issue-banner")
+        } else if model.scanning {
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("Finding the issues in this collection…").font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: Ask (on-device model)
+
+    private var askSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Ask about this comic").font(.headline)
+            HStack(spacing: 8) {
+                TextField("Who is…? What's going on?", text: $question)
+                    .submitLabel(.send)
+                    .onSubmit { send(question) }
+                Button { send(question) } label: {
+                    Image(systemName: "arrow.up.circle.fill").font(.title2).foregroundStyle(Theme.accent)
+                }
+                .disabled(ask.busy || question.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(10)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggestions, id: \.self) { s in
+                        Button { question = s; send(s) } label: {
+                            Text(s).font(.footnote.weight(.semibold))
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(Theme.card2, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            Toggle("Allow spoilers", isOn: $spoilers).font(.footnote)
+            if ask.busy {
+                HStack(spacing: 8) { ProgressView(); Text("Thinking…").font(.footnote).foregroundStyle(.secondary) }
+            } else if ask.failed {
+                Text("I couldn't answer that just now. Try asking it another way.").font(.footnote).foregroundStyle(.secondary)
+            } else if !ask.answer.isEmpty {
+                Text(ask.answer)
+                    .font(.subheadline)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Text("Answered on your phone from the information on this page. It can still be wrong.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var suggestions: [String] {
+        var list = ["Who are the main characters?", "What's going on so far?"]
+        if let first = model.data.characters.first?.name { list.insert("Who is \(first)?", at: 0) }
+        return list
+    }
+
+    private func send(_ text: String) {
+        let context = model.data.llmContext(spoilers: spoilers, mark: model.activeMark,
+                                            page: model.currentPage, pageCount: model.pageCount)
+        Task { await ask.ask(text, context: context) }
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

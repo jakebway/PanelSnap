@@ -114,12 +114,14 @@ struct CompanionData: Codable, Hashable {
 }
 
 enum CompanionCache {
-    static func fileURL(for id: UUID) -> URL {
-        return Paths.companionCache.appendingPathComponent(id.uuidString + "-v2.json")
+    /// `variant` is empty for the whole file, or names one issue inside a collected edition.
+    static func fileURL(for id: UUID, variant: String = "") -> URL {
+        let safe = variant.isEmpty ? "" : "-" + variant.replacingOccurrences(of: "[^A-Za-z0-9]+", with: "_", options: .regularExpression)
+        return Paths.companionCache.appendingPathComponent(id.uuidString + safe + "-v2.json")
     }
 
-    static func read(_ id: UUID, maxAgeDays: Double) -> CompanionData? {
-        guard let data = try? Data(contentsOf: fileURL(for: id)) else { return nil }
+    static func read(_ id: UUID, variant: String = "", maxAgeDays: Double) -> CompanionData? {
+        guard let data = try? Data(contentsOf: fileURL(for: id, variant: variant)) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let value = try? decoder.decode(CompanionData.self, from: data) else { return nil }
@@ -127,11 +129,11 @@ enum CompanionCache {
         return value
     }
 
-    static func write(_ id: UUID, _ value: CompanionData) {
+    static func write(_ id: UUID, variant: String = "", _ value: CompanionData) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(value) {
-            try? data.write(to: fileURL(for: id), options: .atomic)
+            try? data.write(to: fileURL(for: id, variant: variant), options: .atomic)
         }
     }
 }

@@ -23,9 +23,23 @@ final class CompanionModel: ObservableObject {
     private var started = false
     private var running = false
 
+    // Collected editions (omnibus, trade, complete collection): which issue the reader is in, found from the page text.
+    @Published private(set) var issueMarks: [IssueMark] = []
+    @Published private(set) var activeMark: IssueMark?
+    @Published private(set) var scanning = false
+    private(set) var currentPage = 0
+    private(set) var pageCount = 0
+    private let baseIdentity: ComicIdentity
+    private var wholeData: CompanionData?
+    private var variant = ""                  // which cache file the data on screen belongs to ("" = the whole file)
+    private var generation = 0                // bumped whenever a new lookup starts, so an older one stops writing
+    private var pageTask: Task<Void, Never>?
+    private var scanTask: Task<Void, Never>?
+
     init(entry: ComicEntry, identity: ComicIdentity, settings: AppSettings, coverURL: URL) {
         self.entry = entry
         self.identity = identity
+        self.baseIdentity = identity
         self.settings = settings
         self.coverURL = coverURL
         let base = CompanionModel.baseline(identity)
@@ -66,6 +80,102 @@ final class CompanionModel: ObservableObject {
         }
         d.sources = ["Comic file"]
         return d
+    }
+
+    // MARK: Following the reader through a collected edition
+
+    /// Called once when the comic opens. Reads the page text in the background to find where each issue starts.
+    func attach(source: ComicSource, page: Int) {
+        currentPage = page
+        pageCount = source.pageCount
+        let id = entry.id
+        if let known = IssueScanner.read(id) {
+            if !known.isEmpty { applyMarks(known) }
+            return
+        }
+        guard IssueScanner.looksLikeCollection(baseIdentity, pageCount: source.pageCount) else { return }
+        scanning = true
+        scanTask = Task.detached(priority: .utility) { [weak self] in
+            let marks = await IssueScanner.scan(source: source) { partial in
+                Task { @MainActor in self?.applyMarks(partial) }
+            }
+            if Task.isCancelled { return }
+            IssueScanner.write(id, marks)
+            await MainActor.run {
+                self?.scanning = false
+                self?.applyMarks(marks)
+            }
+        }
+    }
+
+    func stopScanning() {
+        scanTask?.cancel()
+        pageTask?.cancel()
+    }
+
+    private func applyMarks(_ marks: [IssueMark]) {
+        issueMarks = marks
+        pageChanged(currentPage)
+    }
+
+    /// Called as the reader turns pages. Switches Companion to the issue the page belongs to.
+    func pageChanged(_ page: Int) {
+        currentPage = page
+        guard !issueMarks.isEmpty else { return }
+        let mark = issueMarks.last(where: { $0.page <= page })
+        if mark == activeMark { return }
+        pageTask?.cancel()
+        pageTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 700_000_000)      // wait until the reader settles on a page
+            if Task.isCancelled { return }
+            self?.activate(mark)
+        }
+    }
+
+    private func activate(_ mark: IssueMark?) {
+        if activeMark == nil && wholeData == nil { wholeData = data }
+        activeMark = mark
+        generation += 1
+        guard let mark = mark else {                       // front matter, before the first issue
+            variant = ""
+            identity = baseIdentity
+            if let whole = wholeData { data = whole }
+            phase = .done
+            return
+        }
+        var id = baseIdentity
+        let name = (mark.series?.isEmpty == false ? mark.series : nil) ?? IssueScanner.baseSeries(baseIdentity.series ?? "")
+        var pretty = name == name.uppercased() ? name.capitalized : name       // "THE AMAZING SPIDER-MAN" -> "The Amazing Spider-Man"
+        if pretty.lowercased().hasPrefix("the ") { pretty = String(pretty.dropFirst(4)) }
+        id.series = pretty
+        id.issue = mark.issue
+        id.title = nil
+        id.summary = nil
+        id.characters = []
+        id.teams = []
+        id.locations = []
+        id.storyArc = nil
+        id.volume = nil
+        identity = id
+        variant = "issue-\(id.series ?? "")-\(mark.issue)"
+        if let cached = CompanionCache.read(entry.id, variant: variant, maxAgeDays: 21) {
+            data = cached
+            applyGlossary()
+            phase = .done
+            updateTip()
+            return
+        }
+        var fresh = CompanionModel.baseline(id)
+        fresh.series = id.series
+        fresh.issue = mark.issue
+        data = fresh
+        applyGlossary()
+        if settings.onlineLookup {
+            phase = .loading
+            Task { await runLookups() }
+        } else {
+            phase = .done
+        }
     }
 
     // MARK: Loading
@@ -142,9 +252,11 @@ final class CompanionModel: ObservableObject {
     }
 
     private func runLookups() async {
-        if running { return }
+        generation += 1
+        let gen = generation
+        let cacheVariant = variant
         running = true
-        defer { running = false }
+        defer { if gen == generation { running = false } }
 
         let id = identity
         var d = data
@@ -158,6 +270,7 @@ final class CompanionModel: ObservableObject {
 
         // 1. Grand Comics Database: credits, cast and sometimes a synopsis.
         if let gcd = await GCDProvider.lookup(series: seriesName, issue: id.issue, year: id.year, publisher: d.publisher ?? id.publisher) {
+            guard gen == generation else { return }
             d.fill(from: gcd)
             data = d
         }
@@ -165,6 +278,7 @@ final class CompanionModel: ObservableObject {
         // 2. Marvel / DC fan wikis: issue synopsis, creators and who appears.
         if let number = id.issue ?? d.issue, d.issueSynopsis == nil || d.creators.isEmpty || d.characters.isEmpty {
             if let wiki = await FandomProvider.lookup(publisher: d.publisher ?? id.publisher, series: d.series ?? seriesName, volume: id.volume, issue: number) {
+                guard gen == generation else { return }
                 d.fill(from: wiki)
                 data = d
             }
@@ -173,6 +287,7 @@ final class CompanionModel: ObservableObject {
         // 3. Wikipedia series background.
         if d.seriesSummary == nil {
             if let wp = await WikipediaProvider.series(name: d.series ?? seriesName, publisher: d.publisher) {
+                guard gen == generation else { return }
                 d.fill(from: wp)
                 data = d
             }
@@ -181,6 +296,7 @@ final class CompanionModel: ObservableObject {
         // 4. Open Library, for graphic novels and collected editions.
         if d.seriesSummary == nil {
             if let ol = await OpenLibraryProvider.lookup(series: d.series ?? seriesName, publisher: d.publisher) {
+                guard gen == generation else { return }
                 d.fill(from: ol)
                 data = d
             }
@@ -189,11 +305,13 @@ final class CompanionModel: ObservableObject {
         // 5. AniList for manga (or as a last resort with a strict name match).
         if id.isManga || d.seriesSummary == nil {
             if let al = await AniListProvider.lookup(series: seriesName, strict: !id.isManga) {
+                guard gen == generation else { return }
                 d.fill(from: al)
                 data = d
             }
         }
 
+        guard gen == generation else { return }
         // 6. Built-in guide again, now that there's more text to read names from.
         applyGlossary()
         d = data
@@ -201,18 +319,19 @@ final class CompanionModel: ObservableObject {
         data = d
         phase = .done
         updateTip()
-        CompanionCache.write(entry.id, d)
+        CompanionCache.write(entry.id, variant: cacheVariant, d)
 
         // 7. Character blurbs (quietly, in the background).
-        await enrichCharacters()
+        await enrichCharacters(gen)
+        guard gen == generation else { return }
         var finalData = data
         finalData.fetchedAt = Date()
-        CompanionCache.write(entry.id, finalData)
+        CompanionCache.write(entry.id, variant: cacheVariant, finalData)
     }
 
-    private func enrichCharacters() async {
+    private func enrichCharacters(_ gen: Int) async {
         let publisher = data.publisher
-        let names = data.characters.prefix(8).filter { $0.blurb == nil }.map { $0.name }
+        let names = data.characters.prefix(12).filter { $0.blurb == nil }.map { $0.name }
         if names.isEmpty { return }
         await withTaskGroup(of: CharacterCard?.self) { group in
             for name in names {
@@ -221,7 +340,7 @@ final class CompanionModel: ObservableObject {
                 }
             }
             for await card in group {
-                guard let card = card else { continue }
+                guard let card = card, gen == generation else { continue }
                 if let i = data.characters.firstIndex(where: { CompanionData.same($0.name, card.name) }) {
                     data.characters[i].blurb = card.blurb
                     if data.characters[i].imageURL == nil { data.characters[i].imageURL = card.imageURL }
