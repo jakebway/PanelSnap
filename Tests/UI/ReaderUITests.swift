@@ -150,20 +150,19 @@ final class ReaderUITests: XCTestCase {
         title.tap(); settle(3.0)
         shot("40-omnibus-open")
 
+        func showControls() {
+            let b = app.buttons["companion-button"]
+            if b.waitForExistence(timeout: 1) { return }
+            at(0.5, 0.5).tap()
+            _ = b.waitForExistence(timeout: 4)
+        }
         func dragSlider(to position: Double) {
             showControls()
-            let slider = app.sliders.firstMatch
-            // Dragging the knob (rather than setting a value) is what makes the reader jump to that page.
-            let from = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
-            let to = slider.coordinate(withNormalizedOffset: CGVector(dx: position, dy: 0.5))
+            // The page bar is a custom control: its knob starts at the left end of the bar near the bottom.
+            let from = at(0.19, 0.93)
+            let to = at(0.16 + position * 0.68, 0.93)
             from.press(forDuration: 0.3, thenDragTo: to)
             settle(2.0)
-        }
-        func showControls() {
-            let s = app.sliders.firstMatch
-            if s.waitForExistence(timeout: 1) { return }
-            at(0.5, 0.5).tap()
-            _ = s.waitForExistence(timeout: 4)
         }
         func openCompanion() -> String {
             showControls()                                          // bring the controls up
@@ -183,10 +182,6 @@ final class ReaderUITests: XCTestCase {
         }
 
         // The file opens on the cover, which comes before issue #1; move into the first issue.
-        showControls()
-        let early = app.sliders.firstMatch
-        XCTAssertTrue(early.waitForExistence(timeout: 4), "the page slider should be there")
-        _ = early
         dragSlider(to: 0.12)
         let first = openCompanion()
         consoleLog("banner at the start: \(first)")
@@ -209,10 +204,6 @@ final class ReaderUITests: XCTestCase {
         closeCompanion()
 
         // Jump to a page inside issue #3 with the slider, then look again.
-        showControls()
-        let slider = app.sliders.firstMatch
-        XCTAssertTrue(slider.waitForExistence(timeout: 4), "the page slider should be there")
-        _ = slider
         dragSlider(to: 0.85)
         shot("43-jumped")
         let later = openCompanion()
