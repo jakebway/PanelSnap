@@ -60,6 +60,8 @@ final class CompanionAsk: ObservableObject {
     with the page words (names in balloons and captions show who is present and who is talking to whom). \
     Answer in your first sentence, naming names, then add only what helps. Never repeat yourself, no filler, no apologies. \
     If the information still does not say, reply exactly: "I couldn't find that in my sources," and add the closest fact you do have. \
+    People who live somewhere are the ones the sources say belong there; people only shown visiting are visitors, not residents. \
+    A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
     Do not reveal events the reader has not reached unless spoilers are allowed. At most four sentences unless asked for more. \
     A picture of the page on screen may be attached; use it to see who is in the panels.
     """

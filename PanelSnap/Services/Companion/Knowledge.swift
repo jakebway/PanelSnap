@@ -93,7 +93,8 @@ enum Knowledge {
 
     private static let stop: Set<String> = ["what", "who", "whom", "where", "when", "which", "that", "this", "with", "they", "their", "there",
                                             "have", "does", "about", "from", "were", "into", "issue", "page", "comic", "going", "happening",
-                                            "wanna", "want", "live", "lived", "living", "lives", "visit", "visiting", "visits", "characters", "character"]
+                                            "wanna", "want", "live", "lived", "living", "lives", "visit", "visiting", "visits", "characters", "character",
+                                            "all", "any", "the", "and", "are", "was", "how", "who", "his", "her", "its", "did", "can", "you", "tell"]
 
     static func terms(_ q: String) -> [String] {
         return q.lowercased().components(separatedBy: CharacterSet.letters.inverted).filter { $0.count > 2 && !stop.contains($0) }
@@ -118,6 +119,62 @@ enum Knowledge {
             out.append(piece); used += piece.count
         }
         return out
+    }
+
+    // MARK: Spelling
+
+    private static func distance(_ a: [Character], _ b: [Character]) -> Int {
+        if a.isEmpty { return b.count }
+        if b.isEmpty { return a.count }
+        var prev = Array(0...b.count)
+        for i in 1...a.count {
+            var cur = [i] + [Int](repeating: 0, count: b.count)
+            for j in 1...b.count {
+                cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1))
+            }
+            prev = cur
+        }
+        return prev[b.count]
+    }
+
+    /// Fixes misspelled names in a question by matching its words against the names in this comic's fact sheets
+    /// ("Atillian" -> "Attilan"). Returns the corrected question and the corrections made.
+    static func canonical(_ question: String, vocabulary: [String]) -> (text: String, fixes: [(String, String)]) {
+        var words: Set<String> = []
+        for v in vocabulary {
+            for w in v.components(separatedBy: CharacterSet.letters.inverted) where w.count >= 4 { words.insert(w) }
+        }
+        var out = question
+        var fixes: [(String, String)] = []
+        for raw in question.components(separatedBy: CharacterSet.letters.inverted) where raw.count >= 5 {
+            let lower = raw.lowercased()
+            if words.contains(where: { $0.lowercased() == lower }) { continue }
+            var best: (String, Int)?
+            for w in words {
+                let wl = w.lowercased()
+                if abs(wl.count - lower.count) > 2 { continue }
+                let d = distance(Array(lower), Array(wl))
+                if d <= (lower.count >= 7 ? 2 : 1), best == nil || d < best!.1 { best = (w, d) }
+            }
+            if let b = best {
+                out = out.replacingOccurrences(of: raw, with: b.0)
+                fixes.append((raw, b.0))
+            }
+        }
+        return (out, fixes)
+    }
+
+    /// The live search, given at most a few seconds so a slow connection never stalls the answer.
+    static func liveSearch(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 6) async -> String {
+        let key = terms(query).joined(separator: " ")
+        guard !key.isEmpty else { return "" }
+        return await withTaskGroup(of: String?.self) { group in
+            group.addTask { await search(key, publisher: publisher, notes: notes) }
+            group.addTask { try? await Task.sleep(nanoseconds: seconds * 1_000_000_000); return nil }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first ?? ""
+        }
     }
 
     /// What the model's search tool runs: the saved notes first, then the comics wiki and Wikipedia, live.
