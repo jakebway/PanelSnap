@@ -212,7 +212,7 @@ final class CompanionModel: ObservableObject {
                 var out: [Int: String] = [:]
                 for p in want {
                     autoreleasepool {
-                        if let img = source.pageImage(at: p, maxPixel: 1800) { out[p] = IssueScanner.readDialogue(img) }
+                        if let img = source.pageImage(at: p, maxPixel: 1500) { out[p] = IssueScanner.readDialogue(img) }
                     }
                 }
                 return out
@@ -252,7 +252,7 @@ final class CompanionModel: ObservableObject {
     func currentPageImage() async -> CGImage? {
         guard let source = scanSource, currentPage >= 0 else { return nil }
         let p = currentPage
-        return await Task.detached(priority: .userInitiated) { source.pageImage(at: p, maxPixel: 1280) }.value
+        return await Task.detached(priority: .userInitiated) { source.pageImage(at: p, maxPixel: 1024) }.value
     }
 
     /// The last few pages always, then the pages that share the most words with the question, then the rest newest first.

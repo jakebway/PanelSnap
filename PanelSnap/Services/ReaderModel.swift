@@ -257,20 +257,33 @@ final class ReaderModel: ObservableObject {
         }
     }
 
-    private let thumbCache = NSCache<NSNumber, UIImage>()
+    private let thumbCache: NSCache<NSNumber, UIImage> = { let c = NSCache<NSNumber, UIImage>(); c.countLimit = 40; return c }()
 
     /// A small picture of any page, for the preview over the page bar. Cached, and made off the main thread.
     func thumbnail(page: Int) async -> UIImage? {
         let key = NSNumber(value: page)
         if let hit = thumbCache.object(forKey: key) { return hit }
+        latestThumb.value = page
         let src = source
-        let img: UIImage? = await Task.detached(priority: .userInitiated) {
-            guard let cg = src.pageImage(at: page, maxPixel: 420) else { return nil }
-            return UIImage(cgImage: cg)
-        }.value
+        let latest = latestThumb
+        // One at a time on a single queue; anything you have already scrubbed past is skipped, so fast scrubbing
+        // can never pile up page decodes in memory.
+        let img: UIImage? = await withCheckedContinuation { cont in
+            thumbQueue.async {
+                autoreleasepool {
+                    if latest.value != page { cont.resume(returning: nil); return }
+                    guard let cg = src.pageImage(at: page, maxPixel: 360) else { cont.resume(returning: nil); return }
+                    cont.resume(returning: UIImage(cgImage: cg))
+                }
+            }
+        }
         if let img = img { thumbCache.setObject(img, forKey: key) }
         return img
     }
+
+    private final class Latest: @unchecked Sendable { var value = -1 }
+    private let latestThumb = Latest()
+    private let thumbQueue = DispatchQueue(label: "panelsnap.thumbs", qos: .userInitiated)
 
     func jump(toPage page: Int) {
         let p = max(0, min(page, pageCount - 1))

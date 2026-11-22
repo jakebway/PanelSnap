@@ -115,7 +115,7 @@ final class CompanionAsk: ObservableObject {
         }
         #if canImport(FoundationModels)
         // 1. Apple's larger server model (Private Cloud Compute): 32K of reading and real reasoning, still private.
-        if #available(iOS 27.0, *), !cloudFailed, ModernAsk.cloudAvailable {
+        if #available(iOS 27.0, *), !cloudFailed, UserDefaults.standard.bool(forKey: "companion.tryCloudModel"), ModernAsk.cloudAvailable {
             let ctx = await makeContext(60_000)
             do {
                 let text = try await ModernAsk.cloud(prompt: makePrompt(ctx), instructions: Self.instructions,

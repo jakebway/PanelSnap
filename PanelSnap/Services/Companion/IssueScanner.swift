@@ -216,30 +216,42 @@ enum IssueScanner {
 
     // MARK: Reading text
 
+    /// All text recognition goes through this one queue, so the issue scan, the page reading for Ask and the reader never
+    /// run several heavy Vision requests at once (that used to pile up memory).
+    private static let ocrQueue = DispatchQueue(label: "panelsnap.ocr", qos: .utility)
+
     static func recognize(_ image: CGImage, fast: Bool, correct: Bool = false) -> [Line] {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = fast ? .fast : .accurate
-        request.usesLanguageCorrection = correct
-        let handler = VNImageRequestHandler(cgImage: image, options: [:])
-        try? handler.perform([request])
-        return (request.results ?? []).compactMap { obs in
-            guard let top = obs.topCandidates(1).first else { return nil }
-            return Line(text: top.string, height: obs.boundingBox.height)
+        return ocrQueue.sync {
+            autoreleasepool {
+                let request = VNRecognizeTextRequest()
+                request.recognitionLevel = fast ? .fast : .accurate
+                request.usesLanguageCorrection = correct
+                let handler = VNImageRequestHandler(cgImage: image, options: [:])
+                try? handler.perform([request])
+                return (request.results ?? []).compactMap { obs in
+                    guard let top = obs.topCandidates(1).first else { return nil }
+                    return Line(text: top.string, height: obs.boundingBox.height)
+                }
+            }
         }
     }
 
     /// The lettering on a page (balloons, captions, sound effects) in rough reading order, for the Ask feature.
     static func readDialogue(_ image: CGImage) -> String {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
-        try? VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
-        let obs = (request.results ?? []).sorted {
-            let a = ($0.boundingBox.midY * 12).rounded(), b = ($1.boundingBox.midY * 12).rounded()
-            return a != b ? a > b : $0.boundingBox.minX < $1.boundingBox.minX
+        return ocrQueue.sync {
+            autoreleasepool {
+                let request = VNRecognizeTextRequest()
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
+                try? VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+                let obs = (request.results ?? []).sorted {
+                    let a = ($0.boundingBox.midY * 12).rounded(), b = ($1.boundingBox.midY * 12).rounded()
+                    return a != b ? a > b : $0.boundingBox.minX < $1.boundingBox.minX
+                }
+                let lines = obs.compactMap { $0.topCandidates(1).first?.string }.filter { $0.filter({ $0.isLetter }).count >= 2 }
+                return lines.joined(separator: " ").replacingOccurrences(of: "- ", with: "")
+            }
         }
-        let lines = obs.compactMap { $0.topCandidates(1).first?.string }.filter { $0.filter({ $0.isLetter }).count >= 2 }
-        return lines.joined(separator: " ").replacingOccurrences(of: "- ", with: "")
     }
 
     // MARK: Scanning a whole file
