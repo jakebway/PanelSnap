@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -11,6 +12,7 @@ struct AskExchange: Codable, Identifiable, Hashable {
     var issueKey: String           // which issue of a collection it was asked in ("" = the whole book)
     var failed = false
     var date = Date()
+    var engine: String? = nil      // "cloud" = Apple's Private Cloud Compute model, "page" = on-device and saw the page
 }
 
 /// Answers questions about the comic with the language model built into the phone (Apple Intelligence). Nothing is sent
@@ -56,6 +58,7 @@ final class CompanionAsk: ObservableObject {
     and captions show who is present and who is talking to whom), the cast list and the plot notes. You may add well-known \
     facts about famous comic characters and places when they fit the information, for example that the Inhumans live on the Moon. \
     If a character is named but not explained, use the lookUpCharacter tool. \
+    A picture of the page on screen may be attached: look at it to see who is in the panels and what they are doing. \
     Never repeat yourself, never restate the question, no filler and no apologies. Only if the information really does not \
     contain the answer, say so in one short sentence and give the best clue you have. Never reveal events the reader has not \
     reached unless the information marks them as allowed spoilers. At most four sentences unless the reader asks for more.
@@ -89,7 +92,10 @@ final class CompanionAsk: ObservableObject {
 
     /// Asks one question. The question shows straight away; `makeContext` gathers what the model should read
     /// (given the space available) and the answer appears as it is written.
-    func ask(_ question: String, issueKey: String, publisher: String?, context makeContext: (Int) async -> String) async {
+    private var cloudFailed = false        // Private Cloud Compute refused once this session: don't keep trying
+
+    func ask(_ question: String, issueKey: String, publisher: String?, context makeContext: (Int) async -> String,
+             pageImage: () async -> CGImage?) async {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !busy, !q.isEmpty else { return }
         busy = true
@@ -98,24 +104,49 @@ final class CompanionAsk: ObservableObject {
             .map { "Reader: \($0.question)\nYou: \(TextClean.shorten($0.answer, limit: 400))" }.joined(separator: "\n")
         history.append(AskExchange(question: q, answer: "", issueKey: issueKey))
         let index = history.count - 1
-        func set(_ text: String, failed: Bool = false) {
+        func set(_ text: String, failed: Bool = false, engine: String? = nil) {
             guard index < history.count else { return }
             history[index].answer = text
             history[index].failed = failed
+            if engine != nil { history[index].engine = engine }
+        }
+        func makePrompt(_ ctx: String) -> String {
+            return "COMIC INFORMATION:\n\(ctx)\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
         }
         #if canImport(FoundationModels)
+        // 1. Apple's larger server model (Private Cloud Compute): 32K of reading and real reasoning, still private.
+        if #available(iOS 27.0, *), !cloudFailed, ModernAsk.cloudAvailable {
+            let ctx = await makeContext(60_000)
+            do {
+                let text = try await ModernAsk.cloud(prompt: makePrompt(ctx), instructions: Self.instructions,
+                                                     tools: [CharacterLookupTool(publisher: publisher)])
+                set(Self.tidy(text), engine: "cloud")
+                return
+            } catch {
+                cloudFailed = true            // offline, out of today's allowance or not allowed: use the phone's model
+                set("")
+            }
+        }
+        // 2. The model on the phone, looking at the page on screen as well (iOS 27).
+        var page: CGImage? = nil
+        if #available(iOS 27.0, *) { page = await pageImage() }
         if #available(iOS 26.0, *) {
-            var budget = await Self.contextBudget() - earlier.count - q.count
+            var budget = await Self.contextBudget() - earlier.count - q.count - (page != nil ? 2500 : 0)
             var permissive = false
             for attempt in 0..<3 {
                 let ctx = await makeContext(budget)
-                let prompt = "COMIC INFORMATION:\n\(ctx)\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
+                let prompt = makePrompt(ctx)
                 let session: LanguageModelSession
                 if attempt == 0, let w = warm as? LanguageModelSession { session = w; warm = nil }
                 else { session = Self.makeSession(publisher: publisher, permissive: permissive) }
                 do {
                     let options = GenerationOptions(temperature: 0.3, maximumResponseTokens: 320)
                     var latest = ""
+                    if #available(iOS 27.0, *), let page = page, attempt == 0 {
+                        latest = try await ModernAsk.withPage(session: session, prompt: prompt, page: page, options: options) { set($0) }
+                        set(Self.tidy(latest), engine: "page")
+                        return
+                    }
                     for try await snap in session.streamResponse(to: prompt, options: options) {
                         latest = snap.content
                         set(latest)
@@ -246,6 +277,39 @@ struct CharacterLookupTool: Tool {
             parts.append(TextClean.shorten(b, limit: 700))
         }
         return parts.isEmpty ? "No information found about \(name)." : parts.joined(separator: " ")
+    }
+}
+#endif
+
+
+#if canImport(FoundationModels)
+/// The iOS 27 additions: Apple's server model and pictures in prompts.
+@available(iOS 27.0, *)
+@MainActor
+enum ModernAsk {
+    static var cloudAvailable: Bool {
+        if case .available = PrivateCloudComputeLanguageModel().availability { return true }
+        return false
+    }
+
+    static func cloud(prompt: String, instructions: String, tools: [any Tool]) async throws -> String {
+        let session = LanguageModelSession(model: PrivateCloudComputeLanguageModel(), tools: tools, instructions: Instructions(instructions))
+        let response = try await session.respond(to: prompt, contextOptions: ContextOptions(reasoningLevel: .light))
+        return response.content
+    }
+
+    static func withPage(session: LanguageModelSession, prompt: String, page: CGImage, options: GenerationOptions,
+                         update: (String) -> Void) async throws -> String {
+        var latest = ""
+        let stream = session.streamResponse(options: options) {
+            prompt
+            Attachment(page).label("page on screen")
+        }
+        for try await snap in stream {
+            latest = snap.content
+            update(latest)
+        }
+        return latest
     }
 }
 #endif

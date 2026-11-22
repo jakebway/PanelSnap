@@ -617,7 +617,14 @@ struct AskPanel: View {
                         } else if ex.failed {
                             Text("I couldn't answer that just now. Try asking it another way.").font(.footnote).foregroundStyle(.secondary)
                         } else {
-                            Text(ex.answer).font(.subheadline).textSelection(.enabled)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(ex.answer).font(.subheadline).textSelection(.enabled)
+                                if let e = ex.engine {
+                                    Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
+                                          systemImage: e == "cloud" ? "icloud" : "eye")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
                     .padding(12)
@@ -650,9 +657,9 @@ struct AskPanel: View {
         let key = model.issueKey
         let publisher = model.data.publisher
         Task {
-            await ask.ask(q, issueKey: key, publisher: publisher) { budget in
+            await ask.ask(q, issueKey: key, publisher: publisher, context: { budget in
                 await model.askContext(spoilers: allow, question: q, budget: budget)
-            }
+            }, pageImage: { await model.currentPageImage() })
         }
     }
 }

@@ -244,6 +244,13 @@ final class CompanionModel: ObservableObject {
         return ctx
     }
 
+    /// The page on screen, as a picture the on-device model can look at.
+    func currentPageImage() async -> CGImage? {
+        guard let source = scanSource, currentPage >= 0 else { return nil }
+        let p = currentPage
+        return await Task.detached(priority: .userInitiated) { source.pageImage(at: p, maxPixel: 1280) }.value
+    }
+
     /// The last few pages always, then the pages that share the most words with the question, then the rest newest first.
     private func choosePages(question: String, budget: Int) -> [String] {
         guard budget > 200, currentPage >= 0 else { return [] }
