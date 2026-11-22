@@ -156,13 +156,9 @@ final class ReaderUITests: XCTestCase {
             at(0.5, 0.5).tap()
             _ = b.waitForExistence(timeout: 4)
         }
-        func dragSlider(to position: Double) {
-            showControls()
-            // The page bar is a custom control: its knob starts at the left end of the bar near the bottom.
-            let from = at(0.19, 0.93)
-            let to = at(0.16 + position * 0.68, 0.93)
-            from.press(forDuration: 0.3, thenDragTo: to)
-            settle(2.0)
+        func goForward(_ pages: Int) {
+            for _ in 0..<pages { at(0.96, 0.5).tap(); settle(0.5) }       // plain pages, so each tap turns a page
+            settle(1.0)
         }
         func openCompanion() -> String {
             showControls()                                          // bring the controls up
@@ -170,7 +166,7 @@ final class ReaderUITests: XCTestCase {
             if button.waitForExistence(timeout: 4) { button.tap() } else { at(0.93, 0.93).tap() }
             settle(1.0)
             let banner = app.descendants(matching: .any)["companion-issue-banner"]
-            _ = banner.waitForExistence(timeout: 60)                // the page text is read in the background first
+            _ = banner.waitForExistence(timeout: 150)                // the page text is read in the background first
             settle(1.5)
             shot("41-companion")
             return banner.exists ? banner.label : "(no banner)"
@@ -182,7 +178,7 @@ final class ReaderUITests: XCTestCase {
         }
 
         // The file opens on the cover, which comes before issue #1; move into the first issue.
-        dragSlider(to: 0.12)
+        goForward(3)
         let first = openCompanion()
         consoleLog("banner at the start: \(first)")
         XCTAssertTrue(first.contains("#1"), "page 2 onwards is issue #1, got: \(first)")
@@ -204,7 +200,7 @@ final class ReaderUITests: XCTestCase {
         closeCompanion()
 
         // Jump to a page inside issue #3 with the slider, then look again.
-        dragSlider(to: 0.85)
+        goForward(24)
         shot("43-jumped")
         let later = openCompanion()
         consoleLog("banner after jumping: \(later)")

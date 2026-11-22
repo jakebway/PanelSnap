@@ -34,13 +34,17 @@ def issue_page(n, writer, artist):
     centered(d, 760, "EDITOR: STAN LEE", font(52), "black")
     return im
 
-interior = Image.open(page_src).convert("RGB").resize((W, H))
+def plain(n):
+    im = Image.new("RGB", (W, H), (200, 220, 235)); d = ImageDraw.Draw(im)
+    centered(d, 850, "page %d" % n, font(60), (90, 90, 120))
+    return im
 xml = """<?xml version="1.0"?>
 <ComicInfo><Series>Amazing Spider-Man Omnibus</Series><Volume>1</Volume><Publisher>Marvel</Publisher><Year>2007</Year></ComicInfo>"""
 pages = [cover()]
 for n in (1, 2, 3):
     pages.append(issue_page(n, "STAN LEE", "STEVE DITKO"))
-    pages += [interior] * 11
+    for _ in range(11):
+        pages.append(plain(len(pages) + 1))
 with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as z:
     z.writestr("ComicInfo.xml", xml)
     for i, im in enumerate(pages):

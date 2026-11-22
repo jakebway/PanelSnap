@@ -134,7 +134,7 @@ enum IssueScanner {
         for p in 0..<source.pageCount {
             if Task.isCancelled { break }
             autoreleasepool {
-                if let image = source.pageImage(at: p, maxPixel: 1500) {
+                if let image = source.pageImage(at: p, maxPixel: 1100) {
                     let lines = recognize(image)
                     let c = candidate(page: p, lines: lines)
                     if let c = c { found.append(c) }
