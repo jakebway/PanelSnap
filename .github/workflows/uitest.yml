@@ -27,6 +27,12 @@ jobs:
         run: |
           brew install xcodegen
           python3 -m pip install --break-system-packages pillow 2>&1 | tail -1
+      - name: Reuse the previous build (much faster than starting from scratch)
+        uses: actions/cache@v4
+        with:
+          path: build-ui
+          key: ui-build-${{ github.sha }}
+          restore-keys: ui-build-
       - name: Generate project
         run: xcodegen generate --spec project.uitest.yml
       - name: Pick a simulator
