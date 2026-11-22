@@ -269,20 +269,22 @@ final class CompanionModel: ObservableObject {
         let allNotes = notes
         async let live = Knowledge.liveSearch(fixedQuestion, publisher: publisher, notes: allNotes)
         let infoBudget = budget * 3 / 10
-        var ctx = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: infoBudget)
+        let info = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: infoBudget)
         // Fact sheets about the people and places in this issue. The plot sheet follows the spoiler setting.
         let usable = notes.filter { spoilers || !$0.title.hasPrefix("Plot") }
         let facts = Knowledge.relevant(usable, to: fixedQuestion, budget: budget / 4)
-        if !facts.isEmpty { ctx += "\n\nFACT SHEETS (from the comics wiki and Wikipedia):\n" + facts.joined(separator: "\n") }
         let found = await live
-        if !found.isEmpty { ctx += "\n\nLIVE SEARCH RESULTS for \"\(fixedQuestion)\":\n" + TextClean.shorten(found, limit: budget / 4) }
+        // The sources come first: they are what answers are made from.
+        var ctx = ""
+        if !found.isEmpty { ctx += "SOURCES - live search for \"\(fixedQuestion)\":\n" + TextClean.shorten(found, limit: budget / 4) + "\n\n" }
+        if !facts.isEmpty { ctx += "SOURCES - fact sheets from the comics wiki and Wikipedia:\n" + facts.joined(separator: "\n") + "\n\n" }
+        ctx += "ABOUT THE COMIC BEING READ:\n" + info
         if !corrected.fixes.isEmpty {
             ctx += "\n\nThe reader misspelled: " + corrected.fixes.map { "\"\($0.0)\" means \"\($0.1)\"" }.joined(separator: ", ") + "."
         }
-        let pages = choosePages(question: fixedQuestion, budget: budget - ctx.count - 300)
+        let pages = choosePages(question: fixedQuestion, budget: min(budget - ctx.count - 300, budget / 3))
         if !pages.isEmpty {
-            ctx += "\n\nWORDS ON PAGES THE READER HAS READ IN THIS ISSUE, in page order; page \(currentPage + 1) is on screen now "
-                + "(read by machine from the lettering, so expect misspellings; names in balloons and captions show who is talking and to whom):\n"
+            ctx += "\n\nWORDS ON PAGES THE READER HAS READ IN THIS ISSUE (shows who is in the scene and what they say; page \(currentPage + 1) is on screen; read by machine, so expect misspellings):\n"
                 + pages.joined(separator: "\n")
         }
         return ctx

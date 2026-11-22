@@ -1,5 +1,20 @@
 import Foundation
 
+/// A short log of what the lookups did (which sites answered, which refused), written into the debug file.
+enum Diagnostics {
+    private static let lock = NSLock()
+    private static var lines: [String] = []
+    static func add(_ s: String) {
+        lock.lock(); defer { lock.unlock() }
+        lines.append(s)
+        if lines.count > 80 { lines.removeFirst(lines.count - 80) }
+    }
+    static var text: String {
+        lock.lock(); defer { lock.unlock() }
+        return lines.joined(separator: "\n")
+    }
+}
+
 enum HTTP {
     static let userAgent = "PanelSnap/1.0 (iOS comic reader; https://github.com/jakebway/PanelSnap)"
 
@@ -26,8 +41,16 @@ enum HTTP {
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch {
+            Diagnostics.add("FAILED \(url.host ?? "?") \(url.query?.prefix(60) ?? ""): \(error.localizedDescription)")
+            throw error
+        }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            Diagnostics.add("HTTP \(http.statusCode) \(url.host ?? "?") \(url.query?.prefix(60) ?? "")")
             throw URLError(.badServerResponse)
         }
         return try JSONSerialization.jsonObject(with: data)

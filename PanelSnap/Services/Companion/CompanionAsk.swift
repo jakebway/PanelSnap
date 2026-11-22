@@ -63,7 +63,8 @@ final class CompanionAsk: ObservableObject {
     People who live somewhere are the ones the sources say belong there; people only shown visiting are visitors, not residents. \
     A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
     Do not reveal events the reader has not reached unless spoilers are allowed. At most four sentences unless asked for more. \
-    A picture of the page on screen may be attached; use it to see who is in the panels.
+    The page words and any attached picture only show who is in the scene and what they say; they do not tell you where \
+    anyone lives or what a place or group is. For that, use only the live search results and fact sheets.
     """
 
     /// The fact sheets for what is on screen. Changing them restarts the warmed-up session so it carries the new tools.
@@ -123,7 +124,9 @@ final class CompanionAsk: ObservableObject {
             if engine != nil { history[index].engine = engine }
         }
         func makePrompt(_ ctx: String) -> String {
-            return "COMIC INFORMATION:\n\(ctx)\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
+            let p = ctx + "\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
+            Self.writeDebug(question: q, prompt: p, notes: notes)
+            return p
         }
         #if canImport(FoundationModels)
         // 1. Apple's larger server model (Private Cloud Compute): 32K of reading and real reasoning, still private.
@@ -141,7 +144,9 @@ final class CompanionAsk: ObservableObject {
         }
         // 2. The model on the phone, looking at the page on screen as well (iOS 27).
         var page: CGImage? = nil
-        if #available(iOS 27.0, *) { page = await pageImage() }
+        // The picture only helps when the question is about what is on screen. For "who lives where" style questions it
+        // pulled the answer away from the sources, so those are answered from the sources alone.
+        if #available(iOS 27.0, *), Self.needsPage(q) { page = await pageImage() }
         if #available(iOS 26.0, *) {
             var budget = await Self.contextBudget() - earlier.count - q.count - (page != nil ? 2500 : 0)
             var permissive = false
@@ -182,6 +187,23 @@ final class CompanionAsk: ObservableObject {
         }
         #endif
         set("", failed: true)
+    }
+
+    static func needsPage(_ q: String) -> Bool {
+        let l = q.lowercased()
+        return ["this page", "this panel", "this scene", "picture", "image", "panel", "what is happening", "what's happening", "what are they doing",
+                "what is she doing", "what is he doing", "going on", "shown", "pictured", "looking at", "on screen", "this issue"].contains { l.contains($0) }
+    }
+
+    /// Saves what the model was given for the latest question to Files › PanelSnap › Companion Debug, so a wrong answer
+    /// can be traced to missing or wrong sources.
+    static func writeDebug(question: String, prompt: String, notes: [KnowledgeNote]) {
+        let folder = Paths.documents.appendingPathComponent("Companion Debug", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var out = "QUESTION: \(question)\n\nFACT SHEETS GATHERED (\(notes.count)): " + notes.map { "\($0.title) [\($0.source), \($0.text.count) chars]" }.joined(separator: "; ")
+        out += "\n\nLOOKUP LOG (errors only):\n" + (Diagnostics.text.isEmpty ? "(none)" : Diagnostics.text)
+        out += "\n\n===== EXACT PROMPT SENT TO THE MODEL (\(prompt.count) characters) =====\n" + prompt
+        try? out.write(to: folder.appendingPathComponent("last-question.txt"), atomically: true, encoding: .utf8)
     }
 
     func clear(issueKey: String) {
