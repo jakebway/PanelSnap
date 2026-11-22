@@ -523,6 +523,7 @@ struct ReaderView: View {
                         .frame(width: 40, height: 40)
                         .background(Theme.accent, in: Circle())
                 }
+                .accessibilityIdentifier("companion-button")
             }
             HStack {
                 Text("\(Int(scrub) + 1)")

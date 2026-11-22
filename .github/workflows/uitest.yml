@@ -4,6 +4,11 @@ name: UI test (simulator)
 # Simulator. Screenshots of every step go to the ci-report branch: <branch>/ui/*.png and <branch>/ui/status.md
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: 'Run just one test (e.g. testOmnibusCompanion); leave empty for all'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -52,6 +57,7 @@ jobs:
           DATA=$(xcrun simctl get_app_container "$UDID" com.jakebway.panelsnap data)
           mkdir -p "$DATA/Documents/Comics"
           python3 Scripts/make-test-comic.py "$DATA/Documents/Comics/UITest Comic 001.cbz" Tests/test-page.png
+          python3 Scripts/make-test-omnibus.py "$DATA/Documents/Comics/Spider Omnibus.cbz" Tests/test-page.png
           find "$DATA/Documents" | head
       - name: Run the UI tests
         id: test
@@ -60,6 +66,7 @@ jobs:
           set -o pipefail
           xcodebuild test-without-building -project PanelSnap.xcodeproj -scheme PanelSnap \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build-ui \
+            ${{ inputs.only != '' && format('-only-testing:PanelSnapUITests/ReaderUITests/{0}', inputs.only) || '' }} \
             -resultBundlePath ui.xcresult 2>&1 | tee test-ui.log | tail -n 80
       - name: Collect results
         if: always()

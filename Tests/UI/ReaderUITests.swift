@@ -142,5 +142,50 @@ final class ReaderUITests: XCTestCase {
         XCTAssertLessThan(d, 0.10, "a small pinch on a snapped panel should look like the same view, slightly larger")
     }
 
+    /// An omnibus of three issues: Companion should work out which issue the page belongs to, and follow the reader.
+    func testOmnibusCompanion() {
+        settle(2.5)
+        let title = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'Omnibus'")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "the omnibus should be in the library")
+        title.tap(); settle(3.0)
+        shot("40-omnibus-open")
+
+        func openCompanion() -> String {
+            at(0.5, 0.5).tap(); settle(0.8)                         // bring the controls up
+            let button = app.buttons["companion-button"]
+            if button.waitForExistence(timeout: 4) { button.tap() } else { at(0.93, 0.93).tap() }
+            settle(1.0)
+            let banner = app.descendants(matching: .any)["companion-issue-banner"]
+            _ = banner.waitForExistence(timeout: 90)                // the page text is read in the background first
+            settle(1.5)
+            shot("41-companion")
+            return banner.exists ? banner.label : "(no banner)"
+        }
+        func closeCompanion() {
+            let done = app.buttons["Done"]
+            if done.waitForExistence(timeout: 3) { done.tap() }
+            settle(0.8)
+        }
+
+        let first = openCompanion()
+        consoleLog("banner at the start: \(first)")
+        XCTAssertTrue(first.contains("#1"), "page 2 onwards is issue #1, got: \(first)")
+        settle(6.0)                                                  // let the lookups fill in
+        shot("42-companion-issue1")
+        closeCompanion()
+
+        // Jump to a page inside issue #3 with the slider, then look again.
+        at(0.5, 0.5).tap(); settle(0.8)
+        let slider = app.sliders.firstMatch
+        XCTAssertTrue(slider.waitForExistence(timeout: 4), "the page slider should be there")
+        slider.adjust(toNormalizedSliderPosition: 0.85); settle(2.0)
+        shot("43-jumped")
+        let later = openCompanion()
+        consoleLog("banner after jumping: \(later)")
+        XCTAssertTrue(later.contains("#3"), "page ~31 is in issue #3, got: \(later)")
+        settle(8.0)
+        shot("44-companion-issue3")
+    }
+
     func consoleLog(_ s: String) { print("UITEST: \(s)") }
 }
