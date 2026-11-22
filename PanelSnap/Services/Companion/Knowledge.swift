@@ -20,11 +20,11 @@ enum Knowledge {
     static func apiPath(_ host: String) -> String { host.hasSuffix("wikipedia.org") ? "/w/api.php" : "/api.php" }
 
     /// The plain-text introduction of a wiki page.
-    static func extract(host: String, title: String, limit: Int) async -> String? {
+    static func extract(host: String, title: String, limit: Int, full: Bool = false) async -> String? {
         guard let url = HTTP.url("https://\(host)\(apiPath(host))", [
-            ("action", "query"), ("prop", "extracts"), ("exintro", "1"), ("explaintext", "1"),
+            ("action", "query"), ("prop", "extracts"), ("explaintext", "1"),
             ("redirects", "1"), ("titles", title), ("format", "json"), ("formatversion", "2")
-        ]), let root = try? await HTTP.json(url) as? [String: Any],
+        ] + (full ? [] : [("exintro", "1")])), let root = try? await HTTP.json(url) as? [String: Any],
               let q = root["query"] as? [String: Any], let pages = q["pages"] as? [[String: Any]],
               let ex = pages.first?["extract"] as? String else { return nil }
         let t = TextClean.tidy(ex)
@@ -33,7 +33,7 @@ enum Knowledge {
 
     /// Searches a wiki and returns the introduction of the best matching page.
     /// The top few pages for a topic (a place like Attilan is covered by its own page and by its people's pages).
-    static func lookUpMany(host: String, query: String, count: Int, limit: Int) async -> [(title: String, text: String)] {
+    static func lookUpMany(host: String, query: String, count: Int, limit: Int, full: Bool = false) async -> [(title: String, text: String)] {
         guard let url = HTTP.url("https://\(host)\(apiPath(host))", [
             ("action", "query"), ("list", "search"), ("srsearch", query), ("srlimit", String(count)), ("format", "json")
         ]), let root = try? await HTTP.json(url) as? [String: Any],
@@ -42,7 +42,7 @@ enum Knowledge {
         return await withTaskGroup(of: (Int, String, String)?.self) { group in
             for (i, t) in titles.enumerated() {
                 group.addTask {
-                    guard let text = await extract(host: host, title: t, limit: limit) else { return nil }
+                    guard let text = await extract(host: host, title: t, limit: limit, full: full) else { return nil }
                     return (i, t, text)
                 }
             }
@@ -212,7 +212,7 @@ enum Knowledge {
         let key = terms(query).joined(separator: " ")
         guard !key.isEmpty else { return "" }
         return await withTaskGroup(of: String?.self) { group in
-            group.addTask { await search(key, publisher: publisher, notes: notes) }
+            group.addTask { await search(key, publisher: publisher, notes: notes, deep: true) }
             group.addTask { try? await Task.sleep(nanoseconds: seconds * 1_000_000_000); return nil }
             let first = await group.next() ?? nil
             group.cancelAll()
@@ -221,7 +221,7 @@ enum Knowledge {
     }
 
     /// What the model's search tool runs: the saved notes first, then the comics wiki and Wikipedia, live.
-    static func search(_ query: String, publisher: String?, notes: [KnowledgeNote]) async -> String {
+    static func search(_ query: String, publisher: String?, notes: [KnowledgeNote], deep: Bool = true) async -> String {
         var parts: [String] = relevant(notes.filter { !$0.title.hasPrefix("Plot") }, to: query, budget: 900, each: 450)
         let ts = terms(query)
         if !ts.isEmpty { parts = parts.filter { p in ts.contains(where: { p.lowercased().contains($0.prefix(6)) }) } }
@@ -237,19 +237,47 @@ enum Knowledge {
         async let hero: [(title: String, text: String)] = lookUpMany(host: "superheroes.fandom.com", query: query, count: 1, limit: 900)
         async let more: [(title: String, text: String)] = lookUpMany(host: "comicvine.fandom.com", query: query, count: 1, limit: 700)
         async let instant: String? = instantAnswer(query + " " + house)
+        // "Who lives there / who is in it / what is its history" is answered by the full page and its member lists, not the intro.
+        async let deepFan: [(title: String, text: String)] = {
+            guard deep, let h = host else { return [] }
+            return await lookUpMany(host: h, query: query, count: 1, limit: 2600, full: true)
+        }()
+        async let deepWiki: [(title: String, text: String)] = deep ? lookUpMany(host: "en.wikipedia.org", query: query + " " + house, count: 1, limit: 2600, full: true) : []
+        async let people: [(title: String, text: String)] = deep ? lookUpMany(host: "en.wikipedia.org", query: query + " residents members inhabitants", count: 2, limit: 700) : []
+        async let peopleFan: [(title: String, text: String)] = {
+            guard deep, let h = host else { return [] }
+            return await lookUpMany(host: h, query: query + " residents members", count: 2, limit: 700)
+        }()
         var seen = Set<String>()
         func add(_ label: String, _ list: [(title: String, text: String)]) {
             for r in list where seen.insert(r.title.lowercased() + "|" + String(r.text.prefix(60)).lowercased()).inserted {
                 parts.append("[\(r.title) – \(label)] " + r.text)
             }
         }
+        add("full page, comics wiki", await deepFan)
+        add("full page, Wikipedia", await deepWiki)
         add("comics wiki", await fan)
+        add("comics wiki", await peopleFan)
         add("Wikipedia", await wiki)
+        add("Wikipedia", await people)
         add("Wikipedia", await wiki2)
         add("Superhero wiki", await hero)
         add("Comic Vine wiki", await more)
         if let i = await instant, !seen.contains(String(i.prefix(60)).lowercased()) { parts.append("[Web summary] " + i) }
         return parts.isEmpty ? "Nothing found for \(query)." : parts.joined(separator: "\n")
+    }
+
+    /// One whole page by name from the comics wiki, falling back to Wikipedia (what the model's page-reading tool runs).
+    static func readPage(_ title: String, publisher: String?) async -> String {
+        async let fan: String? = {
+            guard let h = fandomHost(publisher) else { return nil }
+            return await extract(host: h, title: title, limit: 3200, full: true)
+        }()
+        async let wiki: String? = extract(host: "en.wikipedia.org", title: title, limit: 3200, full: true)
+        var out: [String] = []
+        if let f = await fan { out.append("[\(title) – comics wiki, full page] " + f) }
+        if let w = await wiki { out.append("[\(title) – Wikipedia, full page] " + w) }
+        return out.isEmpty ? "No page called \(title)." : out.joined(separator: "\n")
     }
 
     // MARK: Saving it

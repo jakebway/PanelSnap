@@ -56,7 +56,7 @@ final class CompanionAsk: ObservableObject {
     provided information: the fact sheets, the cast and plot notes, the words printed on the pages, or what the \
     searchKnowledge and lookUpCharacter tools return. Never fill gaps from memory and never guess. \
     For any question about who someone is, who lives somewhere, what a place or group is, or how people are connected, \
-    FIRST call searchKnowledge with the key words (for example "Moon Inhumans"), then answer from what it returns together \
+    FIRST call searchKnowledge with the key words (for example "Moon Inhumans"); if a page such as a place or team is named, also call readWikiPage with its exact title to read the member or resident list; then answer from what it returns together \
     with the page words (names in balloons and captions show who is present and who is talking to whom). \
     Answer in your first sentence, naming names, then add only what helps. Never repeat yourself, no filler, no apologies. \
     If the information still does not say, reply exactly: "I couldn't find that in my sources," and add the closest fact you do have. \
@@ -106,7 +106,7 @@ final class CompanionAsk: ObservableObject {
     @available(iOS 26.0, *)
     private static func makeSession(publisher: String?, permissive: Bool, notes: [KnowledgeNote]) -> LanguageModelSession {
         let model = permissive ? SystemLanguageModel(guardrails: .permissiveContentTransformations) : SystemLanguageModel.default
-        let tools: [any Tool] = [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher)]
+        let tools: [any Tool] = [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher), WikiPageTool(publisher: publisher)]
         return LanguageModelSession(model: model, tools: tools, instructions: Instructions(Self.instructions))
     }
     #endif
@@ -142,7 +142,7 @@ final class CompanionAsk: ObservableObject {
             let ctx = await makeContext(60_000)
             do {
                 let text = try await ModernAsk.cloud(prompt: makePrompt(ctx), instructions: Self.instructions,
-                                                     tools: [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher)])
+                                                     tools: [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher), WikiPageTool(publisher: publisher)])
                 set(Self.tidy(text), engine: "cloud")
                 return
             } catch {
@@ -360,6 +360,22 @@ enum ModernAsk {
 #if canImport(FoundationModels)
 /// Lets the model search before it answers: the facts gathered for this comic first, then the comics wiki and Wikipedia, live.
 @available(iOS 26.0, *)
+struct WikiPageTool: Tool {
+    let name = "readWikiPage"
+    let description = "Reads one whole page from the comics wiki or Wikipedia by its exact title, such as Attilan or Inhumans. Use it after searchKnowledge when a page's member, resident or history list is needed."
+    let publisher: String?
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Exact page title, for example: Attilan")
+        var title: String
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        return await Knowledge.readPage(arguments.title, publisher: publisher)
+    }
+}
+
 struct KnowledgeSearchTool: Tool {
     let name = "searchKnowledge"
     let description = "Searches the fact sheets for this comic, the comics wiki and Wikipedia. Use it for any question about who someone is, who lives somewhere, or what a place, team or group is."

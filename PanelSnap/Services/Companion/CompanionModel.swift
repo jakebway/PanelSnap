@@ -276,7 +276,7 @@ final class CompanionModel: ObservableObject {
         let found = await live
         // The sources come first: they are what answers are made from.
         var ctx = ""
-        if !found.isEmpty { ctx += "SOURCES - live search for \"\(fixedQuestion)\":\n" + TextClean.shorten(found, limit: budget * 2 / 5) + "\n\n" }
+        if !found.isEmpty { ctx += "SOURCES - live search for \"\(fixedQuestion)\":\n" + TextClean.shorten(found, limit: budget / 2) + "\n\n" }
         if !facts.isEmpty { ctx += "SOURCES - fact sheets from the comics wiki and Wikipedia:\n" + facts.joined(separator: "\n") + "\n\n" }
         ctx += "ABOUT THE COMIC BEING READ:\n" + info
         if !corrected.fixes.isEmpty {
