@@ -240,8 +240,9 @@ enum Knowledge {
             guard let h = host else { return [] }
             return await lookUpMany(host: h, query: query, count: 3, limit: 1200)
         }()
-        async let wiki: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query, count: 3, limit: 1100)
-        async let wiki2: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query + " " + house, count: 2, limit: 900)
+        // Wikipedia is always asked about the comics, or "Pietro" finds a TV show.
+        async let wiki: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query + " " + house, count: 3, limit: 1100)
+        async let wiki2: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query + " character comics", count: 2, limit: 900)
         async let hero: [(title: String, text: String)] = lookUpMany(host: "superheroes.fandom.com", query: query, count: 1, limit: 900)
         async let instant: String? = instantAnswer(query + " " + house)
         // "Who lives there / who is in it / what is its history" is answered by the full page and its member lists, not the intro.
@@ -257,7 +258,7 @@ enum Knowledge {
         }()
         var seen = Set<String>()
         func add(_ label: String, _ list: [(title: String, text: String)]) {
-            for r in list where seen.insert(r.title.lowercased() + "|" + String(r.text.prefix(60)).lowercased()).inserted {
+            for r in list where (wantsScreen(query) || !isScreenTopic(r.title)) && seen.insert(r.title.lowercased() + "|" + String(r.text.prefix(60)).lowercased()).inserted {
                 parts.append("[\(r.title) – \(label)] " + r.text)
             }
         }
@@ -271,6 +272,17 @@ enum Knowledge {
         add("Superhero wiki", await hero)
         if let i = await instant, !seen.contains(String(i.prefix(60)).lowercased()) { parts.append("[Web summary] " + i) }
         return parts
+    }
+
+    /// Pages about the films, TV shows and actors are left out unless the question is about them.
+    static func isScreenTopic(_ title: String) -> Bool {
+        let t = title.lowercased()
+        return ["cinematic universe", "(film", "(tv", "(miniseries", "(american tv", "(actor", "(actress", "(video game", "(soundtrack", "taylor-johnson", "filmography"].contains { t.contains($0) }
+    }
+
+    static func wantsScreen(_ question: String) -> Bool {
+        let q = question.lowercased()
+        return ["movie", "film", "mcu", "actor", "actress", "disney", "portray", "played by", "cast", "tv show", "television", "episode", "game"].contains { q.contains($0) }
     }
 
     /// One whole page by name from the comics wiki, falling back to Wikipedia (what the model's page-reading tool runs).

@@ -263,6 +263,12 @@ final class CompanionModel: ObservableObject {
         // Fix misspelled names, then search the wiki ourselves (the model often skips its own search tool).
         var vocab = notes.map { $0.title } + data.locations + data.teams + data.characters.map { $0.name }
         if let s = data.series { vocab.append(s) }
+        // Names that appear in the plot ("Pietro", "Modred") so a misspelling or "Pietro's" without the apostrophe is still recognised.
+        if let plot = data.issueSynopsis?.text, let rx = try? NSRegularExpression(pattern: "\\b[A-Z][a-z]{3,}\\b") {
+            let ns = plot as NSString
+            let found = rx.matches(in: plot, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
+            vocab += Array(Set(found))
+        }
         let corrected = Knowledge.canonical(question, vocabulary: vocab)
         let fixedQuestion = corrected.text
         let publisher = data.publisher ?? identity.publisher
@@ -275,11 +281,11 @@ final class CompanionModel: ObservableObject {
         let facts = Knowledge.relevant(usable, to: fixedQuestion, budget: budget / 3)
         let found = await live
         // Everything found goes into one pool, and only the sentences closest in meaning to the question are kept.
-        let pool = found + facts
+        let pool = (found + facts).filter { Knowledge.wantsScreen(fixedQuestion) || !Knowledge.isScreenTopic(String($0.prefix(80))) }
         let cap = budget * 45 / 100
         let q = fixedQuestion
         let ranked = await Task.detached(priority: .userInitiated) { Passages.best(parts: pool, question: q, maxChars: cap) }.value
-        let keyFacts = ranked.reduce(0) { $0 + $1.count } > 1200 ? await FactNotes.read(question: fixedQuestion, passages: ranked) : ""
+        let keyFacts = ""      // the per-source note step invented facts ("Scarlet Witch is Pietro's wife"), so the answer is written from the sources directly
         // The sources come first: they are what answers are made from.
         var ctx = ""
         let visitors = visitorHint(question: fixedQuestion)
