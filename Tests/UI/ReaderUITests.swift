@@ -156,9 +156,20 @@ final class ReaderUITests: XCTestCase {
             at(0.5, 0.5).tap()
             _ = b.waitForExistence(timeout: 4)
         }
-        func goForward(_ pages: Int) {
-            for _ in 0..<pages { at(0.96, 0.5).tap(); settle(0.5) }       // plain pages, so each tap turns a page
-            settle(1.0)
+        func showControls() {
+            let bar = app.descendants(matching: .any)["page-scrubber"]
+            if bar.waitForExistence(timeout: 1) { return }
+            at(0.5, 0.5).tap()
+            _ = bar.waitForExistence(timeout: 4)
+        }
+        /// Drags the page bar to a place along its length and checks the page really changed.
+        func scrub(to fraction: Double) {
+            showControls()
+            let bar = app.descendants(matching: .any)["page-scrubber"]
+            XCTAssertTrue(bar.exists, "the page bar should be there")
+            bar.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
+                .press(forDuration: 0.2, thenDragTo: bar.coordinate(withNormalizedOffset: CGVector(dx: fraction, dy: 0.5)))
+            settle(2.0)
         }
         func openCompanion() -> String {
             showControls()                                          // bring the controls up
@@ -178,7 +189,7 @@ final class ReaderUITests: XCTestCase {
         }
 
         // The file opens on the cover, which comes before issue #1; move into the first issue.
-        goForward(3)
+        scrub(to: 0.12)
         let first = openCompanion()
         consoleLog("banner at the start: \(first)")
         XCTAssertTrue(first.contains("#1"), "page 2 onwards is issue #1, got: \(first)")
@@ -200,7 +211,7 @@ final class ReaderUITests: XCTestCase {
         closeCompanion()
 
         // Jump to a page inside issue #3 with the slider, then look again.
-        goForward(24)
+        scrub(to: 0.85)
         shot("43-jumped")
         let later = openCompanion()
         consoleLog("banner after jumping: \(later)")

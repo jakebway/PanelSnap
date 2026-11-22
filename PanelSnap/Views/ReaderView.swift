@@ -237,6 +237,7 @@ struct ReaderView: View {
                 )
 
             ZoomGestures(zoom: zoom, enabled: !showCompanion && !scrubbing && !model.reachedEnd,
+                         blockedBottom: chromeVisible ? 130 : 0,
                          panelFocused: model.panelIndex >= 0,
                          onFlick: { handleDrag($0) },
                          onPinchedOut: { model.showOverview() },
@@ -403,7 +404,7 @@ struct ReaderView: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if Task.isCancelled { return }
+            if Task.isCancelled || scrubbing { return }          // never hide the bar while it is being used
             chromeVisible = false
         }
     }
@@ -503,16 +504,15 @@ struct ReaderView: View {
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 if model.pageCount > 1 {
-                    Slider(
+                    PageScrubber(
                         value: $scrub,
-                        in: 0...Double(max(1, model.pageCount - 1)),
-                        step: 1,
-                        onEditingChanged: { editing in
-                            scrubbing = editing
-                            if !editing { model.jump(toPage: Int(scrub)) }
-                        }
+                        pageCount: model.pageCount,
+                        onActive: { active in
+                            scrubbing = active
+                            if active { hideTask?.cancel() } else { scheduleHide() }
+                        },
+                        onJump: { page in model.jump(toPage: page) }
                     )
-                    .tint(Theme.accent)
                 } else {
                     Spacer()
                 }

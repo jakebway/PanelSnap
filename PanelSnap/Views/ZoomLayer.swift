@@ -55,6 +55,7 @@ struct ZoomedContent<Content: View>: View {
 struct ZoomGestures: UIViewRepresentable {
     let zoom: ZoomState
     var enabled: Bool
+    var blockedBottom: CGFloat = 0          // touches this close to the bottom belong to the page bar, not to zooming
     var panelFocused: Bool                 // on a snapped panel: one finger nudges it, a quick flick still swipes
     var onFlick: (CGSize) -> Void          // a quick flick on a snapped panel: the same as a swipe
     var onPinchedOut: () -> Void           // pinching in on a page that is not zoomed: show the whole page
@@ -72,6 +73,7 @@ struct ZoomGestures: UIViewRepresentable {
 
     func updateUIView(_ uiView: HookView, context: Context) {
         context.coordinator.enabled = enabled
+        context.coordinator.blockedBottom = blockedBottom
         context.coordinator.panelFocused = panelFocused
         context.coordinator.onFlick = onFlick
         context.coordinator.onPinchedOut = onPinchedOut
@@ -90,6 +92,7 @@ struct ZoomGestures: UIViewRepresentable {
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         let zoom: ZoomState
         var enabled = true
+        var blockedBottom: CGFloat = 0
         var panelFocused = false
         var onFlick: (CGSize) -> Void = { _ in }
         var onPinchedOut: () -> Void = {}
@@ -140,7 +143,9 @@ struct ZoomGestures: UIViewRepresentable {
 
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard enabled, let stage = stage, stage.window != nil else { return false }
-            if !stage.bounds.contains(g.location(in: stage)) { return false }
+            let at = g.location(in: stage)
+            if !stage.bounds.contains(at) { return false }
+            if blockedBottom > 0, stage.bounds.height - at.y < blockedBottom { return false }
             if g === pan { return zoom.isZoomed || panelFocused }   // one finger moves the page when zoomed in, or nudges a snapped panel
             return true
         }
