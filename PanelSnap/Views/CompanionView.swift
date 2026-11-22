@@ -10,6 +10,7 @@ struct CompanionView: View {
     @State private var revealed = false
     @State private var selected: CharacterCard?
     @State private var showFix = false
+    @State private var showChat = false
 
     var body: some View {
         NavigationStack {
@@ -20,9 +21,7 @@ struct CompanionView: View {
                     issueBanner
                     statusRow
                     if CompanionAsk.isSupported {
-                        AskPanel(model: model, ask: model.ask, scrollTo: { id in
-                            withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(id, anchor: .top) }
-                        })
+                        AskEntryCard(model: model, ask: model.ask) { showChat = true }
                     }
 
                     if let t = model.data.issueSummary {
@@ -57,6 +56,9 @@ struct CompanionView: View {
                 .padding(.vertical, 12)
             }
             .scrollDismissesKeyboard(.interactively)
+            }
+            .fullScreenCover(isPresented: $showChat) {
+                AskChatView(model: model, ask: model.ask)
             }
             .navigationTitle("Companion")
             .navigationBarTitleDisplayMode(.inline)
@@ -553,126 +555,222 @@ struct FixMatchSheet: View {
 }
 
 
-/// Ask about this comic: type a question, the keyboard goes away, and the question and answer appear underneath,
-/// newest first. Earlier questions for the same issue stay, even after closing the comic.
-struct AskPanel: View {
+// MARK: - Ask: the chat
+
+/// The small card in the Companion panel that opens the chat.
+struct AskEntryCard: View {
     @ObservedObject var model: CompanionModel
     @ObservedObject var ask: CompanionAsk
-    var scrollTo: (String) -> Void = { _ in }
-    @State private var question = ""
-    @State private var spoilers = false
+    var open: () -> Void
+
+    private var last: AskExchange? { return ask.history.last(where: { $0.issueKey == model.issueKey }) }
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(width: 38, height: 38)
+                    .background(Theme.accent, in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Ask about this comic").font(.headline).foregroundStyle(.white)
+                    Text(last.map { "You asked: \($0.question)" } ?? "Who is…? What's going on? Ask anything about what you're reading.")
+                        .font(.footnote).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("ask-open")
+    }
+}
+
+/// A full-screen chat about the comic: your questions on the right, the answers on the left, oldest at the top,
+/// and the message bar pinned above the keyboard.
+struct AskChatView: View {
+    @ObservedObject var model: CompanionModel
+    @ObservedObject var ask: CompanionAsk
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("companion.spoilers") private var spoilers = false
+    @State private var text = ""
     @FocusState private var typing: Bool
 
-    private var exchanges: [AskExchange] {
-        return Array(ask.history.filter { $0.issueKey == model.issueKey }.suffix(6).reversed())
+    private var messages: [AskExchange] {
+        return Array(ask.history.filter { $0.issueKey == model.issueKey }.suffix(40))
+    }
+
+    private var title: String {
+        if let m = model.activeMark { return (m.series ?? "Issue") + " #" + m.issue }
+        return model.data.series ?? model.entry.title
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Ask about this comic").font(.headline)
-                Spacer()
-                if !exchanges.isEmpty && !ask.busy {
-                    Button("Clear") { withAnimation { ask.clear(issueKey: model.issueKey) } }
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-            HStack(spacing: 8) {
-                TextField("Who is…? What's going on?", text: $question)
-                    .focused($typing)
-                    .submitLabel(.send)
-                    .onSubmit { send(question) }
-                Button { send(question) } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title2).foregroundStyle(Theme.accent)
-                }
-                .disabled(ask.busy || question.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(10)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .id("ask-field")
-            if exchanges.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(suggestions, id: \.self) { s in
-                            Button { send(s) } label: {
-                                Text(s).font(.footnote.weight(.semibold))
-                                    .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(Theme.card2, in: Capsule())
-                            }
-                            .buttonStyle(.plain)
+        NavigationStack {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        if messages.isEmpty { emptyState }
+                        ForEach(messages) { ex in
+                            userBubble(ex.question)
+                            assistantBubble(ex, isLast: ex.id == messages.last?.id)
                         }
+                        Color.clear.frame(height: 1).id("bottom")
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 8)
                 }
-            }
-            Toggle("Allow spoilers", isOn: $spoilers).font(.footnote)
-            ForEach(exchanges) { ex in
-                VStack(alignment: .leading, spacing: 8) {
-                    // the newest question is the anchor the panel scrolls to
-                    HStack {
-                        Spacer(minLength: 40)
-                        Text(ex.question)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.onAccent)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    Group {
-                        if ex.answer.isEmpty && !ex.failed && ask.busy {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                Text(model.readingPages ? "Reading the pages…" : "Thinking…").font(.footnote).foregroundStyle(.secondary)
-                            }
-                        } else if ex.failed {
-                            Text("I couldn't answer that just now. Try asking it another way.").font(.footnote).foregroundStyle(.secondary)
-                        } else {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(ex.answer).font(.subheadline).textSelection(.enabled)
-                                if let e = ex.engine {
-                                    Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
-                                          systemImage: e == "cloud" ? "icloud" : "eye")
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: messages.count) { _, _ in toBottom(proxy, animated: true) }
+                .onChange(of: messages.last?.answer) { _, _ in toBottom(proxy, animated: false) }
+                .onChange(of: typing) { _, focused in
+                    if focused { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { toBottom(proxy, animated: true) } }
                 }
-                .id(ex.id == exchanges.first?.id ? "ask-answer" : ex.id.uuidString)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { toBottom(proxy, animated: false) } }
             }
-            if !exchanges.isEmpty {
-                Text("Answered on your phone from the details and the pages you've read. It can still be wrong.")
-                    .font(.caption2).foregroundStyle(.secondary)
+            .background(Theme.bg)
+            .safeAreaInset(edge: .bottom, spacing: 0) { inputBar }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    Button("Done") { typing = false; dismiss() }
+                    Menu {
+                        Toggle(isOn: $spoilers) { Label("Allow spoilers", systemImage: "eye") }
+                        Button(role: .destructive) {
+                            withAnimation { ask.clear(issueKey: model.issueKey) }
+                        } label: { Label("Clear chat", systemImage: "trash") }
+                        .disabled(messages.isEmpty || ask.busy)
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityIdentifier("ask-menu")
+                }
             }
         }
-        .animation(.easeOut(duration: 0.2), value: exchanges.map { $0.id })
+        .preferredColorScheme(.dark)
         .task { ask.prewarm(publisher: model.data.publisher) }
-        .onChange(of: typing) { _, focused in
-            // Bring the typing field to the top of the visible area once the keyboard is up.
-            if focused { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { scrollTo("ask-field") } }
+    }
+
+    private func toBottom(_ proxy: ScrollViewProxy, animated: Bool) {
+        if animated { withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+        else { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
+    // MARK: Pieces
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Theme.onAccent)
+                .frame(width: 58, height: 58)
+                .background(Theme.accent, in: Circle())
+            Text("Ask about \(title)").font(.title3.weight(.bold)).multilineTextAlignment(.center)
+            Text("Answers come from this comic's pages and the comics wikis, on your phone.")
+                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                ForEach(suggestions, id: \.self) { s in
+                    Button { send(s) } label: {
+                        Text(s).font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(Theme.card2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 4)
         }
-        .onChange(of: exchanges.first?.id) { _, _ in
-            // A new question was sent: show it and its answer, with the keyboard already gone.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { scrollTo("ask-answer") }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 30)
+        .padding(.horizontal, 8)
+    }
+
+    private func userBubble(_ q: String) -> some View {
+        HStack {
+            Spacer(minLength: 50)
+            Text(q)
+                .font(.body.weight(.medium))
+                .foregroundStyle(Theme.onAccent)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .onChange(of: ask.busy) { _, busy in
-            if !busy { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { scrollTo("ask-answer") } }
+    }
+
+    private func assistantBubble(_ ex: AskExchange, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 28, height: 28)
+                .background(Theme.card2, in: Circle())
+            VStack(alignment: .leading, spacing: 6) {
+                if ex.failed {
+                    Text("I couldn't answer that just now. Try asking it another way.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                } else if ex.answer.isEmpty {
+                    TypingDots()
+                } else {
+                    Text(ex.answer).font(.body).textSelection(.enabled)
+                    if let e = ex.engine {
+                        Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
+                              systemImage: e == "cloud" ? "icloud" : "eye")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Spacer(minLength: 30)
         }
+    }
+
+    private var inputBar: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField("Ask about this comic…", text: $text, axis: .vertical)
+                .lineLimit(1...4)
+                .focused($typing)
+                .submitLabel(.send)
+                .onSubmit { send(text) }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(Theme.card2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            Button { send(text) } label: {
+                Image(systemName: ask.busy ? "ellipsis" : "arrow.up")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(width: 40, height: 40)
+                    .background(canSend ? Theme.accent : Theme.accent.opacity(0.35), in: Circle())
+            }
+            .disabled(!canSend)
+            .accessibilityIdentifier("ask-send")
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+    }
+
+    private var canSend: Bool {
+        return !ask.busy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var suggestions: [String] {
         var list = ["Who are the main characters?", "What's going on so far?"]
         if let first = model.data.characters.first?.name { list.insert("Who is \(first)?", at: 0) }
+        if let place = model.data.locations.first { list.append("What is \(place)?") }
         return list
     }
 
-    private func send(_ text: String) {
-        let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func send(_ raw: String) {
+        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !ask.busy else { return }
-        typing = false                     // put the keyboard away so the answer can be seen
-        question = ""
+        text = ""
         let allow = spoilers
         let key = model.issueKey
         let publisher = model.data.publisher
@@ -681,5 +779,22 @@ struct AskPanel: View {
                 await model.askContext(spoilers: allow, question: q, budget: budget)
             }, pageImage: { await model.currentPageImage() })
         }
+    }
+}
+
+/// Three dots that pulse while the answer is being worked out.
+struct TypingDots: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Color.white.opacity(0.35 + 0.55 * max(0, sin(t * 4 - Double(i) * 0.7))))
+                        .frame(width: 8, height: 8)
+                }
+            }
+        }
+        .frame(height: 20)
     }
 }
