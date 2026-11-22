@@ -267,17 +267,23 @@ final class CompanionModel: ObservableObject {
         let fixedQuestion = corrected.text
         let publisher = data.publisher ?? identity.publisher
         let allNotes = notes
-        async let live = Knowledge.liveSearch(fixedQuestion, publisher: publisher, notes: allNotes)
+        async let live = Knowledge.liveParts(fixedQuestion, publisher: publisher, notes: allNotes)
         let infoBudget = budget * 3 / 10
         let info = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: infoBudget)
         // Fact sheets about the people and places in this issue. The plot sheet follows the spoiler setting.
         let usable = notes.filter { spoilers || !$0.title.hasPrefix("Plot") }
-        let facts = Knowledge.relevant(usable, to: fixedQuestion, budget: budget / 4)
+        let facts = Knowledge.relevant(usable, to: fixedQuestion, budget: budget / 3)
         let found = await live
+        // Everything found goes into one pool, and only the sentences closest in meaning to the question are kept.
+        let pool = found + facts
+        let cap = budget * 4 / 10
+        let q = fixedQuestion
+        let ranked = await Task.detached(priority: .userInitiated) { Passages.best(parts: pool, question: q, maxChars: cap) }.value
+        let keyFacts = ranked.reduce(0) { $0 + $1.count } > 1200 ? await FactNotes.read(question: fixedQuestion, passages: ranked) : ""
         // The sources come first: they are what answers are made from.
         var ctx = ""
-        if !found.isEmpty { ctx += "SOURCES - live search for \"\(fixedQuestion)\":\n" + TextClean.shorten(found, limit: budget / 2) + "\n\n" }
-        if !facts.isEmpty { ctx += "SOURCES - fact sheets from the comics wiki and Wikipedia:\n" + facts.joined(separator: "\n") + "\n\n" }
+        if !keyFacts.isEmpty { ctx += "KEY FACTS pulled out of the sources for this question:\n" + keyFacts + "\n\n" }
+        if !ranked.isEmpty { ctx += "SOURCES - the most relevant passages from the comics wiki, Wikipedia and the web:\n" + ranked.joined(separator: "\n") + "\n\n" }
         ctx += "ABOUT THE COMIC BEING READ:\n" + info
         if !corrected.fixes.isEmpty {
             ctx += "\n\nThe reader misspelled: " + corrected.fixes.map { "\"\($0.0)\" means \"\($0.1)\"" }.joined(separator: ", ") + "."

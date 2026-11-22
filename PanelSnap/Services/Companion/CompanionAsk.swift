@@ -131,9 +131,11 @@ final class CompanionAsk: ObservableObject {
             history[index].failed = failed
             if engine != nil { history[index].engine = engine }
         }
+        var usedPrompt = ""
         func makePrompt(_ ctx: String) -> String {
             let p = ctx + "\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION:\n\(earlier)\n\n") + "QUESTION: \(q)"
             Self.writeDebug(question: q, prompt: p, notes: notes)
+            usedPrompt = p
             return p
         }
         #if canImport(FoundationModels)
@@ -143,7 +145,7 @@ final class CompanionAsk: ObservableObject {
             do {
                 let text = try await ModernAsk.cloud(prompt: makePrompt(ctx), instructions: Self.instructions,
                                                      tools: [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher), WikiPageTool(publisher: publisher)])
-                set(Self.tidy(text), engine: "cloud")
+                set(Self.ground(Self.tidy(text), context: usedPrompt), engine: "cloud")
                 return
             } catch {
                 cloudFailed = true            // offline, out of today's allowance or not allowed: use the phone's model
@@ -176,7 +178,7 @@ final class CompanionAsk: ObservableObject {
                         latest = snap.content
                         set(latest)
                     }
-                    set(Self.tidy(latest))
+                    set(Self.ground(Self.tidy(latest), context: usedPrompt))
                     return
                 } catch let e as LanguageModelSession.GenerationError {
                     switch e {
@@ -222,6 +224,52 @@ final class CompanionAsk: ObservableObject {
     private func save() {
         let keep = Array(history.suffix(60))
         if let data = try? JSONEncoder().encode(keep) { try? data.write(to: file, options: .atomic) }
+    }
+
+    private static let notNames: Set<String> = ["the", "this", "that", "they", "there", "these", "those", "their", "then", "when", "while", "where", "which", "who",
+        "what", "why", "how", "also", "according", "based", "however", "but", "and", "for", "from", "with", "his", "her", "its", "she", "has", "have",
+        "yes", "not", "only", "both", "some", "many", "most", "other", "others", "visiting", "residents", "resident", "family", "royal", "page", "issue",
+        "comic", "sources", "source", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "january", "february", "march", "april",
+        "may", "june", "july", "august", "september", "october", "november", "december", "wiki", "wikipedia", "marvel", "comics", "not"]
+
+    /// A last check in code: any name in the answer that appears nowhere in what the model was given is removed,
+    /// because a small model sometimes invents names. Names inside a list are dropped from the list; otherwise the sentence goes.
+    static func ground(_ answer: String, context: String) -> String {
+        guard !context.isEmpty, !answer.isEmpty else { return answer }
+        let ctx = context.lowercased()
+        func unsupported(_ text: String) -> [String] {
+            var bad: [String] = []
+            let words = text.split(whereSeparator: { !($0.isLetter || $0 == "'" || $0 == "\u{2019}" || $0 == "-") }).map(String.init)
+            for w0 in words {
+                var w = w0
+                for suffix in ["'s", "\u{2019}s", "'", "\u{2019}"] where w.hasSuffix(suffix) { w = String(w.dropLast(suffix.count)) }
+                guard let f = w.first, f.isUppercase, w.count >= 4, !notNames.contains(w.lowercased()) else { continue }
+                if !ctx.contains(String(w.lowercased().prefix(min(w.count, 6)))) { bad.append(w) }
+            }
+            return bad
+        }
+        var lines: [String] = []
+        for line in answer.components(separatedBy: "\n") {
+            var kept: [String] = []
+            line.enumerateSubstrings(in: line.startIndex..., options: .bySentences) { sentence, _, _, _ in
+                guard let s = sentence?.trimmingCharacters(in: .whitespaces), !s.isEmpty else { return }
+                let bad = unsupported(s)
+                if bad.isEmpty { kept.append(s); return }
+                Diagnostics.add("GROUNDING removed " + bad.joined(separator: ", "))
+                let parts = s.components(separatedBy: ", ")
+                if parts.count >= 3 {
+                    let good = parts.filter { unsupported($0).isEmpty }
+                    if good.count >= 2 {
+                        var joined = good.joined(separator: ", ")
+                        if let l = joined.last, !".!?".contains(l) { joined += "." }
+                        kept.append(joined)
+                    }
+                }
+            }
+            if !kept.isEmpty { lines.append(kept.joined(separator: " ")) }
+        }
+        let out = lines.joined(separator: "\n")
+        return out.isEmpty ? "I couldn't find that in my sources." : out
     }
 
     /// Drops sentences the model said twice, which is how "talking in circles" usually shows up.
@@ -391,6 +439,59 @@ struct KnowledgeSearchTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         return await Knowledge.search(arguments.query, publisher: publisher, notes: notes)
+    }
+}
+#endif
+
+
+/// Reads the found passages in small separate pieces and copies out only the facts that matter to the question, so the final
+/// answer is written from a short list instead of pages of text.
+enum FactNotes {
+    static func read(question: String, passages: [String]) async -> String {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) { return await FactReader.read(question: question, passages: passages) }
+        #endif
+        return ""
+    }
+}
+
+#if canImport(FoundationModels)
+@available(iOS 26.0, *)
+enum FactReader {
+    static func read(question: String, passages: [String]) async -> String {
+        var chunks: [String] = []
+        var cur = ""
+        for p in passages {
+            if cur.count + p.count > 1300, !cur.isEmpty { chunks.append(cur); cur = "" }
+            cur += p + "\n"
+        }
+        if !cur.isEmpty { chunks.append(cur) }
+        let use = Array(chunks.prefix(3))
+        guard !use.isEmpty else { return "" }
+        return await withTaskGroup(of: (Int, String?).self) { group in
+            for (i, c) in use.enumerated() { group.addTask { (i, await one(question, c)) } }
+            group.addTask { try? await Task.sleep(nanoseconds: 7_000_000_000); return (-1, nil) }
+            var got: [Int: String] = [:]
+            var done = 0
+            for await (i, text) in group {
+                if i == -1 { break }
+                done += 1
+                if let text = text { got[i] = text }
+                if done == use.count { break }
+            }
+            group.cancelAll()
+            return got.keys.sorted().compactMap { got[$0] }.joined(separator: "\n")
+        }
+    }
+
+    private static func one(_ question: String, _ text: String) async -> String? {
+        let session = LanguageModelSession(instructions: "You copy facts out of a source text. Use only the source text. Never add anything from memory.")
+        let prompt = "SOURCE TEXT:\n\(text)\n\nQUESTION: \(question)\n\nList, as short plain lines, every fact in the source text that helps answer the question: who people are, who belongs to or lives in a place or group, and how they are connected. If nothing in the source text helps, write NONE."
+        do {
+            let r = try await session.respond(to: prompt, options: GenerationOptions(temperature: 0, maximumResponseTokens: 180))
+            let t = r.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty || t.uppercased().hasPrefix("NONE") ? nil : t
+        } catch { return nil }
     }
 }
 #endif

@@ -208,20 +208,28 @@ enum Knowledge {
     }
 
     /// The live search, given at most a few seconds so a slow connection never stalls the answer.
-    static func liveSearch(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 8) async -> String {
+    static func liveParts(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 8) async -> [String] {
         let key = terms(query).joined(separator: " ")
-        guard !key.isEmpty else { return "" }
-        return await withTaskGroup(of: String?.self) { group in
-            group.addTask { await search(key, publisher: publisher, notes: notes, deep: true) }
+        guard !key.isEmpty else { return [] }
+        return await withTaskGroup(of: [String]?.self) { group in
+            group.addTask { await searchParts(key, publisher: publisher, notes: notes, deep: true) }
             group.addTask { try? await Task.sleep(nanoseconds: seconds * 1_000_000_000); return nil }
             let first = await group.next() ?? nil
             group.cancelAll()
-            return first ?? ""
+            return first ?? []
         }
     }
 
     /// What the model's search tool runs: the saved notes first, then the comics wiki and Wikipedia, live.
     static func search(_ query: String, publisher: String?, notes: [KnowledgeNote], deep: Bool = true) async -> String {
+        let parts = await searchParts(query, publisher: publisher, notes: notes, deep: deep)
+        if parts.isEmpty { return "Nothing found for \(query)." }
+        let best = Passages.best(parts: parts, question: query, maxChars: 2800)
+        return (best.isEmpty ? parts : best).joined(separator: "\n")
+    }
+
+    /// Everything the sources returned for a topic, one entry per page, before it is cut down to the best passages.
+    static func searchParts(_ query: String, publisher: String?, notes: [KnowledgeNote], deep: Bool = true) async -> [String] {
         var parts: [String] = relevant(notes.filter { !$0.title.hasPrefix("Plot") }, to: query, budget: 900, each: 450)
         let ts = terms(query)
         if !ts.isEmpty { parts = parts.filter { p in ts.contains(where: { p.lowercased().contains($0.prefix(6)) }) } }
@@ -264,7 +272,7 @@ enum Knowledge {
         add("Superhero wiki", await hero)
         add("Comic Vine wiki", await more)
         if let i = await instant, !seen.contains(String(i.prefix(60)).lowercased()) { parts.append("[Web summary] " + i) }
-        return parts.isEmpty ? "Nothing found for \(query)." : parts.joined(separator: "\n")
+        return parts
     }
 
     /// One whole page by name from the comics wiki, falling back to Wikipedia (what the model's page-reading tool runs).
