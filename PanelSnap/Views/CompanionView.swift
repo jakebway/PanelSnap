@@ -13,13 +13,16 @@ struct CompanionView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     header
                     issueBanner
                     statusRow
                     if CompanionAsk.isSupported {
-                        AskPanel(model: model, ask: model.ask)
+                        AskPanel(model: model, ask: model.ask, scrollTo: { id in
+                            withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(id, anchor: .top) }
+                        })
                     }
 
                     if let t = model.data.issueSummary {
@@ -52,6 +55,8 @@ struct CompanionView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
+            }
+            .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Companion")
             .navigationBarTitleDisplayMode(.inline)
@@ -553,6 +558,7 @@ struct FixMatchSheet: View {
 struct AskPanel: View {
     @ObservedObject var model: CompanionModel
     @ObservedObject var ask: CompanionAsk
+    var scrollTo: (String) -> Void = { _ in }
     @State private var question = ""
     @State private var spoilers = false
     @FocusState private var typing: Bool
@@ -583,6 +589,7 @@ struct AskPanel: View {
             }
             .padding(10)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .id("ask-field")
             if exchanges.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -600,6 +607,7 @@ struct AskPanel: View {
             Toggle("Allow spoilers", isOn: $spoilers).font(.footnote)
             ForEach(exchanges) { ex in
                 VStack(alignment: .leading, spacing: 8) {
+                    // the newest question is the anchor the panel scrolls to
                     HStack {
                         Spacer(minLength: 40)
                         Text(ex.question)
@@ -631,6 +639,7 @@ struct AskPanel: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
+                .id(ex.id == exchanges.first?.id ? "ask-answer" : ex.id.uuidString)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             if !exchanges.isEmpty {
@@ -640,6 +649,17 @@ struct AskPanel: View {
         }
         .animation(.easeOut(duration: 0.2), value: exchanges.map { $0.id })
         .task { ask.prewarm(publisher: model.data.publisher) }
+        .onChange(of: typing) { _, focused in
+            // Bring the typing field to the top of the visible area once the keyboard is up.
+            if focused { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { scrollTo("ask-field") } }
+        }
+        .onChange(of: exchanges.first?.id) { _, _ in
+            // A new question was sent: show it and its answer, with the keyboard already gone.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { scrollTo("ask-answer") }
+        }
+        .onChange(of: ask.busy) { _, busy in
+            if !busy { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { scrollTo("ask-answer") } }
+        }
     }
 
     private var suggestions: [String] {
