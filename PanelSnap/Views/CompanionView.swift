@@ -49,6 +49,8 @@ struct CompanionView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if CompanionAsk.isSupported { askBar }
             }
+            .onChange(of: draft) { _, _ in typingChanged() }
+            .onChange(of: typing) { _, focused in if focused { model.ask.prewarm(publisher: model.data.publisher) } }
             .fullScreenCover(isPresented: $showChat, onDismiss: { pending = nil }) {
                 AskChatView(model: model, ask: model.ask, initialQuestion: pending)
             }
@@ -123,6 +125,10 @@ struct CompanionView: View {
         return list
     }
 
+    private func typingChanged() {
+        model.speculate(draft)
+    }
+
     private var draftReady: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     private func sendDraft() {
@@ -145,7 +151,8 @@ struct CompanionView: View {
         let lead: TextBlock? = [d.issueSummary, d.seriesSummary].compactMap { $0 }.first(where: { !looksLikeHistory($0.text) })
         let more: TextBlock? = d.seriesSummary.flatMap { s in (lead?.text == s.text) ? nil : s }
         let marks = model.issueMarks.sorted { $0.page < $1.page }
-        if lead != nil || d.issueSynopsis != nil || !d.arcs.isEmpty || more != nil {
+        let beats = omnibus ? model.collectionStory : []
+        if lead != nil || d.issueSynopsis != nil || !d.arcs.isEmpty || more != nil || !beats.isEmpty || model.storyLoading {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 8) {
                     Image(systemName: omnibus ? "books.vertical" : "text.book.closed")
@@ -168,7 +175,15 @@ struct CompanionView: View {
                         sourceLine(t)
                     }
                 }
-                if let t = d.issueSynopsis {
+                if omnibus && model.storyLoading && beats.isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Reading each issue…").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                if !beats.isEmpty {
+                    spoilerBeats(beats)
+                } else if let t = d.issueSynopsis {
                     spoilerText(t, label: lead == nil ? "THE STORY · SPOILERS" : "WHAT HAPPENS · SPOILERS")
                 }
                 if let t = more {
@@ -195,6 +210,38 @@ struct CompanionView: View {
         let keys = ["comic book series", "published by", "first appeared", "is an american", "created by", "first published",
                     "longest-running", "ongoing series", "publication history", "was launched"]
         return keys.filter { l.contains($0) }.count >= 2
+    }
+
+    /// The issues of a collected edition, each with the opening of its plot, behind the spoiler shield.
+    private func spoilerBeats(_ beats: [CompanionModel.StoryBeat]) -> some View {
+        let hidden = settings.spoilerShield && !revealed
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("ISSUE BY ISSUE · SPOILERS")
+                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            ZStack {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(beats) { b in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(b.label).font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
+                            Text(b.text).font(.callout).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if let s = beats.first?.source { Text(s).font(.caption).foregroundStyle(.secondary) }
+                }
+                .blur(radius: hidden ? 8 : 0)
+                if hidden {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) { revealed = true }
+                    } label: {
+                        Label("Tap to Reveal", systemImage: "eye")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(Theme.card2, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     private func spoilerText(_ t: TextBlock, label: String) -> some View {
@@ -789,6 +836,7 @@ struct AskChatView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
                 .onTapGesture { typing = false }
+                .onChange(of: text) { _, new in model.speculate(new) }
                 .onChange(of: messages.count) { _, _ in toBottom(proxy, animated: true) }
                 .onChange(of: messages.last?.answer) { _, _ in toBottom(proxy, animated: false) }
                 .onChange(of: typing) { _, focused in

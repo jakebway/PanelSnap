@@ -262,6 +262,103 @@ final class CompanionModel: ObservableObject {
 
     /// Everything the on-device model gets: the issue's details, the plot up to where you are (or all of it with
     /// spoilers on) and the words on the pages you have read, choosing the pages that matter most for the question.
+    /// Names the reader might type (and misspell): characters, places, teams, the series and names from the plot.
+    private func askVocabulary() -> [String] {
+        var vocab = notes.map { $0.title } + data.locations + data.teams + data.characters.map { $0.name }
+        if let s = data.series { vocab.append(s) }
+        // Names that appear in the plot ("Pietro", "Modred") so a misspelling or "Pietro's" without the apostrophe is still recognised.
+        if let plot = data.issueSynopsis?.text, let rx = try? NSRegularExpression(pattern: "\\b[A-Z][a-z]{3,}\\b") {
+            let ns = plot as NSString
+            let found = rx.matches(in: plot, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
+            vocab += Array(Set(found))
+        }
+        return vocab
+    }
+
+    private var speculateTask: Task<Void, Never>?
+    /// While the reader is still typing, start the searches for what they have so far. When they press send the answers
+    /// are already in the search cache, so the model gets its sources straight away.
+    func speculate(_ raw: String) {
+        speculateTask?.cancel()
+        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard settings.onlineLookup, q.split(separator: " ").count >= 3 else { return }
+        let vocab = askVocabulary()
+        let publisher = data.publisher ?? identity.publisher
+        let allNotes = notes
+        speculateTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(nanoseconds: 700_000_000)           // wait for a pause in typing
+            guard !Task.isCancelled else { return }
+            let fixed = Knowledge.canonical(q, vocabulary: vocab).text
+            _ = await Knowledge.liveParts(fixed, publisher: publisher, notes: allNotes)
+        }
+    }
+
+    // MARK: The story of a whole collection
+
+    struct StoryBeat: Codable, Hashable, Identifiable {
+        var label: String
+        var text: String
+        var source: String
+        var id: String { return label }
+    }
+    @Published private(set) var collectionStory: [StoryBeat] = []
+    @Published private(set) var storyLoading = false
+    private var storyTask: Task<Void, Never>?
+
+    private var storyFile: URL { return Paths.companionCache.appendingPathComponent(entry.id.uuidString + "-story-v1.json") }
+
+    /// Reads each issue's plot from the comics wiki (a few at a time) and keeps the opening of each, so a collected edition
+    /// shows what its issues are about, in order. Saved, so it only happens once per comic.
+    func loadCollectionStory() {
+        guard plan.count >= 2, storyTask == nil, collectionStory.isEmpty else { return }
+        if let data = try? Data(contentsOf: storyFile), let saved = try? JSONDecoder().decode([StoryBeat].self, from: data), !saved.isEmpty {
+            collectionStory = saved
+            return
+        }
+        guard settings.onlineLookup else { return }
+        let items = Array(plan.prefix(24))
+        let publisher = data.publisher ?? identity.publisher
+        let file = storyFile
+        storyLoading = true
+        storyTask = Task { [weak self] in
+            let beats: [StoryBeat] = await withTaskGroup(of: (Int, StoryBeat?).self) { group in
+                var results: [(Int, StoryBeat)] = []
+                var next = 0
+                while next < min(4, items.count) {
+                    let i = next; next += 1
+                    group.addTask { (i, await CompanionModel.beat(items[i], publisher: publisher)) }
+                }
+                for await (i, b) in group {
+                    if let b = b { results.append((i, b)) }
+                    if next < items.count {
+                        let j = next; next += 1
+                        group.addTask { (j, await CompanionModel.beat(items[j], publisher: publisher)) }
+                    }
+                }
+                return results.sorted { $0.0 < $1.0 }.map { $0.1 }
+            }
+            guard let self = self else { return }
+            self.storyLoading = false
+            self.storyTask = nil
+            guard !beats.isEmpty else { return }
+            self.collectionStory = beats
+            if let data = try? JSONEncoder().encode(beats) { try? data.write(to: file, options: .atomic) }
+        }
+    }
+
+    nonisolated private static func beat(_ it: PlannedIssue, publisher: String?) async -> StoryBeat? {
+        guard let d = await FandomProvider.lookup(publisher: publisher, series: it.series, volume: nil, issue: String(it.issue), year: it.year),
+              let syn = d.issueSynopsis else { return nil }
+        var sentences: [String] = []
+        syn.text.enumerateSubstrings(in: syn.text.startIndex..<syn.text.endIndex, options: .bySentences) { s, _, _, stop in
+            if let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), s.count > 20 { sentences.append(s) }
+            if sentences.count >= 2 { stop = true }
+        }
+        let text = sentences.joined(separator: " ")
+        guard !text.isEmpty else { return nil }
+        return StoryBeat(label: "\(it.series) #\(it.issue)", text: TextClean.shorten(text, limit: 300), source: syn.source)
+    }
+
     func askContext(spoilers: Bool, question: String, budget: Int) async -> String {
         if !readingPages { await readRecentPages() }               // usually already done in the background
         else {
@@ -275,14 +372,7 @@ final class CompanionModel: ObservableObject {
             progress = Double(currentPage - m.page + 1) / Double(max(1, next - m.page))
         }
         // Fix misspelled names, then search the wiki ourselves (the model often skips its own search tool).
-        var vocab = notes.map { $0.title } + data.locations + data.teams + data.characters.map { $0.name }
-        if let s = data.series { vocab.append(s) }
-        // Names that appear in the plot ("Pietro", "Modred") so a misspelling or "Pietro's" without the apostrophe is still recognised.
-        if let plot = data.issueSynopsis?.text, let rx = try? NSRegularExpression(pattern: "\\b[A-Z][a-z]{3,}\\b") {
-            let ns = plot as NSString
-            let found = rx.matches(in: plot, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
-            vocab += Array(Set(found))
-        }
+        let vocab = askVocabulary()
         let corrected = Knowledge.canonical(question, vocabulary: vocab)
         let fixedQuestion = corrected.text
         let publisher = data.publisher ?? identity.publisher
@@ -419,6 +509,7 @@ final class CompanionModel: ObservableObject {
             scanTask = nil
         }
         startScanIfWorthwhile()
+        loadCollectionStory()
     }
 
     private func applyMarks() {
