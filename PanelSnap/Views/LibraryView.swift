@@ -25,6 +25,7 @@ struct LibraryView: View {
     @State private var shelfRenaming: String?               // nil = creating a new shelf
     @State private var shelfMoveIDs = Set<UUID>()           // comics to move into a shelf that is being created
     @State private var shelfText = ""
+    @State private var compressTarget: ComicEntry?
     @State private var showDeleteShelf = false
     @State private var shelfToDelete = ""
     @State private var showDeleteComics = false
@@ -246,6 +247,16 @@ struct LibraryView: View {
             if shelfRenaming == nil && !shelfMoveIDs.isEmpty {
                 Text("The selected comics will be moved to it.")
             }
+        }
+        .confirmationDialog("Compress \(compressTarget?.title ?? "comic")?", isPresented: Binding(get: { compressTarget != nil }, set: { if !$0 { compressTarget = nil } }),
+                            titleVisibility: .visible) {
+            Button("Compress") {
+                if let e = compressTarget { Task { await library.compress(e) } }
+                compressTarget = nil
+            }
+            Button("Cancel", role: .cancel) { compressTarget = nil }
+        } message: {
+            Text("Pages are re-saved as smaller images (\(settings.compressionLevel.label.lowercased()): \(settings.compressionLevel.detail.lowercased())). The original file is replaced and can't be restored.")
         }
         .confirmationDialog("Delete Shelf?", isPresented: $showDeleteShelf, titleVisibility: .visible) {
             Button("Delete Shelf", role: .destructive) {
@@ -711,6 +722,9 @@ struct LibraryView: View {
             Label(entry.isManga ? "Read left-to-right" : "Read right-to-left (manga)",
                   systemImage: "arrow.left.arrow.right")
         }
+        Button {
+            compressTarget = entry
+        } label: { Label("Compress", systemImage: "arrow.down.right.and.arrow.up.left") }
         Button {
             organizing = true
             selection = [entry.id]

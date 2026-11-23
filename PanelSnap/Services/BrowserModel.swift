@@ -556,8 +556,16 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             await library.importFiles([dest], shelf: nil)
             let gained = library.comics.count - before
             let name = dest.lastPathComponent
+            var saved: Int64 = 0
+            // Downloads are shrunk as they arrive (switch off in Settings › Storage).
+            if gained > 0, CompressionLevel.autoDownloads, let added = library.comics.first {
+                update(id) { $0.state = .adding }
+                saved = await library.compress(added) ?? 0
+            }
             update(id) {
-                if gained > 0 { $0.state = .done("Added to your library") }
+                if gained > 0 {
+                    $0.state = .done(saved > 0 ? "Added, \(ByteCountFormatter.string(fromByteCount: saved, countStyle: .file)) saved" : "Added to your library")
+                }
                 else if library.errorMessage != nil { $0.state = .failed("Downloaded, but couldn't be opened.") }
                 else { $0.state = .done("Already in your library") }
             }

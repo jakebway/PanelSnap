@@ -292,6 +292,78 @@ final class LibraryStore: ObservableObject {
         return .success(entry)
     }
 
+    // MARK: compress
+
+    /// Shrinks one comic: re-saves its pages as smaller JPEGs in a new CBZ and swaps it in for the original.
+    /// Returns the bytes saved (0 when it was already as small as it gets), or nil if it failed.
+    @discardableResult
+    func compress(_ entry: ComicEntry, level: CompressionLevel = .current) async -> Int64? {
+        let src = fileURL(for: entry)
+        let name = entry.title
+        isImporting = true
+        importStatus = "Compressing \(name)…"
+        defer { isImporting = false }
+        let result: Result<ComicCompressor.Outcome, Error> = await Task.detached(priority: .utility) {
+            do {
+                return .success(try ComicCompressor.compress(src, level: level) { fraction in
+                    Task { @MainActor [weak self] in self?.importStatus = "Compressing \(name)… \(Int(fraction * 100))%" }
+                })
+            } catch { return .failure(error) }
+        }.value
+        switch result {
+        case .failure(let error):
+            importStatus = nil
+            errorMessage = "Couldn't compress \(name): \(error.localizedDescription)"
+            Console.log("compress: ERROR \(name): \(error)")
+            return nil
+        case .success(let outcome):
+            guard outcome.worthIt else {
+                importStatus = "\(name) is already as small as it gets"
+                scheduleStatusClear()
+                return 0
+            }
+            let fm = FileManager.default
+            do {
+                let folder = src.deletingLastPathComponent()
+                let base = src.deletingPathExtension().lastPathComponent
+                var finalURL = folder.appendingPathComponent(base + ".cbz")
+                if src.pathExtension.lowercased() == "cbz" {
+                    _ = try fm.replaceItemAt(src, withItemAt: outcome.url)
+                    finalURL = src
+                } else {
+                    var n = 2
+                    while fm.fileExists(atPath: finalURL.path) { finalURL = folder.appendingPathComponent("\(base) \(n).cbz"); n += 1 }
+                    try fm.moveItem(at: outcome.url, to: finalURL)
+                    try? fm.removeItem(at: src)
+                }
+                if let i = comics.firstIndex(where: { $0.id == entry.id }), let rel = LibraryStore.relativeName(finalURL) {
+                    comics[i].fileName = rel
+                    comics[i].format = .cbz
+                    comics[i].pageCount = outcome.pageCount
+                    save()
+                }
+                try? fm.removeItem(at: PanelCache.fileURL(for: entry.id))      // page pictures changed size; panels are found again
+                let saved = outcome.before - outcome.after
+                importStatus = "Saved \(ByteCountFormatter.string(fromByteCount: saved, countStyle: .file)) on \(name)"
+                scheduleStatusClear()
+                Console.log("compress: \(name) \(outcome.before) -> \(outcome.after)")
+                return saved
+            } catch {
+                try? fm.removeItem(at: outcome.url)
+                importStatus = nil
+                errorMessage = "Couldn't replace \(name): \(error.localizedDescription)"
+                return nil
+            }
+        }
+    }
+
+    private func scheduleStatusClear() {
+        Task {
+            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            if !isImporting { importStatus = nil }
+        }
+    }
+
     // MARK: edits
 
     func recordProgress(id: UUID, page: Int, panel: Int, finished: Bool) {
