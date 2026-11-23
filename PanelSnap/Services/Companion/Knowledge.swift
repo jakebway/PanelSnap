@@ -208,7 +208,7 @@ enum Knowledge {
     }
 
     /// The live search, given at most a few seconds so a slow connection never stalls the answer.
-    static func liveParts(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 8) async -> [String] {
+    static func liveParts(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 10) async -> [String] {
         let key = terms(query).joined(separator: " ")
         guard !key.isEmpty else { return [] }
         return await withTaskGroup(of: [String]?.self) { group in
@@ -245,6 +245,7 @@ enum Knowledge {
         async let wiki2: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query + " character comics", count: 2, limit: 900)
         async let hero: [(title: String, text: String)] = lookUpMany(host: "superheroes.fandom.com", query: query, count: 1, limit: 900)
         async let instant: String? = instantAnswer(query + " " + house)
+        async let web: [(title: String, text: String)] = WebSearch.parts(query + " " + house)
         // "Who lives there / who is in it / what is its history" is answered by the full page and its member lists, not the intro.
         async let deepFan: [(title: String, text: String)] = {
             guard deep, let h = host else { return [] }
@@ -268,6 +269,7 @@ enum Knowledge {
         add("comics wiki", await peopleFan)
         add("Wikipedia", await wiki)
         add("Wikipedia", await people)
+        add("web", await web)
         add("Wikipedia", await wiki2)
         add("Superhero wiki", await hero)
         if let i = await instant, !seen.contains(String(i.prefix(60)).lowercased()) { parts.append("[Web summary] " + i) }
