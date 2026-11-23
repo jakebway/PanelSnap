@@ -23,8 +23,8 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                     }
 
-                    Section(header: Text("Storage"), footer: Text("Every comic is kept as HEIC pages sized for the unfolded screen, which is much smaller than the original. New comics are converted when they're added or downloaded, and the old file is deleted. Turn this off to keep files exactly as they are.")) {
-                        Toggle("Optimize Comics Automatically", isOn: $settings.compressDownloads)
+                    Section(header: Text("Storage")) {
+                        Toggle("Space Saver", isOn: $settings.compressDownloads)
                     }
 
                     Section(header: Text("Companion"), footer: Text("Character info comes from a guide built into the app. With lookups on, PanelSnap also fetches story summaries from public sources such as Wikipedia. No account or key is needed.")) {

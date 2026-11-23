@@ -10,18 +10,14 @@ enum ComicCompressor {
     static var enabled: Bool {
         return UserDefaults.standard.object(forKey: "compressDownloads") as? Bool ?? true
     }
-    /// Longest side of a stored page, in pixels: the unfolded screen's long edge (never below 2208).
+    /// Longest side of a stored page, in pixels: this device's screen. A foldable counts its biggest (unfolded) screen,
+    /// remembered in case the app is opened while it is folded.
     @MainActor static var targetPixel: CGFloat {
         let b = UIScreen.main.nativeBounds
-        return max(2208, max(b.width, b.height))
-    }
-
-    struct Outcome {
-        var url: URL            // the new file (a temporary file next to nothing yet); nil savings means it was deleted
-        var before: Int64
-        var after: Int64
-        var pageCount: Int
-        var worthIt: Bool { return after < before - before / 20 }      // at least 5% smaller
+        let d = UserDefaults.standard
+        let biggest = max(max(b.width, b.height), CGFloat(d.double(forKey: "largestScreenPixel")))
+        d.set(Double(biggest), forKey: "largestScreenPixel")
+        return min(3200, max(1600, biggest))
     }
 
     private static func ext(of data: Data) -> String {

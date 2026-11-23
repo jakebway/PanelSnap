@@ -23,29 +23,15 @@ struct CompanionView: View {
                     header
                     issueBanner
                     statusRow
+                    storyCard
+                    if !model.data.characters.isEmpty {
+                        section("Main characters") { characterStrip }
+                    }
                     if CompanionAsk.isSupported {
                         AskEntryCard(model: model, ask: model.ask) { pending = nil; showChat = true }
                     }
-
-                    if let t = model.data.issueSummary {
-                        section("About this issue") { textBlock(t) }
-                    }
-                    if let t = model.data.issueSynopsis {
-                        section("What happens (spoilers)") { spoilerBlock(t) }
-                    }
-                    if let t = model.data.seriesSummary {
-                        section("The series") { textBlock(t) }
-                    }
-                    if !model.data.characters.isEmpty {
-                        section("Who's who") { characterStrip }
-                    }
                     if !model.data.teams.isEmpty || !model.data.locations.isEmpty {
                         section("Teams & places") { teamsAndPlaces }
-                    }
-                    if !model.data.arcs.isEmpty {
-                        section("Story arc") {
-                            FlowChips(items: model.data.arcs, tint: Theme.accent)
-                        }
                     }
                     if !model.data.creators.isEmpty {
                         section("Made by") { creators }
@@ -87,28 +73,54 @@ struct CompanionView: View {
 
     /// The message bar is always on the Companion screen. Sending opens the chat with the question already on its way.
     private var askBar: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "sparkles").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.accent)
-            TextField("Ask about this comic…", text: $draft)
-                .focused($typing)
-                .submitLabel(.send)
-                .onSubmit(sendDraft)
-                .accessibilityIdentifier("ask-field")
-            Button(action: sendDraft) {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.onAccent)
-                    .frame(width: 32, height: 32)
-                    .background(draftReady ? Theme.accent : Theme.accent.opacity(0.35), in: Circle())
+        VStack(spacing: 8) {
+            if !draftReady && !typing {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(quickAsks, id: \.self) { q in
+                            Button { pending = q; showChat = true } label: {
+                                Text(q).font(.footnote.weight(.medium))
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(Theme.card2, in: Capsule())
+                                    .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                }
             }
-            .disabled(!draftReady)
-            .accessibilityIdentifier("ask-send-inline")
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "sparkles").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.accent)
+                TextField("Ask about this comic…", text: $draft)
+                    .focused($typing)
+                    .submitLabel(.send)
+                    .onSubmit(sendDraft)
+                    .accessibilityIdentifier("ask-field")
+                Button(action: sendDraft) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.onAccent)
+                        .frame(width: 32, height: 32)
+                        .background(draftReady ? Theme.accent : Theme.accent.opacity(0.35), in: Circle())
+                }
+                .disabled(!draftReady)
+                .accessibilityIdentifier("ask-send-inline")
+            }
+            .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 6)
+            .background(Theme.card2, in: Capsule())
+            .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+            .padding(.horizontal, 14)
         }
-        .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 6)
-        .background(Theme.card2, in: Capsule())
-        .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
-        .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 8)
+        .padding(.top, 8).padding(.bottom, 8)
         .background(.ultraThinMaterial)
+    }
+
+    private var quickAsks: [String] {
+        var list = ["What's the story so far?", "Who are the main characters?"]
+        if let first = model.data.characters.first?.name { list.append("Who is \(first)?") }
+        if let arc = model.data.arcs.first { list.append("What is \(arc) about?") }
+        return list
     }
 
     private var draftReady: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -120,6 +132,78 @@ struct CompanionView: View {
         typing = false
         pending = q
         showChat = true
+    }
+
+    // MARK: Story
+
+    /// The heart of the screen: the story arc and what it's about. A collected edition gets the whole-book picture.
+    @ViewBuilder
+    private var storyCard: some View {
+        let d = model.data
+        let omnibus = model.plannedCount >= 2
+        let lead: TextBlock? = omnibus ? (d.seriesSummary ?? d.issueSummary) : (d.issueSummary ?? d.seriesSummary)
+        let more: TextBlock? = (!omnibus && d.issueSummary != nil) ? d.seriesSummary : nil
+        if lead != nil || d.issueSynopsis != nil || !d.arcs.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Image(systemName: omnibus ? "books.vertical" : "text.book.closed")
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accent)
+                    Text(omnibus ? "The whole story" : "The story").font(.headline)
+                    Spacer()
+                }
+                if !d.arcs.isEmpty {
+                    FlowChips(items: Array(d.arcs.prefix(omnibus ? 8 : 3)), tint: Theme.accent)
+                }
+                if let t = lead {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(TextClean.shorten(t.text, limit: 520))
+                            .font(.callout).lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        sourceLine(t)
+                    }
+                }
+                if let t = d.issueSynopsis { spoilerText(t) }
+                if let t = more {
+                    DisclosureGroup("About the series") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(TextClean.shorten(t.text, limit: 520)).font(.callout).lineSpacing(3)
+                            sourceLine(t)
+                        }
+                        .padding(.top, 6)
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .tint(.secondary)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private func spoilerText(_ t: TextBlock) -> some View {
+        let hidden = settings.spoilerShield && !revealed
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("WHAT HAPPENS · SPOILERS")
+                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            ZStack {
+                Text(TextClean.shorten(t.text, limit: 700))
+                    .font(.callout).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .blur(radius: hidden ? 8 : 0)
+                if hidden {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) { revealed = true }
+                    } label: {
+                        Label("Tap to Reveal", systemImage: "eye")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(Theme.card2, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     // MARK: Pieces
@@ -289,17 +373,21 @@ struct CompanionView: View {
     private var characterStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
-                ForEach(model.data.characters) { c in
+                ForEach(Array(model.data.characters.prefix(12))) { c in
                     Button {
                         selected = c
                     } label: {
-                        VStack(spacing: 6) {
+                        VStack(spacing: 5) {
                             Avatar(name: c.name, imageURL: c.imageURL, size: 64)
                             Text(c.name)
-                                .font(.caption.weight(.medium))
+                                .font(.caption.weight(.semibold))
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
-                                .frame(width: 76)
+                                .frame(width: 80)
+                            if let r = c.role, !r.isEmpty {
+                                Text(r).font(.caption2).foregroundStyle(.secondary)
+                                    .lineLimit(1).frame(width: 80)
+                            }
                         }
                     }
                     .buttonStyle(.plain)
@@ -640,8 +728,8 @@ struct AskEntryCard: View {
     }
 }
 
-/// A full-screen chat about the comic: your questions on the right, the answers on the left, oldest at the top,
-/// and the message bar pinned above the keyboard.
+/// A full-screen assistant chat about the comic. Your questions sit on the right, answers read as plain text beside a small
+/// sparkle, and the message bar floats above the keyboard.
 struct AskChatView: View {
     @ObservedObject var model: CompanionModel
     @ObservedObject var ask: CompanionAsk
@@ -650,12 +738,15 @@ struct AskChatView: View {
     @AppStorage("companion.spoilers") private var spoilers = false
     @State private var text = ""
     @State private var sentInitial = false
-    @AppStorage("companion.showAllChats") private var showAll = false
+    @State private var viewKey: String?
+    @State private var showHistory = false
     @FocusState private var typing: Bool
 
+    private var activeKey: String { return viewKey ?? model.issueKey }
+    private var viewingPast: Bool { return viewKey != nil && viewKey != model.issueKey }
+
     private var messages: [AskExchange] {
-        let all = showAll ? ask.history : ask.history.filter { $0.issueKey == model.issueKey }
-        return Array(all.suffix(60))
+        return Array(ask.history.filter { $0.issueKey == activeKey }.suffix(60))
     }
 
     private var title: String {
@@ -667,18 +758,10 @@ struct AskChatView: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        if messages.isEmpty { emptyState }
-                        ForEach(Array(messages.enumerated()), id: \.element.id) { i, ex in
-                            if showAll, i == 0 || messages[i - 1].issueKey != ex.issueKey {
-                                HStack(spacing: 10) {
-                                    Rectangle().fill(Theme.stroke).frame(height: 1)
-                                    Text(ex.issueKey.isEmpty ? "This comic" : ex.issueKey.replacingOccurrences(of: "#", with: " #"))
-                                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary).fixedSize()
-                                    Rectangle().fill(Theme.stroke).frame(height: 1)
-                                }
-                                .padding(.vertical, 10)
-                            }
+                    LazyVStack(alignment: .leading, spacing: 20) {
+                        if viewingPast { pastBanner }
+                        if messages.isEmpty && !viewingPast { emptyState }
+                        ForEach(messages) { ex in
                             userBubble(ex.question)
                             assistantBubble(ex, isLast: ex.id == messages.last?.id)
                         }
@@ -699,26 +782,39 @@ struct AskChatView: View {
             }
             .background(Theme.bg)
             .safeAreaInset(edge: .bottom, spacing: 0) { inputBar }
-            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     Button("Done") { typing = false; dismiss() }
-                    Button { withAnimation { showAll.toggle() } } label: {
-                        Image(systemName: "clock.arrow.circlepath").foregroundStyle(showAll ? Theme.accent : Color.secondary)
+                    Button { typing = false; showHistory = true } label: {
+                        Image(systemName: "clock.arrow.circlepath")
                     }
-                    .accessibilityLabel("Past chats from other issues")
+                    .accessibilityLabel("Past chats")
+                    .accessibilityIdentifier("ask-history")
                     Menu {
                         Toggle(isOn: $spoilers) { Label("Allow spoilers", systemImage: "eye") }
-                        Toggle(isOn: $showAll) { Label("Show chats from other issues", systemImage: "clock.arrow.circlepath") }
                         Button(role: .destructive) {
-                            withAnimation { ask.clear(issueKey: model.issueKey) }
-                        } label: { Label("Clear chat", systemImage: "trash") }
+                            withAnimation { ask.clear(issueKey: activeKey) }
+                        } label: { Label("Clear this chat", systemImage: "trash") }
                         .disabled(messages.isEmpty || ask.busy)
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
                     .accessibilityIdentifier("ask-menu")
+                }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sparkles").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.accent)
+                            Text("Companion").font(.subheadline.weight(.semibold))
+                        }
+                        Text(title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
+            .sheet(isPresented: $showHistory) {
+                ChatHistorySheet(ask: ask, currentKey: model.issueKey) { key in
+                    viewKey = (key == model.issueKey) ? nil : key
                 }
             }
         }
@@ -736,67 +832,88 @@ struct AskChatView: View {
 
     // MARK: Pieces
 
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.onAccent)
-                    .frame(width: 34, height: 34)
-                    .background(Theme.accent, in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ask about this comic").font(.headline)
-                    Text("From the pages and the comics wikis").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            ForEach(suggestions, id: \.self) { s in
-                Button { send(s) } label: {
-                    HStack {
-                        Text(s).font(.subheadline)
-                        Spacer(minLength: 6)
-                        Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
+    private var pastBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+            Text("Past chat · " + ChatHistorySheet.label(for: activeKey)).font(.footnote.weight(.semibold))
+            Spacer()
+            Button("Back") { withAnimation { viewKey = nil } }
+                .font(.footnote.weight(.semibold))
         }
-        .padding(.top, 4)
+        .padding(12)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func avatar(_ size: CGFloat) -> some View {
+        Image(systemName: "sparkles")
+            .font(.system(size: size * 0.42, weight: .bold))
+            .foregroundStyle(Theme.onAccent)
+            .frame(width: size, height: size)
+            .background(Theme.accent, in: Circle())
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            avatar(52).padding(.top, 36)
+            VStack(spacing: 4) {
+                Text("Ask me anything").font(.title3.weight(.semibold))
+                Text("Answers come from the pages and the comics wikis")
+                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            VStack(spacing: 8) {
+                ForEach(suggestions, id: \.self) { s in
+                    Button { send(s) } label: {
+                        HStack {
+                            Text(s).font(.subheadline)
+                            Spacer(minLength: 6)
+                            Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func userBubble(_ q: String) -> some View {
         HStack {
-            Spacer(minLength: 50)
+            Spacer(minLength: 56)
             Text(q)
-                .font(.callout.weight(.medium))
+                .font(.callout)
                 .foregroundStyle(Theme.onAccent)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(.horizontal, 14).padding(.vertical, 9)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 
     private func assistantBubble(_ ex: AskExchange, isLast: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if ex.failed {
-                Text("I couldn't answer that just now. Try asking it another way.")
-                    .font(.callout).foregroundStyle(.secondary)
-            } else if ex.answer.isEmpty {
-                HStack(spacing: 8) {
-                    TypingDots()
-                    if isLast && !ask.stage.isEmpty { Text(ask.stage).font(.caption).foregroundStyle(.secondary) }
-                }
-            } else {
-                Text(ex.answer).font(.callout).lineSpacing(3).textSelection(.enabled)
-                if let e = ex.engine {
-                    Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
-                          systemImage: e == "cloud" ? "icloud" : "eye")
-                        .font(.caption2).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 10) {
+            avatar(26).padding(.top, 1)
+            VStack(alignment: .leading, spacing: 6) {
+                if ex.failed {
+                    Text("I couldn't answer that just now. Try asking it another way.")
+                        .font(.callout).foregroundStyle(.secondary)
+                } else if ex.answer.isEmpty {
+                    HStack(spacing: 8) {
+                        TypingDots()
+                        if isLast && !ask.stage.isEmpty { Text(ask.stage).font(.caption).foregroundStyle(.secondary) }
+                    }
+                } else {
+                    Text(ex.answer).font(.callout).lineSpacing(4).textSelection(.enabled)
+                    if let e = ex.engine {
+                        Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
+                              systemImage: e == "cloud" ? "icloud" : "eye")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, 24)
+        .padding(.trailing, 16)
     }
 
     private var inputBar: some View {
@@ -830,7 +947,7 @@ struct AskChatView: View {
     }
 
     private var suggestions: [String] {
-        var list = ["Who are the main characters?", "What's going on so far?"]
+        var list = ["What's the story so far?", "Who are the main characters?"]
         if let first = model.data.characters.first?.name { list.insert("Who is \(first)?", at: 0) }
         if let place = model.data.locations.first { list.append("What is \(place)?") }
         return list
@@ -840,6 +957,7 @@ struct AskChatView: View {
         let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !ask.busy else { return }
         text = ""
+        viewKey = nil                      // new questions always belong to the issue you're reading
         typing = false                     // put the keyboard away so the answer can be read
         let allow = spoilers
         let key = model.issueKey
@@ -852,6 +970,71 @@ struct AskChatView: View {
                 await model.askContext(spoilers: allow, question: searchText, budget: budget)
             }, pageImage: { await model.currentPageImage() })
         }
+    }
+}
+
+/// Every past chat, grouped by issue, newest first. Tapping one opens it in the chat.
+struct ChatHistorySheet: View {
+    @ObservedObject var ask: CompanionAsk
+    let currentKey: String
+    var pick: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    static func label(for key: String) -> String {
+        return key.isEmpty ? "This comic" : key.replacingOccurrences(of: "#", with: " #")
+    }
+
+    private var groups: [(key: String, items: [AskExchange])] {
+        var order: [String] = []
+        var map: [String: [AskExchange]] = [:]
+        for ex in ask.history.reversed() where !ex.failed {
+            if map[ex.issueKey] == nil { order.append(ex.issueKey) }
+            map[ex.issueKey, default: []].append(ex)
+        }
+        return order.map { (key: $0, items: map[$0] ?? []) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if groups.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "bubble.left.and.bubble.right").font(.largeTitle).foregroundStyle(.tertiary)
+                        Text("No chats yet").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(groups, id: \.key) { g in
+                            Button { pick(g.key); dismiss() } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(ChatHistorySheet.label(for: g.key)).font(.subheadline.weight(.semibold))
+                                        if g.key == currentKey {
+                                            Text("Reading now").font(.caption2.weight(.semibold)).foregroundStyle(Theme.accent)
+                                        }
+                                        Spacer()
+                                        Text("\(g.items.count)").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Text(g.items.first?.question ?? "").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            .listRowBackground(Theme.card)
+                        }
+                    }
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(Theme.bg)
+            .navigationTitle("Past Chats")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .preferredColorScheme(.dark)
     }
 }
 
