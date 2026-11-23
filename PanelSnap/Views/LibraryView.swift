@@ -26,6 +26,7 @@ struct LibraryView: View {
     @State private var shelfMoveIDs = Set<UUID>()           // comics to move into a shelf that is being created
     @State private var shelfText = ""
     @State private var showDeleteShelf = false
+    @State private var draggingID: UUID?
     @State private var shelfToDelete = ""
     @State private var showDeleteComics = false
     @State private var deleteIDs = Set<UUID>()
@@ -296,6 +297,7 @@ struct LibraryView: View {
     private func cell(_ entry: ComicEntry) -> some View {
         ComicCell(entry: entry, organizing: organizing, selected: selection.contains(entry.id))
             .onTapGesture {
+                draggingID = nil
                 if organizing {
                     if selection.contains(entry.id) { selection.remove(entry.id) } else { selection.insert(entry.id) }
                 } else {
@@ -305,7 +307,7 @@ struct LibraryView: View {
             .contextMenu {
                 if !organizing { menu(for: entry) }
             }
-            .modifier(ReorderModifier(enabled: true, id: entry.id) { dragged, target in
+            .modifier(ReorderModifier(id: entry.id, dragging: $draggingID) { dragged, target in
                 reorder(dragged, onto: target)
             })
     }
@@ -316,18 +318,11 @@ struct LibraryView: View {
             library.applyOrder(sorted(library.comics, by: settings.librarySort).map { $0.id })
             settings.librarySort = .custom
         }
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
             library.moveComic(dragged, onto: target)
         }
     }
 
-    /// A comic dragged onto a shelf chip moves to that shelf (the All chip takes it off any shelf).
-    private func dropOnShelf(_ items: [String], _ name: String?) -> Bool {
-        let ids = Set(items.compactMap { UUID(uuidString: $0) })
-        if ids.isEmpty { return false }
-        library.move(ids, toShelf: name)
-        return true
-    }
 
     private func commitShelfName() {
         if let old = shelfRenaming {
@@ -393,10 +388,10 @@ struct LibraryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 shelfChip("All", count: library.comics.count, selected: shelf == nil) { shelf = nil }
-                    .dropDestination(for: String.self) { items, _ in dropOnShelf(items, nil) }
+                    .onDrop(of: [.text], delegate: ShelfDropDelegate(name: nil, dragging: $draggingID) { id, name in library.move([id], toShelf: name) })
                 ForEach(library.shelves, id: \.self) { name in
                     shelfChip(name, count: library.comics.filter { $0.shelf == name }.count, selected: shelf == name) { shelf = name }
-                        .dropDestination(for: String.self) { items, _ in dropOnShelf(items, name) }
+                        .onDrop(of: [.text], delegate: ShelfDropDelegate(name: name, dragging: $draggingID) { id, name in library.move([id], toShelf: name) })
                         .contextMenu {
                             Button {
                                 shelfRenaming = name
@@ -722,25 +717,53 @@ struct LibraryView: View {
     }
 }
 
-/// Lets a cell be picked up with a long press and dropped onto another comic or a shelf.
+/// Lets a cell be picked up with a long press. The other covers slide out of the way as it moves over them,
+/// like rearranging apps on the Home Screen.
 private struct ReorderModifier: ViewModifier {
-    let enabled: Bool
     let id: UUID
-    let onDrop: (UUID, UUID) -> Void
+    @Binding var dragging: UUID?
+    let onOver: (UUID, UUID) -> Void
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if enabled {
-            content
-                .draggable(id.uuidString)
-                .dropDestination(for: String.self) { items, _ in
-                    guard let first = items.first, let dragged = UUID(uuidString: first) else { return false }
-                    onDrop(dragged, id)
-                    return true
-                }
-        } else {
-            content
-        }
+        content
+            .opacity(dragging == id ? 0.35 : 1)
+            .onDrag {
+                dragging = id
+                return NSItemProvider(object: id.uuidString as NSString)
+            }
+            .onDrop(of: [.text], delegate: CoverDropDelegate(id: id, dragging: $dragging, onOver: onOver))
+    }
+}
+
+private struct CoverDropDelegate: DropDelegate {
+    let id: UUID
+    @Binding var dragging: UUID?
+    let onOver: (UUID, UUID) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
+    func dropEntered(info: DropInfo) {
+        if let d = dragging, d != id { onOver(d, id) }
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { return DropProposal(operation: .move) }   // a move, so no green plus
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+}
+
+/// A shelf chip takes the comic being dragged (the All chip takes it off any shelf).
+private struct ShelfDropDelegate: DropDelegate {
+    let name: String?
+    @Binding var dragging: UUID?
+    let move: (UUID, String?) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
+    func dropUpdated(info: DropInfo) -> DropProposal? { return DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool {
+        guard let id = dragging else { return false }
+        move(id, name)
+        dragging = nil
+        return true
     }
 }
 
