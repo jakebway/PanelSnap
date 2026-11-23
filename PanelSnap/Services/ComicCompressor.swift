@@ -20,6 +20,14 @@ enum ComicCompressor {
         return min(3200, max(1600, biggest))
     }
 
+    struct Outcome {
+        var url: URL
+        var before: Int64
+        var after: Int64
+        var pageCount: Int
+        var worthIt: Bool { return after < before - before / 20 }      // at least 5% smaller
+    }
+
     private static func ext(of data: Data) -> String {
         let b = [UInt8](data.prefix(12))
         if b.count >= 3, b[0] == 0xFF, b[1] == 0xD8 { return "jpg" }
