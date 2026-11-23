@@ -298,18 +298,10 @@ final class CompanionModel: ObservableObject {
 
     /// The best page to read about this comic: its entry on the comics wiki, else Wikipedia, else any link found.
     var diveDeeperURL: URL? {
-        // The issue's own page on the fan wiki if we found one; otherwise a search of that wiki for this issue.
-        if let u = data.links.map({ $0.url }).first(where: { $0.contains("fandom.com") }) { return URL(string: u) }
-        let publisher = data.publisher ?? identity.publisher
-        if let site = FandomProvider.host(for: publisher) {
-            var query = activeMark.map { ($0.series ?? data.series ?? "") + " " + $0.issue } ?? ((data.series ?? entry.title) + " " + (data.issue ?? ""))
-            query = query.trimmingCharacters(in: .whitespaces)
-            var comps = URLComponents(string: "https://\(site.host)/wiki/Special:Search")
-            comps?.queryItems = [URLQueryItem(name: "query", value: query)]
-            if let u = comps?.url { return u }
-        }
-        let urls = data.links.map { $0.url }
-        return (urls.first(where: { $0.contains("wikipedia.org") }) ?? urls.first).flatMap { URL(string: $0) }
+        // The home page of the publisher's fan wiki, to browse freely.
+        if let site = FandomProvider.host(for: data.publisher ?? identity.publisher), let u = URL(string: "https://\(site.host)/wiki/Main_Page") { return u }
+        if let u = data.links.map({ $0.url }).first(where: { $0.contains("fandom.com") }), let host = URL(string: u)?.host { return URL(string: "https://\(host)/") }
+        return nil
     }
 
     private var speculateTask: Task<Void, Never>?
