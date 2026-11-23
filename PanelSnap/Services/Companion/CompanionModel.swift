@@ -275,6 +275,27 @@ final class CompanionModel: ObservableObject {
         return vocab
     }
 
+    /// "Where is X during these comics" means nothing to a search engine: name the series instead.
+    private func anchored(_ question: String) -> String {
+        let name = activeMark?.series ?? data.series ?? identity.series ?? ""
+        guard !name.isEmpty else { return question }
+        return question.replacingOccurrences(of: "\\b(?:these|those|this|the)\\s+(?:comics?|issues?|books?|collection|volume|story|storyline)\\b",
+                                             with: "in " + name, options: [.regularExpression, .caseInsensitive])
+    }
+
+    /// What happens in each issue of the collection, as passages for the model to read. Issues the reader hasn't reached
+    /// are left out unless spoilers are allowed.
+    private func plotParts(spoilers: Bool) -> [String] {
+        guard !collectionStory.isEmpty else { return [] }
+        var limit = Int.max
+        if !spoilers {
+            guard let m = activeMark, let k = plan.firstIndex(where: { $0.issue == Int(m.issue) && (m.series == nil || $0.series.lowercased().contains((m.series ?? "").lowercased()) || (m.series ?? "").lowercased().contains($0.series.lowercased())) }) else { return [] }
+            limit = k - 1                        // the issue being read is only known up to the page (the issue facts cover it)
+        }
+        return collectionStory.filter { $0.order <= limit && !$0.full.isEmpty }
+            .map { "[Plot of \($0.label), \($0.source)] " + $0.full }
+    }
+
     private var speculateTask: Task<Void, Never>?
     /// While the reader is still typing, start the searches for what they have so far. When they press send the answers
     /// are already in the search cache, so the model gets its sources straight away.
@@ -299,13 +320,15 @@ final class CompanionModel: ObservableObject {
         var label: String
         var text: String
         var source: String
+        var full: String = ""       // a longer part of the plot, for answering questions
+        var order: Int = 0          // position in the collection
         var id: String { return label }
     }
     @Published private(set) var collectionStory: [StoryBeat] = []
     @Published private(set) var storyLoading = false
     private var storyTask: Task<Void, Never>?
 
-    private var storyFile: URL { return Paths.companionCache.appendingPathComponent(entry.id.uuidString + "-story-v1.json") }
+    private var storyFile: URL { return Paths.companionCache.appendingPathComponent(entry.id.uuidString + "-story-v2.json") }
 
     /// Reads each issue's plot from the comics wiki (a few at a time) and keeps the opening of each, so a collected edition
     /// shows what its issues are about, in order. Saved, so it only happens once per comic.
@@ -326,13 +349,13 @@ final class CompanionModel: ObservableObject {
                 var next = 0
                 while next < min(4, items.count) {
                     let i = next; next += 1
-                    group.addTask { (i, await CompanionModel.beat(items[i], publisher: publisher)) }
+                    group.addTask { (i, await CompanionModel.beat(items[i], order: i, publisher: publisher)) }
                 }
                 for await (i, b) in group {
                     if let b = b { results.append((i, b)) }
                     if next < items.count {
                         let j = next; next += 1
-                        group.addTask { (j, await CompanionModel.beat(items[j], publisher: publisher)) }
+                        group.addTask { (j, await CompanionModel.beat(items[j], order: j, publisher: publisher)) }
                     }
                 }
                 return results.sorted { $0.0 < $1.0 }.map { $0.1 }
@@ -346,7 +369,7 @@ final class CompanionModel: ObservableObject {
         }
     }
 
-    nonisolated private static func beat(_ it: PlannedIssue, publisher: String?) async -> StoryBeat? {
+    nonisolated private static func beat(_ it: PlannedIssue, order: Int, publisher: String?) async -> StoryBeat? {
         guard let d = await FandomProvider.lookup(publisher: publisher, series: it.series, volume: nil, issue: String(it.issue), year: it.year),
               let syn = d.issueSynopsis else { return nil }
         var sentences: [String] = []
@@ -356,7 +379,8 @@ final class CompanionModel: ObservableObject {
         }
         let text = sentences.joined(separator: " ")
         guard !text.isEmpty else { return nil }
-        return StoryBeat(label: "\(it.series) #\(it.issue)", text: TextClean.shorten(text, limit: 300), source: syn.source)
+        return StoryBeat(label: "\(it.series) #\(it.issue)", text: TextClean.shorten(text, limit: 300), source: syn.source,
+                         full: TextClean.shorten(syn.text, limit: 1000), order: order)
     }
 
     func askContext(spoilers: Bool, question: String, budget: Int) async -> String {
@@ -374,7 +398,7 @@ final class CompanionModel: ObservableObject {
         // Fix misspelled names, then search the wiki ourselves (the model often skips its own search tool).
         let vocab = askVocabulary()
         let corrected = Knowledge.canonical(question, vocabulary: vocab)
-        let fixedQuestion = corrected.text
+        let fixedQuestion = anchored(corrected.text)
         let publisher = data.publisher ?? identity.publisher
         let allNotes = notes
         async let live = Knowledge.liveParts(fixedQuestion, publisher: publisher, notes: allNotes)
@@ -385,7 +409,7 @@ final class CompanionModel: ObservableObject {
         let facts = Knowledge.relevant(usable, to: fixedQuestion, budget: budget / 3)
         let found = await live
         // Everything found goes into one pool, and only the sentences closest in meaning to the question are kept.
-        let pool = (found + facts).filter { Knowledge.wantsScreen(fixedQuestion) || !Knowledge.isScreenTopic(String($0.prefix(80))) }
+        let pool = (found + facts + plotParts(spoilers: spoilers)).filter { Knowledge.wantsScreen(fixedQuestion) || !Knowledge.isScreenTopic(String($0.prefix(80))) }
         let cap = budget * 45 / 100
         let q = fixedQuestion
         let ranked = await Task.detached(priority: .userInitiated) { Passages.best(parts: pool, question: q, maxChars: cap) }.value
