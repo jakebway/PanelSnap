@@ -43,6 +43,7 @@ struct ComicEntry: Identifiable, Codable, Hashable {
     var finished: Bool
     var isManga: Bool
     var shelf: String? = nil      // name of the shelf this comic sits on, if any
+    var optimized: Bool? = nil    // true once stored as HEIC pages at screen size
 
     var progress: Double {
         if finished { return 1 }

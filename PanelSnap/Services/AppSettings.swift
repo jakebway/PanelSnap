@@ -9,7 +9,6 @@ final class AppSettings: ObservableObject {
 
     @Published var snapToPanels: Bool { didSet { defaults.set(snapToPanels, forKey: "snapToPanels") } }
     @Published var compressDownloads: Bool { didSet { defaults.set(compressDownloads, forKey: "compressDownloads") } }
-    @Published var compressionLevel: CompressionLevel { didSet { defaults.set(compressionLevel.rawValue, forKey: "compressionLevel") } }
     @Published var onlineLookup: Bool { didSet { defaults.set(onlineLookup, forKey: "onlineLookup") } }
     @Published var showDiscover: Bool { didSet { defaults.set(showDiscover, forKey: "showDiscover") } }
     @Published var spoilerShield: Bool { didSet { defaults.set(spoilerShield, forKey: "spoilerShield") } }
@@ -31,7 +30,6 @@ final class AppSettings: ObservableObject {
             "compressDownloads": true
         ])
         compressDownloads = d.bool(forKey: "compressDownloads")
-        compressionLevel = CompressionLevel(rawValue: d.string(forKey: "compressionLevel") ?? "") ?? .balanced
         snapToPanels = d.bool(forKey: "snapToPanels")
         onlineLookup = d.bool(forKey: "onlineLookup")
         spoilerShield = d.bool(forKey: "spoilerShield")

@@ -4,25 +4,18 @@ import ImageIO
 import UniformTypeIdentifiers
 import ZIPFoundation
 
-/// How hard to squeeze: the longest side of each page and the JPEG quality.
-enum CompressionLevel: String, CaseIterable, Identifiable {
-    case balanced, small
-    var id: String { return rawValue }
-    var label: String { return self == .balanced ? "Balanced" : "Smaller" }
-    var detail: String { return self == .balanced ? "Looks the same on a phone; usually 50–70% smaller" : "Slightly softer; usually 65–80% smaller" }
-    var maxPixel: CGFloat { return self == .balanced ? 2200 : 1700 }
-    var quality: CGFloat { return self == .balanced ? 0.72 : 0.6 }
-
-    static var current: CompressionLevel {
-        return CompressionLevel(rawValue: UserDefaults.standard.string(forKey: "compressionLevel") ?? "") ?? .balanced
-    }
-    static var autoDownloads: Bool {
+/// The library format: every comic is kept as a CBZ of HEIC pages sized for the unfolded screen.
+enum ComicCompressor {
+    static let quality: CGFloat = 0.62
+    static var enabled: Bool {
         return UserDefaults.standard.object(forKey: "compressDownloads") as? Bool ?? true
     }
-}
+    /// Longest side of a stored page, in pixels: the unfolded screen's long edge (never below 2208).
+    @MainActor static var targetPixel: CGFloat {
+        let b = UIScreen.main.nativeBounds
+        return max(2208, max(b.width, b.height))
+    }
 
-/// Re-saves a comic's pages as smaller JPEGs inside a fresh CBZ. Works for any format the app can open (CBZ, CBR, CB7, PDF, EPUB).
-enum ComicCompressor {
     struct Outcome {
         var url: URL            // the new file (a temporary file next to nothing yet); nil savings means it was deleted
         var before: Int64
@@ -40,9 +33,9 @@ enum ComicCompressor {
         return "jpg"
     }
 
-    private static func jpeg(_ image: CGImage, quality: CGFloat) -> Data? {
+    private static func heic(_ image: CGImage) -> Data? {
         let data = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+        guard let dest = CGImageDestinationCreateWithData(data, UTType.heic.identifier as CFString, 1, nil) else { return nil }
         CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
         return CGImageDestinationFinalize(dest) ? data as Data : nil
     }
@@ -52,7 +45,7 @@ enum ComicCompressor {
     }
 
     /// Writes the smaller copy to a temporary file and reports the sizes. The caller decides whether to swap it in.
-    static func compress(_ url: URL, level: CompressionLevel, progress: @escaping (Double) -> Void) throws -> Outcome {
+    static func compress(_ url: URL, maxPixel: CGFloat, progress: @escaping (Double) -> Void) throws -> Outcome {
         let source = try ComicOpener.open(url: url)
         let count = source.pageCount
         guard count > 0 else { throw ComicError.noPages }
@@ -69,8 +62,8 @@ enum ComicCompressor {
                 try autoreleasepool {
                     let original = try? source.pageData(at: i)
                     var out: Data?
-                    var name = "jpg"
-                    if let cg = source.pageImage(at: i, maxPixel: level.maxPixel), let j = jpeg(cg, quality: level.quality) { out = j }
+                    var name = "heic"
+                    if let cg = source.pageImage(at: i, maxPixel: maxPixel), let j = heic(cg) { out = j }
                     // Never make a page bigger: if the original is already smaller, keep it as it is.
                     if let o = original, out == nil || o.count <= out!.count { out = o; name = ext(of: o) }
                     guard let data = out else { throw ComicError.unreadable }

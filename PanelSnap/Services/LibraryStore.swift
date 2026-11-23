@@ -118,7 +118,7 @@ final class LibraryStore: ObservableObject {
             return out
         }.value
         Console.log("scan Comics folder: \(found.count) new file(s)")
-        if found.isEmpty { return }
+        if found.isEmpty { await optimizeAll(); return }
         await importFiles(found)
     }
 
@@ -143,8 +143,9 @@ final class LibraryStore: ObservableObject {
         if scoped { folder.stopAccessingSecurityScopedResource() }
     }
 
-    func importFiles(_ urls: [URL], shelf: String? = nil) async {
-        if urls.isEmpty { return }
+    @discardableResult
+    func importFiles(_ urls: [URL], shelf: String? = nil) async -> Int64 {
+        if urls.isEmpty { return 0 }
         isImporting = true
         var added = 0
         var failed: [String] = []
@@ -187,6 +188,7 @@ final class LibraryStore: ObservableObject {
         if !failed.isEmpty {
             errorMessage = failed.joined(separator: "\n")
         }
+        return await optimizeAll()
     }
 
     private func fileSize(_ url: URL) -> Int64? {
@@ -292,34 +294,48 @@ final class LibraryStore: ObservableObject {
         return .success(entry)
     }
 
-    // MARK: compress
+    // MARK: optimize
 
-    /// Shrinks one comic: re-saves its pages as smaller JPEGs in a new CBZ and swaps it in for the original.
-    /// Returns the bytes saved (0 when it was already as small as it gets), or nil if it failed.
+    private var optimizing = false
+    private var optimizeFailed = Set<UUID>()
+
+    /// Converts every comic that isn't in the library format yet (HEIC pages at screen size), deleting the old file as it goes.
+    /// Returns the bytes saved.
     @discardableResult
-    func compress(_ entry: ComicEntry, level: CompressionLevel = .current) async -> Int64? {
+    func optimizeAll() async -> Int64 {
+        guard ComicCompressor.enabled, !optimizing else { return 0 }
+        optimizing = true
+        defer { optimizing = false }
+        var saved: Int64 = 0
+        while ComicCompressor.enabled, let e = comics.first(where: { $0.optimized != true && !optimizeFailed.contains($0.id) }) {
+            if let s = await optimize(e) { saved += s } else { optimizeFailed.insert(e.id) }
+        }
+        return saved
+    }
+
+    private func optimize(_ entry: ComicEntry) async -> Int64? {
         let src = fileURL(for: entry)
         let name = entry.title
+        let target = ComicCompressor.targetPixel
         isImporting = true
-        importStatus = "Compressing \(name)…"
+        importStatus = "Optimizing \(name)…"
         defer { isImporting = false }
         let result: Result<ComicCompressor.Outcome, Error> = await Task.detached(priority: .utility) {
             do {
-                return .success(try ComicCompressor.compress(src, level: level) { fraction in
-                    Task { @MainActor [weak self] in self?.importStatus = "Compressing \(name)… \(Int(fraction * 100))%" }
+                return .success(try ComicCompressor.compress(src, maxPixel: target) { fraction in
+                    Task { @MainActor [weak self] in self?.importStatus = "Optimizing \(name)… \(Int(fraction * 100))%" }
                 })
             } catch { return .failure(error) }
         }.value
         switch result {
         case .failure(let error):
             importStatus = nil
-            errorMessage = "Couldn't compress \(name): \(error.localizedDescription)"
-            Console.log("compress: ERROR \(name): \(error)")
+            Console.log("optimize: ERROR \(name): \(error)")
             return nil
         case .success(let outcome):
             guard outcome.worthIt else {
-                importStatus = "\(name) is already as small as it gets"
-                scheduleStatusClear()
+                markOptimized(entry.id)        // already small; don't try again
+                importStatus = nil
                 return 0
             }
             let fm = FileManager.default
@@ -340,28 +356,24 @@ final class LibraryStore: ObservableObject {
                     comics[i].fileName = rel
                     comics[i].format = .cbz
                     comics[i].pageCount = outcome.pageCount
+                    comics[i].optimized = true
                     save()
                 }
-                try? fm.removeItem(at: PanelCache.fileURL(for: entry.id))      // page pictures changed size; panels are found again
-                let saved = outcome.before - outcome.after
-                importStatus = "Saved \(ByteCountFormatter.string(fromByteCount: saved, countStyle: .file)) on \(name)"
-                scheduleStatusClear()
-                Console.log("compress: \(name) \(outcome.before) -> \(outcome.after)")
-                return saved
+                try? fm.removeItem(at: PanelCache.fileURL(for: entry.id))
+                importStatus = nil
+                Console.log("optimize: \(name) \(outcome.before) -> \(outcome.after)")
+                return outcome.before - outcome.after
             } catch {
                 try? fm.removeItem(at: outcome.url)
                 importStatus = nil
-                errorMessage = "Couldn't replace \(name): \(error.localizedDescription)"
+                Console.log("optimize: replace failed \(name): \(error)")
                 return nil
             }
         }
     }
 
-    private func scheduleStatusClear() {
-        Task {
-            try? await Task.sleep(nanoseconds: 3_500_000_000)
-            if !isImporting { importStatus = nil }
-        }
+    private func markOptimized(_ id: UUID) {
+        if let i = comics.firstIndex(where: { $0.id == id }) { comics[i].optimized = true; save() }
     }
 
     // MARK: edits

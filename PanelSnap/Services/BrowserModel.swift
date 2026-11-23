@@ -553,15 +553,10 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         guard let library = library else { return }
         let before = library.comics.count
         Task {
-            await library.importFiles([dest], shelf: nil)
+            // Importing also converts the comic to the library format (HEIC pages at screen size).
+            let saved = await library.importFiles([dest], shelf: nil)
             let gained = library.comics.count - before
             let name = dest.lastPathComponent
-            var saved: Int64 = 0
-            // Downloads are shrunk as they arrive (switch off in Settings › Storage).
-            if gained > 0, CompressionLevel.autoDownloads, let added = library.comics.first {
-                update(id) { $0.state = .adding }
-                saved = await library.compress(added) ?? 0
-            }
             update(id) {
                 if gained > 0 {
                     $0.state = .done(saved > 0 ? "Added, \(ByteCountFormatter.string(fromByteCount: saved, countStyle: .file)) saved" : "Added to your library")

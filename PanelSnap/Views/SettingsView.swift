@@ -23,12 +23,8 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                     }
 
-                    Section(header: Text("Storage"), footer: Text("Comics you add yourself can be shrunk any time: press and hold a comic and choose Compress. Pages are re-saved as smaller images in a new CBZ, so the original file is replaced.")) {
-                        Toggle("Shrink Downloads Automatically", isOn: $settings.compressDownloads)
-                        Picker("Compression", selection: $settings.compressionLevel) {
-                            ForEach(CompressionLevel.allCases) { Text($0.label).tag($0) }
-                        }
-                        Text(settings.compressionLevel.detail).font(.footnote).foregroundStyle(.secondary)
+                    Section(header: Text("Storage"), footer: Text("Every comic is kept as HEIC pages sized for the unfolded screen, which is much smaller than the original. New comics are converted when they're added or downloaded, and the old file is deleted. Turn this off to keep files exactly as they are.")) {
+                        Toggle("Optimize Comics Automatically", isOn: $settings.compressDownloads)
                     }
 
                     Section(header: Text("Companion"), footer: Text("Character info comes from a guide built into the app. With lookups on, PanelSnap also fetches story summaries from public sources such as Wikipedia. No account or key is needed.")) {
