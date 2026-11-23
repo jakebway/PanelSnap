@@ -296,6 +296,13 @@ final class CompanionModel: ObservableObject {
             .map { "[Plot of \($0.label), \($0.source)] " + $0.full }
     }
 
+    /// The best page to read about this comic: its entry on the comics wiki, else Wikipedia, else any link found.
+    var diveDeeperURL: URL? {
+        let urls = data.links.map { $0.url }
+        let pick = urls.first(where: { $0.contains("fandom.com") }) ?? urls.first(where: { $0.contains("wikipedia.org") }) ?? urls.first
+        return pick.flatMap { URL(string: $0) }
+    }
+
     private var speculateTask: Task<Void, Never>?
     /// While the reader is still typing, start the searches for what they have so far. When they press send the answers
     /// are already in the search cache, so the model gets its sources straight away.
@@ -407,7 +414,15 @@ final class CompanionModel: ObservableObject {
         // Fact sheets about the people and places in this issue. The plot sheet follows the spoiler setting.
         let usable = notes.filter { spoilers || !$0.title.hasPrefix("Plot") }
         let facts = Knowledge.relevant(usable, to: fixedQuestion, budget: budget / 3)
-        let found = await live
+        // "Where is X while this happens": also look for where X is around the same year, since X may not be in these pages.
+        let when = activeMark?.year ?? data.year ?? identity.year
+        let lowered = fixedQuestion.lowercased()
+        let wantsWhere = ["where is", "where was", "where are", "where were", "doing during", "at this time", "at the time", "while this"].contains { lowered.contains($0) }
+        let timelineQuery = fixedQuestion + " " + (when.map { String($0) } ?? "") + " whereabouts timeline"
+        let timelineTask = Task { () -> [String] in
+            return wantsWhere ? await Knowledge.liveParts(timelineQuery, publisher: publisher, notes: allNotes) : []
+        }
+        let found = await live + (await timelineTask.value)
         // Everything found goes into one pool, and only the sentences closest in meaning to the question are kept.
         let pool = (found + facts + plotParts(spoilers: spoilers)).filter { Knowledge.wantsScreen(fixedQuestion) || !Knowledge.isScreenTopic(String($0.prefix(80))) }
         let cap = budget * 45 / 100

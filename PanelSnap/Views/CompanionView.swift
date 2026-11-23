@@ -803,6 +803,7 @@ struct AskChatView: View {
     @State private var sentInitial = false
     @State private var viewKey: String?
     @State private var showHistory = false
+    @State private var showBrowser = false
     @FocusState private var typing: Bool
 
     private var activeKey: String { return viewKey ?? model.issueKey }
@@ -981,6 +982,33 @@ struct AskChatView: View {
     }
 
     private var inputBar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    typing = false
+                    if let u = model.diveDeeperURL { BrowserModel.shared.open(u) }
+                    else { BrowserModel.shared.searchHome((model.data.series ?? model.entry.title) + " comic") }
+                    showBrowser = true
+                } label: {
+                    Label("Dive Deeper", systemImage: "safari")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(Theme.card2, in: Capsule())
+                        .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ask-dive")
+                Spacer()
+            }
+            .padding(.horizontal, 14).padding(.top, 8)
+            inputField
+        }
+        .background(.ultraThinMaterial)
+        .fullScreenCover(isPresented: $showBrowser) { BrowserView() }
+    }
+
+    private var inputField: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField("Ask about this comic…", text: $text, axis: .vertical)
                 .lineLimit(1...4)

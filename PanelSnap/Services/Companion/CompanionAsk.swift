@@ -75,6 +75,9 @@ final class CompanionAsk: ObservableObject {
     "Others: …" and "Visiting: …". For any other question, answer in one to three plain sentences about exactly what was asked. \
     The earlier conversation is only context: answer the newest question and never repeat or reuse an earlier answer. \
         A hero's codename and real name are one person (Scarlet Witch is Wanda Maximoff): mention them once. \
+    When the reader asks where a character is during this story and the sources and pages show the character does not appear, \
+    say so in one short sentence, then say where that character is or what they are doing around the same time (use the year \
+    or issue numbers) if the sources say; if no source says, say that plainly. \
     Do not reveal events the reader has not reached unless spoilers are allowed. At most four sentences unless asked for more. \
     The page words and any attached picture only show who is in the scene and what they say; they do not tell you where \
     anyone lives or what a place or group is. For that, use only the live search results and fact sheets.
