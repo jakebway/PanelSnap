@@ -40,6 +40,23 @@ enum ComicCompressor {
         return CGImageDestinationFinalize(dest) ? data as Data : nil
     }
 
+    /// True when the file is already in the library format (marker entry, or HEIC pages), so it is never converted twice.
+    static func isOptimized(_ url: URL) -> Bool {
+        guard url.pathExtension.lowercased() == "cbz", let archive = try? Archive(url: url, accessMode: .read) else { return false }
+        var checked = 0
+        for entry in archive where entry.type == .file {
+            let name = entry.path.lowercased()
+            if name == "panelsnap.json" { return true }
+            let ext = (name as NSString).pathExtension
+            if ArchiveNames.imageExtensions.contains(ext) {
+                if ext == "heic" || ext == "heif" { return true }
+                checked += 1
+                if checked >= 3 { return false }
+            }
+        }
+        return false
+    }
+
     static func fileSize(_ url: URL) -> Int64 {
         return Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
     }
@@ -53,6 +70,9 @@ enum ComicCompressor {
         try? FileManager.default.removeItem(at: tmp)
         do {
             let archive = try Archive(url: tmp, accessMode: .create)
+            let marker = Data("{\"format\":\"heic\",\"version\":1}".utf8)
+            try archive.addEntry(with: "PanelSnap.json", type: .file, uncompressedSize: Int64(marker.count), compressionMethod: .none,
+                                 provider: { position, size in marker.subdata(in: Int(position)..<Int(position) + size) })
             if let xml = source.metadataXML() {
                 try archive.addEntry(with: "ComicInfo.xml", type: .file, uncompressedSize: Int64(xml.count), compressionMethod: .deflate,
                                      provider: { position, size in xml.subdata(in: Int(position)..<Int(position) + size) })

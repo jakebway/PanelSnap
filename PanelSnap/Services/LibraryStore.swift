@@ -297,6 +297,7 @@ final class LibraryStore: ObservableObject {
     // MARK: optimize
 
     private var optimizing = false
+    private var optimizeLabel = "Optimizing"
     private var optimizeFailed = Set<UUID>()
 
     /// Converts every comic that isn't in the library format yet (HEIC pages at screen size), deleting the old file as it goes.
@@ -307,7 +308,16 @@ final class LibraryStore: ObservableObject {
         optimizing = true
         defer { optimizing = false }
         var saved: Int64 = 0
-        while ComicCompressor.enabled, let e = comics.first(where: { $0.optimized != true && !optimizeFailed.contains($0.id) }) {
+        var done = 0
+        let total = comics.filter { $0.optimized != true }.count
+        // Biggest files first.
+        func next() -> ComicEntry? {
+            return comics.filter { $0.optimized != true && !optimizeFailed.contains($0.id) }
+                .max { ComicCompressor.fileSize(fileURL(for: $0)) < ComicCompressor.fileSize(fileURL(for: $1)) }
+        }
+        while ComicCompressor.enabled, let e = next() {
+            done += 1
+            optimizeLabel = total > 1 ? "Optimizing \(min(done, total))/\(total)" : "Optimizing"
             if let s = await optimize(e) { saved += s } else { optimizeFailed.insert(e.id) }
         }
         return saved
@@ -318,12 +328,19 @@ final class LibraryStore: ObservableObject {
         let name = entry.title
         let target = ComicCompressor.targetPixel
         isImporting = true
-        importStatus = "Optimizing \(name)…"
+        let label = optimizeLabel
+        importStatus = label + "…"
         defer { isImporting = false }
+        // Already in the library format (e.g. converted by an earlier version): never convert twice.
+        if await Task.detached(priority: .utility, operation: { ComicCompressor.isOptimized(src) }).value {
+            markOptimized(entry.id)
+            importStatus = nil
+            return 0
+        }
         let result: Result<ComicCompressor.Outcome, Error> = await Task.detached(priority: .utility) {
             do {
                 return .success(try ComicCompressor.compress(src, maxPixel: target) { fraction in
-                    Task { @MainActor [weak self] in self?.importStatus = "Optimizing \(name)… \(Int(fraction * 100))%" }
+                    Task { @MainActor [weak self] in self?.importStatus = "\(label) · \(Int(fraction * 100))%" }
                 })
             } catch { return .failure(error) }
         }.value
