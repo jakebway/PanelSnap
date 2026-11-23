@@ -49,6 +49,7 @@ struct CompanionData: Codable, Hashable {
     var seriesSummary: TextBlock?
     var issueSummary: TextBlock?
     var issueSynopsis: TextBlock?        // may contain spoilers
+    var issueYear: Int?                  // the year this issue was published (from the comics wiki)
     var characters: [CharacterCard] = []
     var teams: [String] = []
     var locations: [String] = []
@@ -71,6 +72,7 @@ struct CompanionData: Codable, Hashable {
         if seriesSummary == nil { seriesSummary = other.seriesSummary }
         if issueSummary == nil { issueSummary = other.issueSummary }
         if issueSynopsis == nil { issueSynopsis = other.issueSynopsis }
+        if issueYear == nil { issueYear = other.issueYear }
 
         for c in other.characters {
             if let i = characters.firstIndex(where: { CompanionData.same($0.name, c.name) }) {

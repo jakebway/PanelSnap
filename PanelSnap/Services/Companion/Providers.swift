@@ -298,6 +298,9 @@ enum FandomProvider {
             let pageURL = "https://\(site.host)/wiki/\(encoded)"
 
             var out = CompanionData()
+            if let r = text.range(of: "\\|\\s*Year\\s*=\\s*(\\d{4})", options: .regularExpression) {
+                out.issueYear = Int(text[r].filter { $0.isNumber }.suffix(4))
+            }
             out.links.append(LinkItem(title: "\(site.name): \(pageTitle)", url: pageURL))
             if let s = synopsis {
                 out.issueSynopsis = TextBlock(text: TextClean.shorten(s, limit: 4500), source: site.name, url: pageURL)

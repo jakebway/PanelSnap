@@ -279,8 +279,8 @@ final class CompanionModel: ObservableObject {
     private func anchored(_ question: String) -> String {
         let name = activeMark?.series ?? data.series ?? identity.series ?? ""
         guard !name.isEmpty else { return question }
-        return question.replacingOccurrences(of: "\\b(?:these|those|this|the)\\s+(?:comics?|issues?|books?|collection|volume|story|storyline)\\b",
-                                             with: "in " + name, options: [.regularExpression, .caseInsensitive])
+        return question.replacingOccurrences(of: "\\b(?:these|those|this|the)\\s+(?:comics?|issues?|books?|collection|volume|story|storyline|events?|stories|adventures)\\b",
+                                             with: name, options: [.regularExpression, .caseInsensitive])
     }
 
     /// What happens in each issue of the collection, as passages for the model to read. Issues the reader hasn't reached
@@ -298,9 +298,18 @@ final class CompanionModel: ObservableObject {
 
     /// The best page to read about this comic: its entry on the comics wiki, else Wikipedia, else any link found.
     var diveDeeperURL: URL? {
+        // The issue's own page on the fan wiki if we found one; otherwise a search of that wiki for this issue.
+        if let u = data.links.map({ $0.url }).first(where: { $0.contains("fandom.com") }) { return URL(string: u) }
+        let publisher = data.publisher ?? identity.publisher
+        if let site = FandomProvider.host(for: publisher) {
+            var query = activeMark.map { ($0.series ?? data.series ?? "") + " " + $0.issue } ?? ((data.series ?? entry.title) + " " + (data.issue ?? ""))
+            query = query.trimmingCharacters(in: .whitespaces)
+            var comps = URLComponents(string: "https://\(site.host)/wiki/Special:Search")
+            comps?.queryItems = [URLQueryItem(name: "query", value: query)]
+            if let u = comps?.url { return u }
+        }
         let urls = data.links.map { $0.url }
-        let pick = urls.first(where: { $0.contains("fandom.com") }) ?? urls.first(where: { $0.contains("wikipedia.org") }) ?? urls.first
-        return pick.flatMap { URL(string: $0) }
+        return (urls.first(where: { $0.contains("wikipedia.org") }) ?? urls.first).flatMap { URL(string: $0) }
     }
 
     private var speculateTask: Task<Void, Never>?
@@ -415,12 +424,18 @@ final class CompanionModel: ObservableObject {
         let usable = notes.filter { spoilers || !$0.title.hasPrefix("Plot") }
         let facts = Knowledge.relevant(usable, to: fixedQuestion, budget: budget / 3)
         // "Where is X while this happens": also look for where X is around the same year, since X may not be in these pages.
-        let when = activeMark?.year ?? data.year ?? identity.year
+        let when = data.issueYear ?? activeMark?.year ?? data.year ?? identity.year
         let lowered = fixedQuestion.lowercased()
         let wantsWhere = ["where is", "where was", "where are", "where were", "doing during", "at this time", "at the time", "while this"].contains { lowered.contains($0) }
         let timelineQuery = fixedQuestion + " " + (when.map { String($0) } ?? "") + " whereabouts timeline"
         let timelineTask = Task { () -> [String] in
-            return wantsWhere ? await Knowledge.liveParts(timelineQuery, publisher: publisher, notes: allNotes) : []
+            guard wantsWhere else { return [] }
+            async let live2 = Knowledge.liveParts(timelineQuery, publisher: publisher, notes: allNotes)
+            async let era: [String] = { () -> [String] in
+                guard let y = when else { return [] }
+                return await Knowledge.eraParts(question: fixedQuestion, year: y, publisher: publisher)
+            }()
+            return await era + live2
         }
         let found = await live + (await timelineTask.value)
         // Everything found goes into one pool, and only the sentences closest in meaning to the question are kept.

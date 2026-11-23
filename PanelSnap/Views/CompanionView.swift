@@ -1031,7 +1031,6 @@ struct AskChatView: View {
         .background(Theme.card2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
         .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 8)
-        .background(.ultraThinMaterial)
     }
 
     private var canSend: Bool {

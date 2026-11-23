@@ -318,6 +318,42 @@ enum Knowledge {
         return ["movie", "film", "mcu", "actor", "actress", "disney", "portray", "played by", "cast", "tv show", "television", "episode", "game"].contains { q.contains($0) }
     }
 
+    /// For "where is X while this happens" when X isn't in the pages: what the wikis say X was doing around the year the comic came out.
+    /// Reads X's whole article and keeps the sentences that mention that time.
+    static func eraParts(question: String, year: Int, publisher: String?) async -> [String] {
+        // Which character does the question name? Try the longest runs of words first.
+        let words = question.components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
+        var entry: GlossaryEntry?
+        search: for len in stride(from: min(3, words.count), through: 1, by: -1) {
+            for start in 0...(words.count - len) {
+                let gram = words[start..<start + len].joined(separator: " ")
+                if gram.count > 4, let e = CharacterGlossary.shared.find(name: gram) { entry = e; break search }
+            }
+        }
+        guard let name = entry?.n else { return [] }
+        let years = (year - 1...year + 2).map { String($0) }
+        var hosts: [(String, String)] = [("en.wikipedia.org", "Wikipedia")]
+        if let h = fandomHost(publisher) { hosts.insert((h, "comics wiki"), at: 0) }
+        var out: [String] = []
+        await withTaskGroup(of: String?.self) { group in
+            for (host, label) in hosts {
+                group.addTask {
+                    let pages = await lookUpMany(host: host, query: host.contains("wikipedia") ? name + " comics" : name, count: 1, limit: 150_000, full: true)
+                    guard let page = pages.first else { return nil }
+                    var hits: [String] = []
+                    page.text.enumerateSubstrings(in: page.text.startIndex..<page.text.endIndex, options: .bySentences) { s, _, _, stop in
+                        guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), s.count > 25 else { return }
+                        if years.contains(where: { s.contains($0) }) { hits.append(TextClean.shorten(s, limit: 320)) }
+                        if hits.count >= 8 { stop = true }
+                    }
+                    return hits.isEmpty ? nil : "[\(name) around \(year) - \(label), page \"\(page.title)\"] " + hits.joined(separator: " ")
+                }
+            }
+            for await r in group { if let r = r { out.append(r) } }
+        }
+        return out
+    }
+
     /// One whole page by name from the comics wiki, falling back to Wikipedia (what the model's page-reading tool runs).
     static func readPage(_ title: String, publisher: String?) async -> String {
         async let fan: String? = {
