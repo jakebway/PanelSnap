@@ -23,7 +23,7 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                     }
 
-                    Section(header: Text("Storage")) {
+                    Section(header: Text("Storage"), footer: Text("Shrinks comics to fit your screen and replaces the originals.")) {
                         Toggle("Space Saver", isOn: $settings.compressDownloads)
                     }
 

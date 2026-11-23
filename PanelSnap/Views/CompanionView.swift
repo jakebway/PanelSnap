@@ -141,15 +141,21 @@ struct CompanionView: View {
     private var storyCard: some View {
         let d = model.data
         let omnibus = model.plannedCount >= 2
-        let lead: TextBlock? = omnibus ? (d.seriesSummary ?? d.issueSummary) : (d.issueSummary ?? d.seriesSummary)
-        let more: TextBlock? = (!omnibus && d.issueSummary != nil) ? d.seriesSummary : nil
-        if lead != nil || d.issueSynopsis != nil || !d.arcs.isEmpty {
+        // Only text that tells the story leads. A series description about who made the comic and when goes under "About the series".
+        let lead: TextBlock? = [d.issueSummary, d.seriesSummary].compactMap { $0 }.first(where: { !looksLikeHistory($0.text) })
+        let more: TextBlock? = d.seriesSummary.flatMap { s in (lead?.text == s.text) ? nil : s }
+        let marks = model.issueMarks.sorted { $0.page < $1.page }
+        if lead != nil || d.issueSynopsis != nil || !d.arcs.isEmpty || more != nil {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 8) {
                     Image(systemName: omnibus ? "books.vertical" : "text.book.closed")
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accent)
                     Text(omnibus ? "The whole story" : "The story").font(.headline)
                     Spacer()
+                }
+                if omnibus, let f = marks.first, let l = marks.last, marks.count >= 2 {
+                    Text("\(marks.count) issues · \(f.series ?? "") #\(f.issue) to #\(l.issue)")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 if !d.arcs.isEmpty {
                     FlowChips(items: Array(d.arcs.prefix(omnibus ? 8 : 3)), tint: Theme.accent)
@@ -162,7 +168,9 @@ struct CompanionView: View {
                         sourceLine(t)
                     }
                 }
-                if let t = d.issueSynopsis { spoilerText(t) }
+                if let t = d.issueSynopsis {
+                    spoilerText(t, label: lead == nil ? "THE STORY · SPOILERS" : "WHAT HAPPENS · SPOILERS")
+                }
                 if let t = more {
                     DisclosureGroup("About the series") {
                         VStack(alignment: .leading, spacing: 6) {
@@ -181,10 +189,18 @@ struct CompanionView: View {
         }
     }
 
-    private func spoilerText(_ t: TextBlock) -> some View {
+    /// True for text about the comic's publication (who made it, when, for which publisher) rather than its story.
+    private func looksLikeHistory(_ text: String) -> Bool {
+        let l = text.lowercased()
+        let keys = ["comic book series", "published by", "first appeared", "is an american", "created by", "first published",
+                    "longest-running", "ongoing series", "publication history", "was launched"]
+        return keys.filter { l.contains($0) }.count >= 2
+    }
+
+    private func spoilerText(_ t: TextBlock, label: String) -> some View {
         let hidden = settings.spoilerShield && !revealed
         return VStack(alignment: .leading, spacing: 6) {
-            Text("WHAT HAPPENS · SPOILERS")
+            Text(label)
                 .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
             ZStack {
                 Text(TextClean.shorten(t.text, limit: 700))
