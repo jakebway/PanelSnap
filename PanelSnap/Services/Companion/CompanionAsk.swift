@@ -21,6 +21,7 @@ struct AskExchange: Codable, Identifiable, Hashable {
 final class CompanionAsk: ObservableObject {
     @Published private(set) var history: [AskExchange] = []
     @Published private(set) var busy = false
+    @Published private(set) var stage = ""
     private let file: URL
 
     init(comicID: UUID) {
@@ -124,7 +125,7 @@ final class CompanionAsk: ObservableObject {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !busy, !q.isEmpty else { return }
         busy = true
-        defer { busy = false; save(); prewarm(publisher: publisher) }
+        defer { busy = false; stage = ""; save(); prewarm(publisher: publisher) }
         let earlier = history.filter { $0.issueKey == issueKey && !$0.failed }.suffix(2)
             .map { "Reader: \($0.question)\nYou: \(TextClean.shorten($0.answer, limit: 160))" }.joined(separator: "\n")
         history.append(AskExchange(question: q, answer: "", issueKey: issueKey))
@@ -136,6 +137,12 @@ final class CompanionAsk: ObservableObject {
             if engine != nil { history[index].engine = engine }
         }
         var usedPrompt = ""
+        func gather(_ budget: Int) async -> String {
+            stage = "Searching the wikis and the web…"
+            let c = await makeContext(budget)
+            stage = "Writing the answer…"
+            return c
+        }
         func makePrompt(_ ctx: String) -> String {
             let p = ctx + "\n\n" + (earlier.isEmpty ? "" : "EARLIER IN THIS CONVERSATION (context only; do not repeat these answers):\n\(earlier)\n\n") + "QUESTION: \(q)"
             Self.writeDebug(question: q, prompt: p, notes: notes)
@@ -145,7 +152,7 @@ final class CompanionAsk: ObservableObject {
         #if canImport(FoundationModels)
         // 1. Apple's larger server model (Private Cloud Compute): 32K of reading and real reasoning, still private.
         if #available(iOS 27.0, *), !cloudFailed, UserDefaults.standard.bool(forKey: "companion.tryCloudModel"), ModernAsk.cloudAvailable {
-            let ctx = await makeContext(60_000)
+            let ctx = await gather(60_000)
             do {
                 let text = try await ModernAsk.cloud(prompt: makePrompt(ctx), instructions: Self.instructions,
                                                      tools: [KnowledgeSearchTool(publisher: publisher, notes: notes), CharacterLookupTool(publisher: publisher), WikiPageTool(publisher: publisher)])
@@ -165,13 +172,13 @@ final class CompanionAsk: ObservableObject {
             var budget = await Self.contextBudget() - earlier.count - q.count - (page != nil ? 2500 : 0)
             var permissive = false
             for attempt in 0..<3 {
-                let ctx = await makeContext(budget)
+                let ctx = await gather(budget)
                 let prompt = makePrompt(ctx)
                 let session: LanguageModelSession
                 if attempt == 0, let w = warm as? LanguageModelSession { session = w; warm = nil }
                 else { session = Self.makeSession(publisher: publisher, permissive: permissive, notes: notes) }
                 do {
-                    let options = GenerationOptions(temperature: 0.1, maximumResponseTokens: 320)
+                    let options = GenerationOptions(temperature: 0.1, maximumResponseTokens: 260)
                     var latest = ""
                     if #available(iOS 27.0, *), let page = page, attempt == 0 {
                         latest = try await ModernAsk.withPage(session: session, prompt: prompt, page: page, options: options) { set($0) }
@@ -190,7 +197,7 @@ final class CompanionAsk: ObservableObject {
                         let fresh = ctx + "\n\nQUESTION: \(q)\nAnswer only this question, in one to three plain sentences."
                         usedPrompt = fresh
                         var second = ""
-                        for try await snap in again.streamResponse(to: fresh, options: GenerationOptions(temperature: 0.3, maximumResponseTokens: 320)) {
+                        for try await snap in again.streamResponse(to: fresh, options: GenerationOptions(temperature: 0.3, maximumResponseTokens: 260)) {
                             second = snap.content
                             set(second)
                         }

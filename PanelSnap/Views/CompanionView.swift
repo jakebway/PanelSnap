@@ -776,7 +776,10 @@ struct AskChatView: View {
                     Text("I couldn't answer that just now. Try asking it another way.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 } else if ex.answer.isEmpty {
-                    TypingDots()
+                    HStack(spacing: 8) {
+                        TypingDots()
+                        if isLast && !ask.stage.isEmpty { Text(ask.stage).font(.caption).foregroundStyle(.secondary) }
+                    }
                 } else {
                     Text(ex.answer).font(.callout).lineSpacing(2).textSelection(.enabled)
                     if let e = ex.engine {

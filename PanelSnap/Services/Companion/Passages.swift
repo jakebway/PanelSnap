@@ -6,6 +6,9 @@ import NaturalLanguage
 enum Passages {
     private static let embedding: NLEmbedding? = NLEmbedding.sentenceEmbedding(for: .english)
 
+    /// Loads the embedding model now, so the first question doesn't pay for it.
+    static func warm() { _ = embedding?.vector(for: "warm up") }
+
     static func sentences(_ text: String) -> [String] {
         let tokenizer = NLTokenizer(unit: .sentence)
         tokenizer.string = text

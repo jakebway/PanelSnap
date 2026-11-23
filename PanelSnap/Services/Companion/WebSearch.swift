@@ -71,7 +71,7 @@ enum WebSearch {
     }
 
     /// Search, read the top pages at once, and return one entry per page. Never takes longer than `seconds`.
-    static func parts(_ query: String, pages: Int = 4, seconds: UInt64 = 7) async -> [(title: String, text: String)] {
+    static func parts(_ query: String, pages: Int = 4, seconds: UInt64 = 5) async -> [(title: String, text: String)] {
         return await withTaskGroup(of: [(title: String, text: String)]?.self) { group in
             group.addTask {
                 let found = Array(await results(query).prefix(pages))
@@ -80,7 +80,7 @@ enum WebSearch {
                         inner.addTask {
                             let host = (r.url.host ?? "").replacingOccurrences(of: "www.", with: "")
                             var body = r.snippet
-                            if let html = await get(r.url, timeout: 6) {
+                            if let html = await get(r.url, timeout: 4) {
                                 let page = readable(html)
                                 if page.count > 200 { body += " " + TextClean.shorten(page, limit: 4500) }
                             }
@@ -88,7 +88,10 @@ enum WebSearch {
                         }
                     }
                     var got: [(Int, String, String)] = []
-                    for await x in inner { if let x = x { got.append(x) } }
+                    for await x in inner {
+                        if let x = x { got.append(x) }
+                        if got.count >= 3 { inner.cancelAll(); break }      // three readable pages are plenty; don't wait for the slow one
+                    }
                     return got.sorted { $0.0 < $1.0 }.map { ($0.1, $0.2) }
                 }
             }

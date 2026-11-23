@@ -211,12 +211,35 @@ enum Knowledge {
     static func liveParts(_ query: String, publisher: String?, notes: [KnowledgeNote], seconds: UInt64 = 10) async -> [String] {
         let key = terms(query).joined(separator: " ")
         guard !key.isEmpty else { return [] }
-        return await withTaskGroup(of: [String]?.self) { group in
-            group.addTask { await searchParts(key, publisher: publisher, notes: notes, deep: true) }
+        // Already looked up (while the comic was loading, or by an earlier question): no waiting at all.
+        if let hit = SearchCache.get(key) { return hit }
+        let found = await withTaskGroup(of: [String]?.self) { group in
+            group.addTask { await searchParts(key, publisher: publisher, notes: [], deep: true) }
             group.addTask { try? await Task.sleep(nanoseconds: seconds * 1_000_000_000); return nil }
             let first = await group.next() ?? nil
             group.cancelAll()
             return first ?? []
+        }
+        if found.count >= 2 { SearchCache.put(key, found) }
+        return found
+    }
+
+    /// Looks up the people, places and teams in the issue ahead of time, so the first questions about them are instant.
+    static func prewarm(data: CompanionData, publisher: String?) async {
+        let names = data.characters.prefix(6).map { $0.name } + data.locations.prefix(3) + data.teams.prefix(2)
+        let keys = names.map { terms($0).joined(separator: " ") }.filter { !$0.isEmpty && SearchCache.get($0) == nil }
+        guard !keys.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            var running = 0
+            for key in keys {
+                if running >= 2 { await group.next(); running -= 1 }
+                if Task.isCancelled { break }
+                group.addTask {
+                    let parts = await searchParts(key, publisher: publisher, notes: [], deep: true)
+                    if parts.count >= 2 { SearchCache.put(key, parts) }
+                }
+                running += 1
+            }
         }
     }
 
@@ -245,7 +268,7 @@ enum Knowledge {
         async let wiki2: [(title: String, text: String)] = lookUpMany(host: "en.wikipedia.org", query: query + " character comics", count: 2, limit: 900)
         async let hero: [(title: String, text: String)] = lookUpMany(host: "superheroes.fandom.com", query: query, count: 1, limit: 900)
         async let instant: String? = instantAnswer(query + " " + house)
-        async let web: [(title: String, text: String)] = WebSearch.parts(query + " " + house)
+        let webTask = Task { await WebSearch.parts(query + " " + house) }
         // "Who lives there / who is in it / what is its history" is answered by the full page and its member lists, not the intro.
         async let deepFan: [(title: String, text: String)] = {
             guard deep, let h = host else { return [] }
@@ -269,7 +292,15 @@ enum Knowledge {
         add("comics wiki", await peopleFan)
         add("Wikipedia", await wiki)
         add("Wikipedia", await people)
-        add("web", await web)
+        // The web pages are the slowest part: give them a few more seconds once the wikis are in, then go without them.
+        let web: [(title: String, text: String)] = await withTaskGroup(of: [(title: String, text: String)]?.self) { group in
+            group.addTask { await webTask.value }
+            group.addTask { try? await Task.sleep(nanoseconds: 3_500_000_000); return nil }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first ?? []
+        }
+        add("web", web)
         add("Wikipedia", await wiki2)
         add("Superhero wiki", await hero)
         if let i = await instant, !seen.contains(String(i.prefix(60)).lowercased()) { parts.append("[Web summary] " + i) }
@@ -319,5 +350,40 @@ enum Knowledge {
 
     static func write(_ id: UUID, variant: String, _ notes: [KnowledgeNote]) {
         if let data = try? JSONEncoder().encode(notes) { try? data.write(to: file(id, variant: variant), options: .atomic) }
+    }
+}
+
+
+/// Search results kept for a week (on disk, so they survive a restart): a repeat question, or one about someone the comic
+/// already mentions, doesn't need the network at all.
+enum SearchCache {
+    private struct Entry: Codable { var date: Date; var parts: [String] }
+    private static let lock = NSLock()
+    private static var entries: [String: Entry]? = nil
+    private static var file: URL { Paths.companionCache.appendingPathComponent("search-cache-v1.json") }
+
+    private static func load() -> [String: Entry] {
+        if let e = entries { return e }
+        var loaded: [String: Entry] = [:]
+        if let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode([String: Entry].self, from: data) { loaded = decoded }
+        entries = loaded
+        return loaded
+    }
+
+    static func get(_ key: String) -> [String]? {
+        lock.lock(); defer { lock.unlock() }
+        guard let e = load()[key], Date().timeIntervalSince(e.date) < 7 * 86400 else { return nil }
+        return e.parts
+    }
+
+    static func put(_ key: String, _ parts: [String]) {
+        lock.lock(); defer { lock.unlock() }
+        var all = load()
+        all[key] = Entry(date: Date(), parts: parts)
+        if all.count > 120 {
+            for (k, _) in all.sorted(by: { $0.value.date < $1.value.date }).prefix(all.count - 120) { all[k] = nil }
+        }
+        entries = all
+        if let data = try? JSONEncoder().encode(all) { try? data.write(to: file, options: .atomic) }
     }
 }

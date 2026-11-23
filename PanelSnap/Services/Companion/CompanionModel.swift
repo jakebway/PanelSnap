@@ -170,6 +170,7 @@ final class CompanionModel: ObservableObject {
             guard gen == generation else { return }
             notes = saved
             ask.notes = saved
+            startPrewarm()
             return
         }
         let snapshot = data
@@ -179,6 +180,19 @@ final class CompanionModel: ObservableObject {
         notes = built
         ask.notes = built
         Knowledge.write(entry.id, variant: key, built)
+        startPrewarm()
+    }
+
+    private var prewarmTask: Task<Void, Never>?
+    /// Looks up everyone and everywhere in this issue in the background, and warms the on-device ranking.
+    private func startPrewarm() {
+        prewarmTask?.cancel()
+        let snapshot = data
+        let publisher = snapshot.publisher ?? identity.publisher
+        prewarmTask = Task.detached(priority: .utility) {
+            Passages.warm()
+            await Knowledge.prewarm(data: snapshot, publisher: publisher)
+        }
     }
 
     // MARK: What the reader has read (for Ask)
@@ -274,7 +288,7 @@ final class CompanionModel: ObservableObject {
         let publisher = data.publisher ?? identity.publisher
         let allNotes = notes
         async let live = Knowledge.liveParts(fixedQuestion, publisher: publisher, notes: allNotes)
-        let infoBudget = budget * 3 / 10
+        let infoBudget = budget * 25 / 100
         let info = data.llmContext(spoilers: spoilers, mark: activeMark, page: currentPage, pageCount: pageCount, progress: progress, limit: infoBudget)
         // Fact sheets about the people and places in this issue. The plot sheet follows the spoiler setting.
         let usable = notes.filter { spoilers || !$0.title.hasPrefix("Plot") }
@@ -296,7 +310,7 @@ final class CompanionModel: ObservableObject {
         if !corrected.fixes.isEmpty {
             ctx += "\n\nThe reader misspelled: " + corrected.fixes.map { "\"\($0.0)\" means \"\($0.1)\"" }.joined(separator: ", ") + "."
         }
-        let pages = choosePages(question: fixedQuestion, budget: min(budget - ctx.count - 300, budget / 3))
+        let pages = choosePages(question: fixedQuestion, budget: min(budget - ctx.count - 300, budget / 4))
         if !pages.isEmpty {
             ctx += "\n\nWORDS ON PAGES THE READER HAS READ IN THIS ISSUE (shows who is in the scene and what they say; page \(currentPage + 1) is on screen; read by machine, so expect misspellings):\n"
                 + pages.joined(separator: "\n")
