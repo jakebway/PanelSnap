@@ -187,8 +187,11 @@ final class CompanionAsk: ObservableObject {
                         set(Self.tidy(latest), engine: "page")
                         return
                     }
+                    // If the model starts by repeating the last answer, keep it off the screen: the retry below writes the real one.
+                    let lastAnswer = attempt == 0 ? history.dropLast().last(where: { $0.issueKey == issueKey && !$0.failed })?.answer : nil
                     for try await snap in session.streamResponse(to: prompt, options: options) {
                         latest = snap.content
+                        if let p = lastAnswer, !p.isEmpty, !earlier.isEmpty, Self.mayRepeat(latest, p) { set(""); continue }
                         set(latest)
                     }
                     var final = Self.ground(Self.tidy(latest), context: usedPrompt)
@@ -232,6 +235,13 @@ final class CompanionAsk: ObservableObject {
         let x = words(a), y = words(b)
         guard x.count >= 4, y.count >= 4 else { return false }
         return Double(x.intersection(y).count) / Double(min(x.count, y.count)) > 0.7
+    }
+
+    /// True while a partly written answer is, so far, the same as the previous answer.
+    static func mayRepeat(_ partial: String, _ previous: String) -> Bool {
+        let x = partial.lowercased(), y = previous.lowercased()
+        if x.count >= 8, y.hasPrefix(x) { return true }
+        return similar(partial, previous)
     }
 
     static func needsPage(_ q: String) -> Bool {
