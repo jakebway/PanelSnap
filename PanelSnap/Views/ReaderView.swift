@@ -72,7 +72,7 @@ struct ReaderHost: View {
                 source: pair.0,
                 identity: pair.1,
                 snap: settings.snapToPanels,
-                pageFirst: settings.showFullPageFirst
+                pageFirst: false
             )
             let companion = CompanionModel(entry: entry, identity: pair.1, settings: settings, coverURL: library.coverURL(for: entry))
             companion.attach(source: pair.0, page: model.pageIndex)
@@ -171,10 +171,7 @@ struct ReaderView: View {
         .onChange(of: model.pageIndex) { _, _ in resetZoom() }
         .onChange(of: model.panelIndex) { _, _ in if !zoom.converting { resetZoom() } }
         .onChange(of: settings.snapToPanels) { _, _ in
-            model.updateSettings(snap: settings.snapToPanels, pageFirst: settings.showFullPageFirst)
-        }
-        .onChange(of: settings.showFullPageFirst) { _, _ in
-            model.updateSettings(snap: settings.snapToPanels, pageFirst: settings.showFullPageFirst)
+            model.updateSettings(snap: settings.snapToPanels, pageFirst: false)
         }
     }
 
@@ -477,7 +474,6 @@ struct ReaderView: View {
     private var readerMenu: some View {
         Menu {
             Toggle(isOn: $settings.snapToPanels) { Label("Snap Panel to Panel", systemImage: "rectangle.split.2x2") }
-            Toggle(isOn: $settings.showFullPageFirst) { Label("Whole Page First", systemImage: "doc") }
             Divider()
             if !model.panels.isEmpty {
                 Button { model.toggleOverview() } label: {

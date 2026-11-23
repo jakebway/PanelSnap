@@ -19,7 +19,7 @@ struct CompanionView: View {
         NavigationStack {
             ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 20) {
                     header
                     issueBanner
                     statusRow
@@ -232,18 +232,22 @@ struct CompanionView: View {
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.headline)
+                .font(.title3.weight(.semibold))
             content()
         }
     }
 
     private func textBlock(_ t: TextBlock) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(t.text)
-                .font(.body)
+                .font(.callout)
+                .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             sourceLine(t)
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func sourceLine(_ t: TextBlock) -> some View {
@@ -663,13 +667,17 @@ struct AskChatView: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
+                    LazyVStack(alignment: .leading, spacing: 18) {
                         if messages.isEmpty { emptyState }
                         ForEach(Array(messages.enumerated()), id: \.element.id) { i, ex in
                             if showAll, i == 0 || messages[i - 1].issueKey != ex.issueKey {
-                                Text(ex.issueKey.isEmpty ? "This comic" : ex.issueKey.replacingOccurrences(of: "#", with: " #"))
-                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .center).padding(.top, 8)
+                                HStack(spacing: 10) {
+                                    Rectangle().fill(Theme.stroke).frame(height: 1)
+                                    Text(ex.issueKey.isEmpty ? "This comic" : ex.issueKey.replacingOccurrences(of: "#", with: " #"))
+                                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary).fixedSize()
+                                    Rectangle().fill(Theme.stroke).frame(height: 1)
+                                }
+                                .padding(.vertical, 10)
                             }
                             userBubble(ex.question)
                             assistantBubble(ex, isLast: ex.id == messages.last?.id)
@@ -696,6 +704,10 @@ struct AskChatView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     Button("Done") { typing = false; dismiss() }
+                    Button { withAnimation { showAll.toggle() } } label: {
+                        Image(systemName: "clock.arrow.circlepath").foregroundStyle(showAll ? Theme.accent : Color.secondary)
+                    }
+                    .accessibilityLabel("Past chats from other issues")
                     Menu {
                         Toggle(isOn: $spoilers) { Label("Allow spoilers", systemImage: "eye") }
                         Toggle(isOn: $showAll) { Label("Show chats from other issues", systemImage: "clock.arrow.circlepath") }
@@ -765,58 +777,51 @@ struct AskChatView: View {
     }
 
     private func assistantBubble(_ ex: AskExchange, isLast: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Theme.accent)
-                .frame(width: 28, height: 28)
-                .background(Theme.card2, in: Circle())
-            VStack(alignment: .leading, spacing: 6) {
-                if ex.failed {
-                    Text("I couldn't answer that just now. Try asking it another way.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                } else if ex.answer.isEmpty {
-                    HStack(spacing: 8) {
-                        TypingDots()
-                        if isLast && !ask.stage.isEmpty { Text(ask.stage).font(.caption).foregroundStyle(.secondary) }
-                    }
-                } else {
-                    Text(ex.answer).font(.callout).lineSpacing(2).textSelection(.enabled)
-                    if let e = ex.engine {
-                        Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
-                              systemImage: e == "cloud" ? "icloud" : "eye")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
+        VStack(alignment: .leading, spacing: 6) {
+            if ex.failed {
+                Text("I couldn't answer that just now. Try asking it another way.")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else if ex.answer.isEmpty {
+                HStack(spacing: 8) {
+                    TypingDots()
+                    if isLast && !ask.stage.isEmpty { Text(ask.stage).font(.caption).foregroundStyle(.secondary) }
+                }
+            } else {
+                Text(ex.answer).font(.callout).lineSpacing(3).textSelection(.enabled)
+                if let e = ex.engine {
+                    Label(e == "cloud" ? "Apple's private cloud model" : "Looked at this page",
+                          systemImage: e == "cloud" ? "icloud" : "eye")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Spacer(minLength: 30)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 24)
     }
 
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
+        HStack(alignment: .bottom, spacing: 8) {
             TextField("Ask about this comic…", text: $text, axis: .vertical)
                 .lineLimit(1...4)
                 .focused($typing)
                 .submitLabel(.send)
                 .onSubmit { send(text) }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Theme.card2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(.vertical, 8)
             Button { send(text) } label: {
                 Image(systemName: ask.busy ? "ellipsis" : "arrow.up")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.onAccent)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 32, height: 32)
                     .background(canSend ? Theme.accent : Theme.accent.opacity(0.35), in: Circle())
             }
             .disabled(!canSend)
+            .padding(.bottom, 4)
             .accessibilityIdentifier("ask-send")
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.leading, 14).padding(.trailing, 6)
+        .background(Theme.card2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
+        .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 8)
         .background(.ultraThinMaterial)
     }
 

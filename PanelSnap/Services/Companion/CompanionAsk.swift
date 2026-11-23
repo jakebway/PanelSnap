@@ -138,9 +138,9 @@ final class CompanionAsk: ObservableObject {
         }
         var usedPrompt = ""
         func gather(_ budget: Int) async -> String {
-            stage = "Searching the wikis and the web…"
+            stage = "Searching…"
             let c = await makeContext(budget)
-            stage = "Writing the answer…"
+            stage = "Writing…"
             return c
         }
         func makePrompt(_ ctx: String) -> String {

@@ -21,9 +21,6 @@ struct SettingsView: View {
                             Text("Regular Pages").tag(false)
                         }
                         .pickerStyle(.segmented)
-                        if settings.snapToPanels {
-                            Toggle("Show Whole Page First", isOn: $settings.showFullPageFirst)
-                        }
                     }
 
                     Section(header: Text("Companion"), footer: Text("Character info comes from a guide built into the app. With lookups on, PanelSnap also fetches story summaries from public sources such as Wikipedia. No account or key is needed.")) {
