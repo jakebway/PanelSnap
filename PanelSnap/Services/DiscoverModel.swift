@@ -214,6 +214,8 @@ final class DiscoverModel: ObservableObject {
     ///  2. Because You Read X: other series that share the name of one you read (up to three shelves),
     ///  3. More from the publisher you read most,
     ///  4. Trending: what readers are pulling this week, from anywhere.
+    private var seedResults: [String: [DiscoverComic]] = [:]
+
     func recommend(libraryTitles: [String], force: Bool = false) async {
         let profile = TitleTools.profile(from: libraryTitles)
         guard !profile.isEmpty else { return }
@@ -227,19 +229,13 @@ final class DiscoverModel: ObservableObject {
         async let nxt: Void = load(.next)
         async let prv: Void = load(.previous)
         var found: [String: [DiscoverComic]] = [:]
-        // A few searches at a time, so the site isn't flooded.
-        var start = 0
-        while start < top.count {
-            let batch = Array(top[start..<min(start + 4, top.count)])
-            start += 4
-            await withTaskGroup(of: (String, [DiscoverComic]).self) { group in
-                for item in batch {
-                    group.addTask { @MainActor in
-                        (item.name, await self.fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? [])
-                    }
-                }
-                for await (name, list) in group { found[name] = list }
-            }
+        // Each series is searched once and remembered, so the shelves don't change from one refresh to the next.
+        for item in top {
+            if let cached = seedResults[item.name], !force { found[item.name] = cached; continue }
+            var list = await fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? []
+            if list.isEmpty { list = await fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? [] }
+            if list.isEmpty { list = seedResults[item.name] ?? [] } else { seedResults[item.name] = list }
+            found[item.name] = list
         }
         _ = await (cur, nxt, prv)
 
@@ -485,7 +481,7 @@ final class DiscoverModel: ObservableObject {
 
     private static func clean(_ html: String) -> String {
         var s = html.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
-        for (a, b) in [("&amp;", "&"), ("&#039;", "'"), ("&#39;", "'"), ("&quot;", "\""), ("&nbsp;", " "), ("&lt;", "<"), ("&gt;", ">"), ("&rsquo;", "’"), ("&ndash;", "–")] {
+        for (a, b) in [("&amp;", "&"), ("&#039;", "'"), ("&#183;", "·"), ("&middot;", "·"), ("&#8211;", "–"), ("&#8217;", "’"), ("&#39;", "'"), ("&quot;", "\""), ("&nbsp;", " "), ("&lt;", "<"), ("&gt;", ">"), ("&rsquo;", "’"), ("&ndash;", "–")] {
             s = s.replacingOccurrences(of: a, with: b)
         }
         return s.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -508,7 +504,19 @@ final class WebJSONFetcher: NSObject, WKNavigationDelegate {
     private var webView: WKWebView?
     private var continuation: CheckedContinuation<String?, Never>?
 
+    private var busy = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    /// One page at a time: a second request would cancel the first.
     func fetch(_ url: URL) async -> String? {
+        if busy { await withCheckedContinuation { waiting.append($0) } }
+        busy = true
+        let out = await load(url)
+        if waiting.isEmpty { busy = false } else { waiting.removeFirst().resume() }
+        return out
+    }
+
+    private func load(_ url: URL) async -> String? {
         return await withCheckedContinuation { (c: CheckedContinuation<String?, Never>) in
             finish(nil)
             continuation = c
