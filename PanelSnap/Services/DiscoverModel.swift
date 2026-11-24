@@ -105,7 +105,9 @@ final class DiscoverModel: ObservableObject {
         var times: [String: Date]
         var sections: [ForYouSection]
         var profile: String
+        var seeds: [String: SeedSaved]? = nil
     }
+    struct SeedSaved: Codable { var date: Date; var list: [DiscoverComic] }
     private static let file = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("DiscoverCache.json")
 
@@ -121,6 +123,7 @@ final class DiscoverModel: ObservableObject {
         }
         forYouSections = saved.sections
         recommendedFor = saved.profile
+        seedCache = saved.seeds ?? [:]
         DiscoverCovers.shared.prefetch(visibleCovers())
     }
 
@@ -134,7 +137,7 @@ final class DiscoverModel: ObservableObject {
     }
 
     private func save() {
-        var saved = Saved(weeks: [:], days: [:], times: [:], sections: forYouSections, profile: recommendedFor)
+        var saved = Saved(weeks: [:], days: [:], times: [:], sections: forYouSections, profile: recommendedFor, seeds: seedCache)
         for (w, list) in weeks {
             saved.weeks[w.rawValue] = list
             saved.days[w.rawValue] = Self.releaseDay(w)
@@ -214,7 +217,8 @@ final class DiscoverModel: ObservableObject {
     ///  2. Because You Read X: other series that share the name of one you read (up to three shelves),
     ///  3. More from the publisher you read most,
     ///  4. Trending: what readers are pulling this week, from anywhere.
-    private var seedResults: [String: [DiscoverComic]] = [:]
+    /// Each series related-title search, kept for days so most visits need no searching at all.
+    private var seedCache: [String: SeedSaved] = [:]
 
     func recommend(libraryTitles: [String], force: Bool = false) async {
         let profile = TitleTools.profile(from: libraryTitles)
@@ -225,20 +229,15 @@ final class DiscoverModel: ObservableObject {
         guard force || key != recommendedFor || forYouSections.isEmpty else { return }
         recommendedFor = key
 
+        // This week's lists first (they fill the Trending row), then the shelves, which fill in one by one.
         async let cur: Void = load(.current)
         async let nxt: Void = load(.next)
         async let prv: Void = load(.previous)
-        var found: [String: [DiscoverComic]] = [:]
-        // Each series is searched once and remembered, so the shelves don't change from one refresh to the next.
-        for item in top {
-            if let cached = seedResults[item.name], !force { found[item.name] = cached; continue }
-            var list = await fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? []
-            if list.isEmpty { list = await fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? [] }
-            if list.isEmpty { list = seedResults[item.name] ?? [] } else { seedResults[item.name] = list }
-            found[item.name] = list
-        }
         _ = await (cur, nxt, prv)
+        var found: [String: [DiscoverComic]] = [:]
+        for item in top { if let c = seedCache[item.name] { found[item.name] = c.list } }
 
+        func assemble() {
         let ownedSeries = Set(profile.map { TitleTools.key($0.name) })
         let ownedIssues = Set(libraryTitles.map { t -> String in
             let p = TitleTools.split(t)
@@ -316,6 +315,21 @@ final class DiscoverModel: ObservableObject {
         forYouSections = sections
         save()
         DiscoverCovers.shared.prefetch(visibleCovers())
+        }
+
+        // Show what is already known straight away (saved searches, even slightly old ones), then refresh what is stale.
+        assemble()
+        for item in top {
+            let age = seedCache[item.name].map { Date().timeIntervalSince($0.date) } ?? .infinity
+            guard force || age > 3 * 24 * 3600 else { continue }
+            let req = Self.url(["list": "search", "title": item.name, "list_option": "series"])
+            var list = await fetch(req) ?? []
+            if list.isEmpty { list = await fetch(req) ?? [] }
+            if list.isEmpty { continue }
+            seedCache[item.name] = SeedSaved(date: Date(), list: list)
+            found[item.name] = list
+            assemble()
+        }
     }
 
     // MARK: Detail page
