@@ -27,6 +27,8 @@ struct LibraryView: View {
     @State private var shelfText = ""
     @State private var showDeleteShelf = false
     @State private var draggingID: UUID?
+    @State private var showShelfManager = false
+    @State private var chipScroll: CGFloat = 0       // how far the shelf chips are scrolled, for the left fade
     @State private var dragActive = false          // the dragged cover has really started moving (not just a long press for the menu)
     @State private var gridFrame: CGRect = .zero    // where the grid is on screen, so a drop past either end can be told apart
     @State private var shelfToDelete = ""
@@ -285,6 +287,9 @@ struct LibraryView: View {
         .task(id: library.comics.count) {
             if settings.showDiscover { await DiscoverModel.shared.prefetch(libraryTitles: TitleTools.byRecency(library.comics)) }
         }
+        .sheet(isPresented: $showShelfManager) {
+            ShelfManagerView().environmentObject(library)
+        }
         .fullScreenCover(item: $route) { r in
             switch r {
             case .reader(let entry):
@@ -402,6 +407,10 @@ struct LibraryView: View {
     private var shelfChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                Color.clear.frame(width: 0, height: 0)
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: ChipScrollKey.self, value: -g.frame(in: .named("chips")).minX)
+                    })
                 shelfChip("All", count: library.comics.count, selected: shelf == nil) { shelf = nil }
                     .onDrop(of: [.text], delegate: ShelfDropDelegate(name: nil, dragging: $draggingID, active: $dragActive) { id, name in library.move([id], toShelf: name) })
                 ForEach(library.shelves, id: \.self) { name in
@@ -420,17 +429,33 @@ struct LibraryView: View {
                             } label: { Label("Delete Shelf", systemImage: "trash") }
                         }
                 }
-                Button { newShelf(moving: []) } label: {
+                Menu {
+                    Button { newShelf(moving: []) } label: { Label("New Shelf", systemImage: "plus") }
+                    if !library.shelves.isEmpty {
+                        Button { showShelfManager = true } label: { Label("Edit & Reorder Shelves", systemImage: "arrow.up.arrow.down") }
+                    }
+                } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Theme.accent)
                         .frame(width: 34, height: 34)
                         .background(Theme.card2, in: Circle())
                 }
-                .accessibilityLabel("New Shelf")
+                .accessibilityLabel("Shelf options")
+                Color.clear.frame(width: 22, height: 1)          // room so the last chip can scroll clear of the fade
             }
             .padding(.vertical, 2)
         }
+        .coordinateSpace(name: "chips")
+        .onPreferenceChange(ChipScrollKey.self) { chipScroll = $0 }
+        // The chips fade out at the edge instead of being cut off.
+        .mask(
+            HStack(spacing: 0) {
+                LinearGradient(colors: [chipScroll > 4 ? .clear : .black, .black], startPoint: .leading, endPoint: .trailing).frame(width: 18)
+                Rectangle().fill(.black)
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 28)
+            }
+        )
     }
 
     private var sortRow: some View {
@@ -892,5 +917,67 @@ struct ComicCell: View {
                 .foregroundStyle(Theme.secondary)
         }
         .contentShape(Rectangle())
+    }
+}
+
+
+private struct ChipScrollKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// Reorder, rename and delete shelves in one place.
+struct ShelfManagerView: View {
+    @EnvironmentObject var library: LibraryStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var renaming: String?
+    @State private var text = ""
+    @State private var showRename = false
+    @State private var creating = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(library.shelves, id: \.self) { name in
+                    Button {
+                        renaming = name; text = name; creating = false; showRename = true
+                    } label: {
+                        HStack {
+                            Text(name).foregroundStyle(.white)
+                            Spacer()
+                            Text("\(library.comics.filter { $0.shelf == name }.count)").foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    .listRowBackground(Theme.card)
+                }
+                .onMove { library.moveShelves(from: $0, to: $1) }
+                .onDelete { offsets in
+                    for i in offsets.sorted(by: >) where i < library.shelves.count { library.deleteShelf(library.shelves[i]) }
+                }
+                Section {
+                    Button { renaming = nil; text = ""; creating = true; showRename = true } label: {
+                        Label("New Shelf", systemImage: "plus").foregroundStyle(Theme.accent)
+                    }
+                    .listRowBackground(Theme.card)
+                } footer: {
+                    Text("Drag to reorder. Tap a shelf to rename it. Deleting a shelf keeps its comics in the library.")
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg)
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Shelves")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .alert(creating ? "New Shelf" : "Rename Shelf", isPresented: $showRename) {
+                TextField("Shelf name", text: $text)
+                Button(creating ? "Create" : "Save") {
+                    if creating { _ = library.addShelf(text) }
+                    else if let old = renaming { library.renameShelf(old, to: text) }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }

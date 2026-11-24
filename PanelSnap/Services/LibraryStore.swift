@@ -475,6 +475,11 @@ final class LibraryStore: ObservableObject {
         return n
     }
 
+    func moveShelves(from offsets: IndexSet, to destination: Int) {
+        shelves.move(fromOffsets: offsets, toOffset: destination)
+        saveShelves()
+    }
+
     func renameShelf(_ old: String, to new: String) {
         let n = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !n.isEmpty, let i = shelves.firstIndex(of: old) else { return }
