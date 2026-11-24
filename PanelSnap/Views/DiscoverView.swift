@@ -24,7 +24,7 @@ struct DiscoverView: View {
     @State private var topInset: CGFloat = 0
     @State private var landscape = false
     @State private var tab: DiscoverTab = .forYou
-    @State private var newWeek: ReleaseWeek = .current
+    @State private var showEarlier = false
     @State private var search = ""
     @State private var publisher: String?
     @State private var sort: DiscoverSort = .popular
@@ -32,6 +32,8 @@ struct DiscoverView: View {
     @State private var expanded = Set<ReleaseWeek>()
 
     private var searching: Bool { return search.trimmingCharacters(in: .whitespaces).count >= 2 }
+    private var recentWeeks: [ReleaseWeek] { return ReleaseWeek.recent }
+    private var newWeek: ReleaseWeek { return recentWeeks.count > 1 && showEarlier ? recentWeeks[1] : (recentWeeks.first ?? .previous) }
     private var weekList: [DiscoverComic] { return model.weeks[newWeek] ?? [] }
     private let grid = [GridItem(.adaptive(minimum: 104, maximum: 160), spacing: 14, alignment: .top)]
 
@@ -149,9 +151,9 @@ struct DiscoverView: View {
     private var newContent: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Picker("Week", selection: $newWeek) {
-                    Text("This Week").tag(ReleaseWeek.current)
-                    Text("Last Week").tag(ReleaseWeek.previous)
+                Picker("Week", selection: $showEarlier) {
+                    Text("Latest").tag(false)
+                    Text("Before That").tag(true)
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 250)
@@ -163,7 +165,11 @@ struct DiscoverView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 10)
+            .padding(.bottom, 6)
+            Text("Out in shops since " + DiscoverView.dayText(DiscoverModel.releaseDate(newWeek)))
+                .font(.footnote).foregroundStyle(Theme.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20).padding(.bottom, 10)
             if !publishers.isEmpty { chips }
             if model.loadingWeeks.contains(newWeek) && model.weeks[newWeek] == nil {
                 Spacer(); ProgressView().tint(Theme.accent); Spacer()
@@ -217,7 +223,7 @@ struct DiscoverView: View {
         let all = (model.weeks[w] ?? []).sorted { $0.pulls != $1.pulls ? $0.pulls > $1.pulls : $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         let shown = expanded.contains(w) ? all : Array(all.prefix(6))
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(w.label, subtitle: DiscoverView.dayText(DiscoverModel.releaseDate(w)))
+            sectionHeader("Out " + DiscoverView.dayText(DiscoverModel.releaseDate(w)), subtitle: w == .current ? "Later this week" : w.label)
             if all.isEmpty {
                 if model.failedWeeks.contains(w) {
                     Text("Couldn't load this week").font(.footnote).foregroundStyle(Theme.secondary)
@@ -479,6 +485,12 @@ private struct DetailSheet: View {
     @State private var detail: ComicDetail?
     @State private var loading = true
 
+    private var getComicsURL: URL? {
+        var c = URLComponents(string: "https://getcomics.org/")
+        c?.queryItems = [URLQueryItem(name: "s", value: comic.searchTerm)]
+        return c?.url
+    }
+
     private var releaseText: String? {
         guard let day = comic.released else { return nil }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
@@ -508,6 +520,13 @@ private struct DetailSheet: View {
                             Label("Find on My Home Website", systemImage: "magnifyingglass").frame(maxWidth: .infinity)
                         }
                         .buttonStyle(YellowButtonStyle(compact: false))
+                        Button { if let u = getComicsURL { onOpen(u) } } label: {
+                            Label("Search GetComics", systemImage: "arrow.down.circle").frame(maxWidth: .infinity)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.vertical, 12)
+                        .background(Theme.card2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         if let url = comic.listingURL, url.scheme?.hasPrefix("http") == true {
                             Button { onOpen(url) } label: {
                                 Label("Open Listing in Browser", systemImage: "globe").frame(maxWidth: .infinity)

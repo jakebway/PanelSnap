@@ -30,10 +30,11 @@ struct DiscoverComic: Identifiable, Hashable, Codable {
 }
 
 enum ReleaseWeek: String, CaseIterable, Identifiable {
-    case previous, current, next, week2, week3, week4
+    case earlier, previous, current, next, week2, week3, week4
     var id: String { return rawValue }
     var label: String {
         switch self {
+        case .earlier: return "Two Weeks Ago"
         case .previous: return "Last Week"
         case .current: return "This Week"
         case .next: return "Next Week"
@@ -44,6 +45,7 @@ enum ReleaseWeek: String, CaseIterable, Identifiable {
     }
     var dayOffset: Int {
         switch self {
+        case .earlier: return -14
         case .previous: return -7
         case .current: return 0
         case .next: return 7
@@ -52,8 +54,14 @@ enum ReleaseWeek: String, CaseIterable, Identifiable {
         case .week4: return 28
         }
     }
-    /// The weeks shown on the Upcoming tab.
-    static let upcoming: [ReleaseWeek] = [.next, .week2, .week3, .week4]
+    /// Comics come out on Wednesdays. A week is "out" once its Wednesday is today or earlier.
+    var isOut: Bool { return DiscoverModel.releaseDate(self) <= Calendar(identifier: .gregorian).startOfDay(for: Date()) }
+
+    /// The two most recent weeks whose comics are already in shops: the newest, then the one before it.
+    static var recent: [ReleaseWeek] { return [ReleaseWeek.current, .previous, .earlier].filter { $0.isOut }.prefix(2).map { $0 } }
+
+    /// The weeks whose Wednesday is still ahead (this week's too, early in the week).
+    static var upcoming: [ReleaseWeek] { return [ReleaseWeek.current, .next, .week2, .week3, .week4].filter { !$0.isOut }.prefix(4).map { $0 } }
 }
 
 /// What the detail page shows beyond the release list.
