@@ -269,7 +269,7 @@ struct LibraryView: View {
             Text("The files will be removed from PanelSnap.")
         }
         .task(id: library.comics.count) {
-            if settings.showDiscover { await DiscoverModel.shared.prefetch(libraryTitles: library.comics.map { $0.title }) }
+            if settings.showDiscover { await DiscoverModel.shared.prefetch(libraryTitles: TitleTools.byRecency(library.comics)) }
         }
         .fullScreenCover(item: $route) { r in
             switch r {

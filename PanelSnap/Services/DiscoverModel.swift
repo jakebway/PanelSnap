@@ -217,8 +217,9 @@ final class DiscoverModel: ObservableObject {
     func recommend(libraryTitles: [String], force: Bool = false) async {
         let profile = TitleTools.profile(from: libraryTitles)
         guard !profile.isEmpty else { return }
-        let top = Array(profile.prefix(6))
-        let key = "v2|" + top.map { $0.name }.joined(separator: "|") + "@" + Self.releaseDay(.current)
+        // One shelf for each of your ten most recent series (newest first), so the shelves stay the same from one visit to the next.
+        let top = TitleTools.recentSeries(from: libraryTitles, limit: 10)
+        let key = "v3|" + top.map { $0.name }.joined(separator: "|") + "@" + Self.releaseDay(.current)
         guard force || key != recommendedFor || forYouSections.isEmpty else { return }
         recommendedFor = key
 
@@ -226,13 +227,19 @@ final class DiscoverModel: ObservableObject {
         async let nxt: Void = load(.next)
         async let prv: Void = load(.previous)
         var found: [String: [DiscoverComic]] = [:]
-        await withTaskGroup(of: (String, [DiscoverComic]).self) { group in
-            for item in top {
-                group.addTask { @MainActor in
-                    (item.name, await self.fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? [])
+        // A few searches at a time, so the site isn't flooded.
+        var start = 0
+        while start < top.count {
+            let batch = Array(top[start..<min(start + 4, top.count)])
+            start += 4
+            await withTaskGroup(of: (String, [DiscoverComic]).self) { group in
+                for item in batch {
+                    group.addTask { @MainActor in
+                        (item.name, await self.fetch(Self.url(["list": "search", "title": item.name, "list_option": "series"])) ?? [])
+                    }
                 }
+                for await (name, list) in group { found[name] = list }
             }
-            for await (name, list) in group { found[name] = list }
         }
         _ = await (cur, nxt, prv)
 
@@ -273,13 +280,12 @@ final class DiscoverModel: ObservableObject {
 
         // 2. Because you read X.
         var publisherWeight: [String: Int] = [:]
-        var becauseShelves = 0
         for item in top {
             if let own = found[item.name]?.first(where: { TitleTools.key($0.title) == TitleTools.key(item.name) || $0.seriesKey == TitleTools.key(item.name) }), !own.publisher.isEmpty {
                 publisherWeight[own.publisher, default: 0] += item.count
             }
             let words = Set(TitleTools.significantWords(item.name))
-            guard !words.isEmpty, becauseShelves < 3 else { continue }
+            guard !words.isEmpty else { continue }
             let need = max(1, Int((Double(words.count) * 0.5).rounded(.up)))
             let candidates = (found[item.name] ?? [])
                 .map { c -> (DiscoverComic, Int) in (c, Set(TitleTools.significantWords(c.title)).intersection(words).count) }
@@ -287,9 +293,8 @@ final class DiscoverModel: ObservableObject {
                 .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.pulls > $1.0.pulls }
                 .map { $0.0 }
             let picks = pick(candidates, limit: 10, ownedOK: false)
-            if picks.count >= 3 {
+            if picks.count >= 2 {
                 sections.append(ForYouSection(title: "Because You Read \(item.name)", subtitle: "Series with a similar name or world", comics: picks))
-                becauseShelves += 1
             } else {
                 for c in picks { used.remove(c.seriesKey) }       // too few to be a shelf: let another shelf use them
             }
@@ -306,10 +311,10 @@ final class DiscoverModel: ObservableObject {
             }
         }
 
-        // 4. Trending.
+        // 4. Trending: shown first, but it only takes what the shelves above didn't use.
         let trending = pick((weeks[.current] ?? []).sorted { $0.pulls > $1.pulls }, limit: 12, ownedOK: false)
         if trending.count >= 3 {
-            sections.append(ForYouSection(title: "Trending This Week", subtitle: "What readers are pulling most", comics: trending))
+            sections.insert(ForYouSection(title: "Trending This Week", subtitle: "What readers are pulling most", comics: trending), at: 0)
         }
 
         forYouSections = sections
@@ -572,6 +577,26 @@ enum TitleTools {
         var k = normal(short(name))
         if k.hasPrefix("the ") { k = String(k.dropFirst(4)) }
         return k
+    }
+
+    /// The series of the most recently used comics (titles are given newest first), one entry per series.
+    static func recentSeries(from titles: [String], limit: Int) -> [(name: String, count: Int)] {
+        var seen = Set<String>()
+        var out: [(name: String, count: Int)] = []
+        let counts = Dictionary(uniqueKeysWithValues: profile(from: titles).map { (key($0.name), $0.count) })
+        for t in titles {
+            let name = short(split(t).name)
+            let k = key(name)
+            if name.count < 3 || k.isEmpty || !seen.insert(k).inserted { continue }
+            out.append((name: name, count: counts[k] ?? 1))
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    /// Comic titles, most recently opened or added first.
+    static func byRecency(_ comics: [ComicEntry]) -> [String] {
+        return comics.sorted { ($0.lastOpenedAt ?? $0.addedAt) > ($1.lastOpenedAt ?? $1.addedAt) }.map { $0.title }
     }
 
     /// The series in the library, the ones with the most issues first.

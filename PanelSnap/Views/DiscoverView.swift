@@ -75,7 +75,7 @@ struct DiscoverView: View {
         .readLandscape($landscape)
         .task(id: tab) {
             switch tab {
-            case .forYou: await model.prefetch(libraryTitles: library.comics.map { $0.title })
+            case .forYou: await model.prefetch(libraryTitles: TitleTools.byRecency(library.comics))
             case .shop: await model.load(shopWeek)
             }
         }
@@ -246,7 +246,7 @@ struct DiscoverView: View {
         .refreshable {
             await model.load(.current, force: true)
             await model.load(.next, force: true)
-            await model.recommend(libraryTitles: library.comics.map { $0.title }, force: true)
+            await model.recommend(libraryTitles: TitleTools.byRecency(library.comics), force: true)
         }
     }
 
@@ -293,7 +293,7 @@ struct DiscoverView: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2).fill(Theme.accent).frame(width: 4, height: 18)
-                Text(title).font(.system(size: 19, weight: .heavy, design: .rounded)).foregroundStyle(.white).lineLimit(1)
+                Text(title).font(.system(size: 19, weight: .heavy, design: .rounded)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.8)
             }
             if let subtitle = subtitle, !subtitle.isEmpty {
                 Text(subtitle).font(.footnote).foregroundStyle(Theme.secondary).padding(.leading, 12)
