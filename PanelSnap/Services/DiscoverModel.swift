@@ -204,10 +204,30 @@ final class DiscoverModel: ObservableObject {
         searching = true
         let list = await fetch(Self.url(["list": "search", "title": q, "list_option": "series"]))
         if q == query.trimmingCharacters(in: .whitespaces) {
-            searchResults = list ?? []
-            DiscoverCovers.shared.prefetch((list ?? []).prefix(20).compactMap { $0.cover })
+            let tidy = Self.withoutDuplicates(list ?? [])
+            searchResults = tidy
+            DiscoverCovers.shared.prefetch(tidy.prefix(20).compactMap { $0.cover })
         }
         searching = false
+    }
+
+    /// The same title listed twice (one entry often has no cover): keep the better one, in the original order.
+    static func withoutDuplicates(_ list: [DiscoverComic]) -> [DiscoverComic] {
+        func hasCover(_ c: DiscoverComic) -> Bool {
+            guard let u = c.cover?.absoluteString.lowercased() else { return false }
+            return !u.contains("nocover") && !u.contains("no-cover") && !u.contains("placeholder")
+        }
+        var best: [String: Int] = [:]
+        for (i, c) in list.enumerated() {
+            let k = TitleTools.key(c.title) + "|" + c.publisher.lowercased()
+            if let j = best[k] {
+                let a = list[j], b = c
+                let better = (hasCover(b) && !hasCover(a)) || (hasCover(b) == hasCover(a) && b.pulls > a.pulls)
+                if better { best[k] = i }
+            } else { best[k] = i }
+        }
+        let keep = Set(best.values)
+        return list.enumerated().filter { keep.contains($0.offset) }.map { $0.element }
     }
 
     // MARK: Suggestions
