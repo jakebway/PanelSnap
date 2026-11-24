@@ -185,8 +185,8 @@ struct ReaderView: View {
         .onChange(of: vertical) { _, on in
             if on { hideChrome() } else { model.reloadCurrent() }
         }
-        .onChange(of: settings.snapToPanels) { _, _ in
-            model.updateSettings(snap: entry.snapPanels ?? settings.snapToPanels, pageFirst: false)
+        .onChange(of: snap) { _, _ in
+            model.updateSettings(snap: snap, pageFirst: false)
         }
     }
 
