@@ -1,15 +1,14 @@
 import SwiftUI
 
-/// Discover: what to read next. For You (suggestions from your library), New (this week and last), Upcoming (the next
-/// four weeks). Search covers every comic, old and new. Pick any comic for the full story and a way to find it.
+/// Discover: what to read next. For You (suggestions from your library) and Shop (every release week: what is out now and
+/// what is coming). Search covers every comic, old and new. Pick any comic for the full story and a way to find it.
 enum DiscoverTab: String, CaseIterable, Identifiable {
-    case forYou, new, upcoming
+    case forYou, shop
     var id: String { return rawValue }
     var label: String {
         switch self {
         case .forYou: return "For You"
-        case .new: return "New"
-        case .upcoming: return "Upcoming"
+        case .shop: return "Shop"
         }
     }
 }
@@ -24,17 +23,20 @@ struct DiscoverView: View {
     @State private var topInset: CGFloat = 0
     @State private var landscape = false
     @State private var tab: DiscoverTab = .forYou
-    @State private var showEarlier = false
+    @State private var shopPick: ReleaseWeek?
     @State private var search = ""
     @State private var publisher: String?
     @State private var sort: DiscoverSort = .popular
     @State private var selected: DiscoverComic?
-    @State private var expanded = Set<ReleaseWeek>()
 
     private var searching: Bool { return search.trimmingCharacters(in: .whitespaces).count >= 2 }
-    private var recentWeeks: [ReleaseWeek] { return ReleaseWeek.recent }
-    private var newWeek: ReleaseWeek { return recentWeeks.count > 1 && showEarlier ? recentWeeks[1] : (recentWeeks.first ?? .previous) }
-    private var weekList: [DiscoverComic] { return model.weeks[newWeek] ?? [] }
+    /// Every release week in time order: the last two that are out, then the ones still to come.
+    private var shopWeeks: [ReleaseWeek] { return Array(ReleaseWeek.recent.reversed()) + ReleaseWeek.upcoming }
+    private var shopWeek: ReleaseWeek {
+        if let p = shopPick, shopWeeks.contains(p) { return p }
+        return ReleaseWeek.recent.first ?? shopWeeks.first ?? .current
+    }
+    private var weekList: [DiscoverComic] { return model.weeks[shopWeek] ?? [] }
     private let grid = [GridItem(.adaptive(minimum: 104, maximum: 160), spacing: 14, alignment: .top)]
 
     private var publishers: [String] {
@@ -74,13 +76,12 @@ struct DiscoverView: View {
         .task(id: tab) {
             switch tab {
             case .forYou: await model.prefetch(libraryTitles: library.comics.map { $0.title })
-            case .new: await model.load(newWeek)
-            case .upcoming: await model.loadUpcoming()
+            case .shop: await model.load(shopWeek)
             }
         }
-        .task(id: newWeek) {
+        .task(id: shopWeek) {
             publisher = nil
-            if tab == .new { await model.load(newWeek) }
+            if tab == .shop { await model.load(shopWeek) }
         }
         .task(id: search) {
             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -140,113 +141,72 @@ struct DiscoverView: View {
         } else {
             switch tab {
             case .forYou: forYouContent
-            case .new: newContent
-            case .upcoming: upcomingContent
+            case .shop: shopContent
             }
         }
     }
 
-    // MARK: New
+    // MARK: Shop
 
-    private var newContent: some View {
+    private var shopContent: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Picker("Week", selection: $showEarlier) {
-                    Text("Latest").tag(false)
-                    Text("Before That").tag(true)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(shopWeeks) { w in weekChip(w) }
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 250)
+                .padding(.horizontal, 20)
+            }
+            .padding(.bottom, 10)
+            HStack(spacing: 14) {
+                Text((shopWeek.isOut ? "Out " : "Coming ") + DiscoverView.dayText(DiscoverModel.releaseDate(shopWeek)))
+                    .font(.footnote.weight(.semibold)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 0)
+                if !publishers.isEmpty {
+                    Menu {
+                        Button("All Publishers") { publisher = nil }
+                        ForEach(publishers, id: \.self) { p in Button(p) { publisher = p } }
+                    } label: {
+                        Label(publisher ?? "All", systemImage: "line.3.horizontal.decrease.circle")
+                            .font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1)
+                    }
+                }
                 Menu {
                     Picker("Sort", selection: $sort) { ForEach(DiscoverSort.allCases) { Text($0.label).tag($0) } }
                 } label: {
-                    Label(sort.label, systemImage: "arrow.up.arrow.down").font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
+                    Image(systemName: "arrow.up.arrow.down").font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
                 }
+                .accessibilityLabel("Sort")
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 6)
-            Text("Out in shops since " + DiscoverView.dayText(DiscoverModel.releaseDate(newWeek)))
-                .font(.footnote).foregroundStyle(Theme.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20).padding(.bottom, 10)
-            if !publishers.isEmpty { chips }
-            if model.loadingWeeks.contains(newWeek) && model.weeks[newWeek] == nil {
+            .padding(.bottom, 10)
+            if model.loadingWeeks.contains(shopWeek) && model.weeks[shopWeek] == nil {
                 Spacer(); ProgressView().tint(Theme.accent); Spacer()
-            } else if model.failedWeeks.contains(newWeek) {
-                failure { Task { await model.load(newWeek, force: true) } }
+            } else if model.failedWeeks.contains(shopWeek) {
+                failure { Task { await model.load(shopWeek, force: true) } }
             } else if visibleWeek.isEmpty {
-                Spacer(); Text("Nothing here yet").foregroundStyle(Theme.secondary); Spacer()
+                Spacer()
+                Text(model.weeks[shopWeek] == nil ? "Loading…" : (shopWeek.isOut ? "Nothing here" : "Nothing announced yet"))
+                    .foregroundStyle(Theme.secondary)
+                Spacer()
             } else {
-                gridScroll(visibleWeek) { await model.load(newWeek, force: true) }
+                gridScroll(visibleWeek) { await model.load(shopWeek, force: true) }
             }
         }
     }
 
-    private var chips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("All", on: publisher == nil) { publisher = nil }
-                ForEach(publishers, id: \.self) { p in chip(p, on: publisher == p) { publisher = p } }
-            }
-            .padding(.horizontal, 20)
-        }
-        .padding(.bottom, 10)
-    }
-
-    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text).font(.footnote.weight(.semibold))
+    /// One release week as a pill: its Wednesday. Weeks still to come have an outline; the chosen one is filled.
+    private func weekChip(_ w: ReleaseWeek) -> some View {
+        let on = w == shopWeek
+        let f = DateFormatter(); f.dateFormat = "MMM d"
+        return Button { shopPick = w } label: {
+            Text(f.string(from: DiscoverModel.releaseDate(w)))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(on ? Theme.onAccent : Color.white)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(on ? Theme.accent : Theme.card2, in: Capsule())
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(on ? Theme.accent : (w.isOut ? Theme.card2 : Color.clear), in: Capsule())
+                .overlay(Capsule().stroke(on || w.isOut ? Color.clear : Theme.stroke, lineWidth: 1))
         }
-    }
-
-    // MARK: Upcoming
-
-    private var upcomingContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
-                ForEach(ReleaseWeek.upcoming) { w in upcomingSection(w) }
-                attribution
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
-            .padding(.bottom, 28)
-        }
-        .ignoresSafeArea(.container, edges: .horizontal)
-        .refreshable { for w in ReleaseWeek.upcoming { await model.load(w, force: true) } }
-    }
-
-    @ViewBuilder private func upcomingSection(_ w: ReleaseWeek) -> some View {
-        let all = (model.weeks[w] ?? []).sorted { $0.pulls != $1.pulls ? $0.pulls > $1.pulls : $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-        let shown = expanded.contains(w) ? all : Array(all.prefix(6))
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Out " + DiscoverView.dayText(DiscoverModel.releaseDate(w)), subtitle: w == .current ? "Later this week" : w.label)
-            if all.isEmpty {
-                if model.failedWeeks.contains(w) {
-                    Text("Couldn't load this week").font(.footnote).foregroundStyle(Theme.secondary)
-                } else if model.loadingWeeks.contains(w) || model.weeks[w] == nil {
-                    skeletonRow
-                } else {
-                    Text("Nothing announced yet").font(.footnote).foregroundStyle(Theme.secondary)
-                }
-            } else {
-                LazyVGrid(columns: grid, spacing: 18) {
-                    ForEach(shown) { c in card(c) }
-                }
-                if all.count > 6 {
-                    Button { withAnimation(.easeInOut(duration: 0.2)) { if expanded.contains(w) { expanded.remove(w) } else { expanded.insert(w) } } } label: {
-                        Text(expanded.contains(w) ? "Show Fewer" : "Show All \(all.count)")
-                            .font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(Theme.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
+        .buttonStyle(.plain)
     }
 
     static func dayText(_ date: Date) -> String {
