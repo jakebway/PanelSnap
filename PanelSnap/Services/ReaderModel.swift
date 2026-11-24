@@ -14,8 +14,10 @@ final class ReaderModel: ObservableObject {
         case index(Int)
     }
 
-    @Published private(set) var pageIndex: Int = 0
-    @Published private(set) var panelIndex: Int = 0          // -1 = whole page
+    @Published private(set) var pageIndex: Int = 0 { didSet { if pageIndex != oldValue { resumePanel = nil } } }
+    @Published private(set) var panelIndex: Int = 0 { didSet { if panelIndex >= 0 { resumePanel = nil } } }          // -1 = whole page
+    /// The panel you were snapped to before pinching off it. Edge taps and swipes carry on from there, not to the next page.
+    private var resumePanel: Int?
     @Published private(set) var image: UIImage?
     @Published private(set) var panels: [CGRect] = []
     @Published private(set) var isLoading = true
@@ -248,7 +250,10 @@ final class ReaderModel: ObservableObject {
     /// (never pulling you into a panel); on a panel they move to the next or previous panel, and on across pages.
     func step(forward: Bool) {
         if isLoading { return }
-        if panelIndex >= 0 {
+        if panelIndex < 0, snap, let r = resumePanel, r < panels.count {
+            panelIndex = r
+            if forward { goForward() } else { goBack() }
+        } else if panelIndex >= 0 {
             if forward { goForward() } else { goBack() }
         } else if forward {
             if pageIndex + 1 < pageCount { load(page: pageIndex + 1, target: .overview) } else { reachedEnd = true }
@@ -357,8 +362,12 @@ final class ReaderModel: ObservableObject {
         panelIndex = index
     }
 
-    func showOverview() {
-        if panelIndex >= 0 { panelIndex = -1 }
+    func showOverview(keepingPlace: Bool = false) {
+        if panelIndex >= 0 {
+            let was = panelIndex
+            panelIndex = -1
+            resumePanel = keepingPlace ? was : nil
+        }
     }
 
     func focusPanelNearest(to point: CGPoint) {
