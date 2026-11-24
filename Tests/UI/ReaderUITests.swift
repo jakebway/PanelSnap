@@ -118,6 +118,31 @@ final class ReaderUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    /// Vertical scrolling: scroll, pinch, drag while zoomed, double-tap, edge tap.
+    func testVerticalScroll() {
+        app.terminate()
+        app.launchArguments = ["-verticalScroll", "YES"]
+        app.launch()
+        openComic()
+        let a = shot("30-vertical-open")
+        at(0.5, 0.7).press(forDuration: 0.05, thenDragTo: at(0.5, 0.2)); settle(1.0)
+        let b = shot("31-scrolled")
+        XCTAssertGreaterThan(diff(a, b), 0.002, "dragging should scroll")
+        app.windows.firstMatch.pinch(withScale: 2.5, velocity: 2); settle(0.8)
+        let c = shot("32-pinched")
+        XCTAssertGreaterThan(diff(b, c), 0.002, "pinching should zoom")
+        at(0.7, 0.6).press(forDuration: 0.05, thenDragTo: at(0.3, 0.4)); settle(0.8)
+        let d = shot("33-panned")
+        XCTAssertGreaterThan(diff(c, d), 0.002, "dragging while zoomed should pan")
+        at(0.5, 0.5).doubleTap(); settle(1.0)
+        shot("34-double-tap-out")
+        at(0.96, 0.5).tap(); settle(1.0)
+        shot("35-edge-tap")
+        at(0.5, 0.5).tap(); settle(0.8)
+        shot("36-tap-controls")
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     func testPageSwipes() {
         openComic()
         let a = shot("20-start")

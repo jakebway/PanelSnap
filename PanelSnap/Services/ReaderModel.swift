@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import ImageIO
 
 /// Drives the reader: loads pages, finds panels and decides where the "camera" points.
 @MainActor
@@ -310,6 +311,19 @@ final class ReaderModel: ObservableObject {
             if need <= 1200 { return UIImage(cgImage: probe) }
             guard let cg = src.pageImage(at: page, maxPixel: need) else { return UIImage(cgImage: probe) }
             return UIImage(cgImage: cg)
+        }.value
+    }
+
+    /// A page's height / width, read from the image header without decoding it (nil if it can't be told cheaply).
+    func pageRatio(page: Int) async -> CGFloat? {
+        let src = source
+        return await Task.detached(priority: .utility) { () -> CGFloat? in
+            guard let data = try? src.pageData(at: page),
+                  let isrc = CGImageSourceCreateWithData(data as CFData, nil),
+                  let props = CGImageSourceCopyPropertiesAtIndex(isrc, 0, nil) as? [CFString: Any],
+                  let w = props[kCGImagePropertyPixelWidth] as? CGFloat,
+                  let h = props[kCGImagePropertyPixelHeight] as? CGFloat, w > 0 else { return nil }
+            return h / w
         }.value
     }
 
