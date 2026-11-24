@@ -440,6 +440,13 @@ private struct CoverThumb: View {
 /// two ways to go find it.
 private struct DetailSheet: View {
     let comic: DiscoverComic
+    /// The browser's home website, by name (getcomics.org unless it was changed).
+    static var homeName: String {
+        let host = URL(string: BrowserModel.shared.homeURL)?.host ?? ""
+        let name = host.replacingOccurrences(of: "www.", with: "")
+        return name.isEmpty ? "My Home Website" : name
+    }
+
     var onFind: () -> Void
     var onOpen: (URL) -> Void
     @State private var detail: ComicDetail?
@@ -471,18 +478,9 @@ private struct DetailSheet: View {
 
                     VStack(spacing: 10) {
                         Button { onFind() } label: {
-                            Label("Find on My Home Website", systemImage: "magnifyingglass").frame(maxWidth: .infinity)
+                            Label("Find on \(Self.homeName)", systemImage: "magnifyingglass").frame(maxWidth: .infinity)
                         }
                         .buttonStyle(YellowButtonStyle(compact: false))
-                        if let url = comic.listingURL, url.scheme?.hasPrefix("http") == true {
-                            Button { onOpen(url) } label: {
-                                Label("Open Listing in Browser", systemImage: "globe").frame(maxWidth: .infinity)
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.vertical, 12)
-                            .background(Theme.card2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
                     }
 
                     if let about = detail?.about ?? (comic.summary.isEmpty ? nil : comic.summary) {

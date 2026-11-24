@@ -368,11 +368,16 @@ final class DiscoverModel: ObservableObject {
 
     private static func seriesNote(name: String, publisher: String) async -> (text: String, source: String)? {
         guard name.count >= 3 else { return nil }
+        // Only accept a page that is about this series, not one that merely mentions the name ("Absolute Batman" for "Batman").
+        let base = name.split(separator: " ")
+            .filter { w in !(w.count == 4 && w.allSatisfy { $0.isNumber }) && !["annual", "special", "vol", "volume"].contains(w.lowercased()) }
+            .joined(separator: " ").lowercased()
+        func fits(_ title: String) -> Bool { return base.isEmpty || title.lowercased().hasPrefix(base) }
         if let site = FandomProvider.host(for: publisher),
-           let r = await Knowledge.lookUp(host: site.host, query: name, limit: 700), r.text.count > 80 {
+           let r = await Knowledge.lookUp(host: site.host, query: name, limit: 700), r.text.count > 80, fits(r.title) {
             return (r.text, site.name)
         }
-        if let r = await Knowledge.lookUp(host: "en.wikipedia.org", query: name + " comics", limit: 700), r.text.count > 80 {
+        if let r = await Knowledge.lookUp(host: "en.wikipedia.org", query: name + " comics", limit: 700), r.text.count > 80, fits(r.title) {
             return (r.text, "Wikipedia")
         }
         return nil
