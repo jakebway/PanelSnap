@@ -59,6 +59,7 @@ struct ZoomGestures: UIViewRepresentable {
     var panelFocused: Bool                 // on a snapped panel: one finger nudges it, a quick flick still swipes
     var onFlick: (CGSize) -> Void          // a quick flick on a snapped panel: the same as a swipe
     var onPinchedOut: () -> Void           // pinching in on a page that is not zoomed: show the whole page
+    var onZoomedOut: () -> Void = {}       // zoomed all the way out by hand: it is the whole page again
     var onLeavePanel: () -> Void           // pinching on a focused panel: switch to free zooming on the whole page
     var onEdgeSwipe: (Bool) -> Void        // zoomed in and pushed past the side of the page: true = swiped left
 
@@ -78,6 +79,7 @@ struct ZoomGestures: UIViewRepresentable {
         context.coordinator.onFlick = onFlick
         context.coordinator.onPinchedOut = onPinchedOut
         context.coordinator.onLeavePanel = onLeavePanel
+        context.coordinator.onZoomedOut = onZoomedOut
         context.coordinator.onEdgeSwipe = onEdgeSwipe
     }
 
@@ -97,6 +99,7 @@ struct ZoomGestures: UIViewRepresentable {
         var onFlick: (CGSize) -> Void = { _ in }
         var onPinchedOut: () -> Void = {}
         var onLeavePanel: () -> Void = {}
+        var onZoomedOut: () -> Void = {}
         var onEdgeSwipe: (Bool) -> Void = { _ in }
         private var startedAtLeftEdge = false, startedAtRightEdge = false
         private var left = false
@@ -215,6 +218,7 @@ struct ZoomGestures: UIViewRepresentable {
                     let showWholePage = s.zoom <= 1.02 && g.scale < 0.85
                     zoom.reset()
                     if showWholePage { onPinchedOut() }
+                    onZoomedOut()
                 } else {
                     withAnimation(.easeOut(duration: 0.2)) {
                         zoom.set(offset: zoom.clamp(zoom.offset, zoom: zoom.zoom, size: size))

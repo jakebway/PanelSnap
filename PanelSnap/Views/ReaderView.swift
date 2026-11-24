@@ -259,6 +259,7 @@ struct ReaderView: View {
                          panelFocused: model.panelIndex >= 0,
                          onFlick: { handleDrag($0) },
                          onPinchedOut: { model.showOverview() },
+                         onZoomedOut: { model.forgetPlace() },
                          onLeavePanel: { leavePanel(size: size) },
                          onEdgeSwipe: { swipedLeft in
                              hideChrome()

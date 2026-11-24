@@ -362,6 +362,9 @@ final class ReaderModel: ObservableObject {
         panelIndex = index
     }
 
+    /// Back to a plain whole page: edge taps turn the page again.
+    func forgetPlace() { resumePanel = nil }
+
     func showOverview(keepingPlace: Bool = false) {
         if panelIndex >= 0 {
             let was = panelIndex
