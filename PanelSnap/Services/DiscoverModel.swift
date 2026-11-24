@@ -11,11 +11,12 @@ struct DiscoverComic: Identifiable, Hashable, Codable {
     var cover: URL?
     var pulls: Int             // how many readers have it on their pull list: a popularity measure
     var rating: Int?
+    var released: String? = nil        // the Wednesday it comes out, YYYY-MM-DD (release lists only)
 
     var listingURL: URL? { return URL(string: id) }
 
     /// The series without the issue number, in plain lowercase: "Batman #105" -> "batman".
-    var seriesKey: String { return TitleTools.normal(TitleTools.split(title).name) }
+    var seriesKey: String { return TitleTools.key(TitleTools.split(title).name) }
 
     /// What to type into a download site's search box: the series name and issue number, without variant wording.
     var searchTerm: String {
@@ -29,13 +30,16 @@ struct DiscoverComic: Identifiable, Hashable, Codable {
 }
 
 enum ReleaseWeek: String, CaseIterable, Identifiable {
-    case previous, current, next
+    case previous, current, next, week2, week3, week4
     var id: String { return rawValue }
     var label: String {
         switch self {
         case .previous: return "Last Week"
         case .current: return "This Week"
         case .next: return "Next Week"
+        case .week2: return "In 2 Weeks"
+        case .week3: return "In 3 Weeks"
+        case .week4: return "In 4 Weeks"
         }
     }
     var dayOffset: Int {
@@ -43,8 +47,21 @@ enum ReleaseWeek: String, CaseIterable, Identifiable {
         case .previous: return -7
         case .current: return 0
         case .next: return 7
+        case .week2: return 14
+        case .week3: return 21
+        case .week4: return 28
         }
     }
+    /// The weeks shown on the Upcoming tab.
+    static let upcoming: [ReleaseWeek] = [.next, .week2, .week3, .week4]
+}
+
+/// What the detail page shows beyond the release list.
+struct ComicDetail {
+    var about: String?
+    var creators: [String] = []
+    var seriesAbout: String?
+    var seriesSource: String?
 }
 
 enum DiscoverSort: String, CaseIterable, Identifiable {
@@ -104,7 +121,7 @@ final class DiscoverModel: ObservableObject {
         var urls: [URL] = []
         for sec in forYouSections { urls += sec.comics.compactMap { $0.cover } }
         for w in [ReleaseWeek.current, .next] { urls += (weeks[w] ?? []).sorted { $0.pulls > $1.pulls }.prefix(20).compactMap { $0.cover } }
-        for w in [ReleaseWeek.current, .next, .previous] { urls += (weeks[w] ?? []).sorted { $0.pulls > $1.pulls }.compactMap { $0.cover } }
+        for w in ReleaseWeek.allCases { urls += (weeks[w] ?? []).sorted { $0.pulls > $1.pulls }.prefix(30).compactMap { $0.cover } }
         return urls
     }
 
@@ -135,7 +152,9 @@ final class DiscoverModel: ObservableObject {
         failedWeeks.remove(week)
         let list = await fetch(Self.url(["list": "releases", "list_option": "thumbs", "view": "list",
                                          "date": Self.releaseDay(week), "date_type": "week"]))
-        if let list = list, !list.isEmpty {
+        if var list = list, !list.isEmpty {
+            let day = Self.releaseDay(week)
+            for i in list.indices { list[i].released = day }
             weeks[week] = list
             loadedAt[week] = Date()
             save()
@@ -154,6 +173,19 @@ final class DiscoverModel: ObservableObject {
         _ = await (a, b, c)
     }
 
+    /// The next four Wednesdays, one request each, one after another so the site isn't hit all at once.
+    func loadUpcoming() async {
+        for w in ReleaseWeek.upcoming { await load(w) }
+    }
+
+    /// The date of a release week's Wednesday, for headings.
+    static func releaseDate(_ week: ReleaseWeek) -> Date {
+        let cal = Calendar(identifier: .gregorian)
+        let day = cal.date(byAdding: .day, value: week.dayOffset, to: Date()) ?? Date()
+        let weekday = cal.component(.weekday, from: day)
+        return cal.date(byAdding: .day, value: 4 - weekday, to: day) ?? day
+    }
+
     /// Searches the whole catalogue, old and new.
     func search(_ query: String) async {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -169,21 +201,22 @@ final class DiscoverModel: ObservableObject {
 
     // MARK: Suggestions
 
-    /// Builds the For You shelves from what is in the library:
-    ///  1. new issues of series you already read,
-    ///  2. "Because you read X": other series that share the name of one you read (one entry per series, most popular
-    ///     first, never something you already have),
-    ///  3. popular new releases from the publisher you read most.
+    /// Builds the For You shelves from what is in the library. A series appears on one shelf only, so nothing is repeated:
+    ///  1. Continue Your Series: new and upcoming issues of series you already read,
+    ///  2. Because You Read X: other series that share the name of one you read (up to three shelves),
+    ///  3. More from the publisher you read most,
+    ///  4. Trending: what readers are pulling this week, from anywhere.
     func recommend(libraryTitles: [String], force: Bool = false) async {
         let profile = TitleTools.profile(from: libraryTitles)
         guard !profile.isEmpty else { return }
         let top = Array(profile.prefix(6))
-        let key = top.map { $0.name }.joined(separator: "|") + "@" + Self.releaseDay(.current)
+        let key = "v2|" + top.map { $0.name }.joined(separator: "|") + "@" + Self.releaseDay(.current)
         guard force || key != recommendedFor || forYouSections.isEmpty else { return }
         recommendedFor = key
 
         async let cur: Void = load(.current)
         async let nxt: Void = load(.next)
+        async let prv: Void = load(.previous)
         var found: [String: [DiscoverComic]] = [:]
         await withTaskGroup(of: (String, [DiscoverComic]).self) { group in
             for item in top {
@@ -193,70 +226,147 @@ final class DiscoverModel: ObservableObject {
             }
             for await (name, list) in group { found[name] = list }
         }
-        _ = await (cur, nxt)
+        _ = await (cur, nxt, prv)
 
-        let ownedSeries = Set(profile.map { TitleTools.normal($0.name) })
+        let ownedSeries = Set(profile.map { TitleTools.key($0.name) })
         let ownedIssues = Set(libraryTitles.map { t -> String in
             let p = TitleTools.split(t)
-            return TitleTools.normal(p.name) + "#" + (p.issue ?? "")
+            return TitleTools.key(p.name) + "#" + (p.issue ?? "")
         })
         func isOwned(_ c: DiscoverComic) -> Bool {
             let p = TitleTools.split(c.title)
-            return ownedIssues.contains(TitleTools.normal(p.name) + "#" + (p.issue ?? ""))
+            return ownedIssues.contains(TitleTools.key(p.name) + "#" + (p.issue ?? ""))
         }
-        let fresh = (weeks[.current] ?? []) + (weeks[.next] ?? [])
+        var fresh: [DiscoverComic] = []
+        var seenIDs = Set<String>()
+        for w in [ReleaseWeek.current, .next, .previous] {
+            for c in weeks[w] ?? [] where seenIDs.insert(c.id).inserted { fresh.append(c) }
+        }
         var used = Set<String>()
         var sections: [ForYouSection] = []
-
-        // 1. New issues of series you read.
-        var newIssues: [DiscoverComic] = []
-        for c in fresh.sorted(by: { $0.pulls > $1.pulls }) where ownedSeries.contains(c.seriesKey) && !isOwned(c) {
-            if newIssues.contains(where: { $0.seriesKey == c.seriesKey }) { continue }
-            newIssues.append(c)
+        /// One comic per series, skipping anything already shown on another shelf.
+        func pick(_ list: [DiscoverComic], limit: Int, ownedOK: Bool) -> [DiscoverComic] {
+            var out: [DiscoverComic] = []
+            for c in list {
+                let k = c.seriesKey
+                if k.isEmpty || used.contains(k) || isOwned(c) { continue }
+                if !ownedOK && ownedSeries.contains(k) { continue }
+                out.append(c); used.insert(k)
+                if out.count >= limit { break }
+            }
+            return out
         }
-        if !newIssues.isEmpty {
-            sections.append(ForYouSection(title: "New Issues for You", comics: Array(newIssues.prefix(12))))
-            for c in newIssues { used.insert(c.seriesKey) }
+
+        // 1. Continue your series.
+        let mine = pick(fresh.filter { ownedSeries.contains($0.seriesKey) }.sorted { $0.pulls > $1.pulls }, limit: 12, ownedOK: true)
+        if !mine.isEmpty {
+            sections.append(ForYouSection(title: "Continue Your Series", subtitle: "New and upcoming issues of comics you read", comics: mine))
         }
 
         // 2. Because you read X.
         var publisherWeight: [String: Int] = [:]
+        var becauseShelves = 0
         for item in top {
-            let words = Set(TitleTools.significantWords(item.name))
-            if let own = found[item.name]?.first(where: { $0.seriesKey == TitleTools.normal(item.name) }), !own.publisher.isEmpty {
+            if let own = found[item.name]?.first(where: { TitleTools.key($0.title) == TitleTools.key(item.name) || $0.seriesKey == TitleTools.key(item.name) }), !own.publisher.isEmpty {
                 publisherWeight[own.publisher, default: 0] += item.count
             }
-            guard !words.isEmpty, sections.count < 4 else { continue }
+            let words = Set(TitleTools.significantWords(item.name))
+            guard !words.isEmpty, becauseShelves < 3 else { continue }
             let need = max(1, Int((Double(words.count) * 0.5).rounded(.up)))
-            var best: [String: (DiscoverComic, Int)] = [:]
-            for c in found[item.name] ?? [] {
-                let key = c.seriesKey
-                if key.isEmpty || ownedSeries.contains(key) || used.contains(key) || isOwned(c) { continue }
-                let overlap = Set(TitleTools.significantWords(c.title)).intersection(words).count
-                if overlap < need { continue }
-                if let old = best[key], old.0.pulls >= c.pulls { continue }
-                best[key] = (c, overlap)
-            }
-            let picks = best.values.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.pulls > $1.0.pulls }.prefix(10).map { $0.0 }
-            if picks.count >= 2 {
-                sections.append(ForYouSection(title: "Because You Read \(item.name)", comics: Array(picks)))
-                for c in picks { used.insert(c.seriesKey) }
+            let candidates = (found[item.name] ?? [])
+                .map { c -> (DiscoverComic, Int) in (c, Set(TitleTools.significantWords(c.title)).intersection(words).count) }
+                .filter { $0.1 >= need }
+                .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.pulls > $1.0.pulls }
+                .map { $0.0 }
+            let picks = pick(candidates, limit: 10, ownedOK: false)
+            if picks.count >= 3 {
+                sections.append(ForYouSection(title: "Because You Read \(item.name)", subtitle: "Series with a similar name or world", comics: picks))
+                becauseShelves += 1
+            } else {
+                for c in picks { used.remove(c.seriesKey) }       // too few to be a shelf: let another shelf use them
             }
         }
 
-        // 3. Popular from the publisher you read most.
+        // 3. More from the publisher you read most.
         if let pub = publisherWeight.max(by: { $0.value < $1.value })?.key {
-            var seen = Set<String>()
-            let popular = fresh.filter { $0.publisher == pub && !ownedSeries.contains($0.seriesKey) && !used.contains($0.seriesKey) }
-                .sorted { $0.pulls > $1.pulls }
-                .filter { seen.insert($0.seriesKey).inserted }
-                .prefix(10)
-            if popular.count >= 3 { sections.append(ForYouSection(title: "Popular from \(pub)", comics: Array(popular))) }
+            let list = fresh.filter { $0.publisher == pub }.sorted { $0.pulls > $1.pulls }
+            let picks = pick(list, limit: 10, ownedOK: false)
+            if picks.count >= 3 {
+                sections.append(ForYouSection(title: "More from \(pub)", subtitle: "Popular recent releases from your most-read publisher", comics: picks))
+            } else {
+                for c in picks { used.remove(c.seriesKey) }
+            }
+        }
+
+        // 4. Trending.
+        let trending = pick((weeks[.current] ?? []).sorted { $0.pulls > $1.pulls }, limit: 12, ownedOK: false)
+        if trending.count >= 3 {
+            sections.append(ForYouSection(title: "Trending This Week", subtitle: "What readers are pulling most", comics: trending))
         }
 
         forYouSections = sections
         save()
         DiscoverCovers.shared.prefetch(visibleCovers())
+    }
+
+    // MARK: Detail page
+
+    private var details: [String: ComicDetail] = [:]
+
+    /// A fuller description for the detail page: the comic's own listing (its blurb and creators) plus a short note on the
+    /// series from the comics wiki or Wikipedia. Whatever can't be found is simply left out.
+    func detail(for comic: DiscoverComic) async -> ComicDetail {
+        if let d = details[comic.id] { return d }
+        let name = TitleTools.split(comic.title).name
+        let publisher = comic.publisher
+        async let page = Self.listingPage(comic.listingURL)
+        async let series = Self.seriesNote(name: name, publisher: publisher)
+        let (p, s) = await (page, series)
+        var d = ComicDetail()
+        let listed = comic.summary
+        if let about = p.about, about.count > listed.count { d.about = about } else if !listed.isEmpty { d.about = listed } else { d.about = p.about }
+        d.creators = p.creators
+        d.seriesAbout = s?.text
+        d.seriesSource = s?.source
+        details[comic.id] = d
+        return d
+    }
+
+    private static func listingPage(_ url: URL?) async -> (about: String?, creators: [String]) {
+        guard let url = url, url.scheme?.hasPrefix("http") == true else { return (nil, []) }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 15
+        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false,
+              let html = String(data: data, encoding: .utf8) else { return (nil, []) }
+        var about: String?
+        for pattern in [#"<meta[^>]+property="og:description"[^>]+content="([^"]*)""#, #"<meta[^>]+content="([^"]*)"[^>]+property="og:description""#,
+                        #"<meta[^>]+name="description"[^>]+content="([^"]*)""#, #"<meta[^>]+content="([^"]*)"[^>]+name="description""#] {
+            if let m = html.firstMatch(pattern) { let t = clean(m); if t.count > 40 { about = t; break } }
+        }
+        var creators: [String] = []
+        if let re = try? NSRegularExpression(pattern: #"href="/people/[^"]+"[^>]*>\s*([^<]{2,60}?)\s*</a>"#) {
+            let ns = html as NSString
+            for m in re.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+                let name = clean(ns.substring(with: m.range(at: 1)))
+                if !name.isEmpty, !creators.contains(name) { creators.append(name) }
+                if creators.count >= 6 { break }
+            }
+        }
+        return (about, creators)
+    }
+
+    private static func seriesNote(name: String, publisher: String) async -> (text: String, source: String)? {
+        guard name.count >= 3 else { return nil }
+        if let site = FandomProvider.host(for: publisher),
+           let r = await Knowledge.lookUp(host: site.host, query: name, limit: 700), r.text.count > 80 {
+            return (r.text, site.name)
+        }
+        if let r = await Knowledge.lookUp(host: "en.wikipedia.org", query: name + " comics", limit: 700), r.text.count > 80 {
+            return (r.text, "Wikipedia")
+        }
+        return nil
     }
 
     // MARK: Requests
@@ -420,6 +530,7 @@ final class WebJSONFetcher: NSObject, WKNavigationDelegate {
 /// A row of suggestions on the For You page.
 struct ForYouSection: Identifiable, Codable, Hashable {
     var title: String
+    var subtitle: String? = nil
     var comics: [DiscoverComic]
     var id: String { return title }
 }
@@ -439,12 +550,28 @@ enum TitleTools {
         return (s, issue)
     }
 
+    /// The series name without a subtitle or collection wording: "Avengers: Absolute Vision - Book One" -> "Avengers".
+    static func short(_ name: String) -> String {
+        var s = name
+        for sep in [":", " - ", " – ", " — "] { if let r = s.range(of: sep) { s = String(s[..<r.lowerBound]) } }
+        s = s.replacingOccurrences(of: "\\b(epic collection|omnibus|complete collection|ultimate collection|book\\s+\\w+|volume\\s+\\w+|vol\\.?\\s*\\d+)\\b.*$",
+                                   with: "", options: [.regularExpression, .caseInsensitive])
+        return s.trimmingCharacters(in: CharacterSet(charactersIn: " -–—"))
+    }
+
+    /// A comparison key for a series: lowercase, no punctuation, no leading "the".
+    static func key(_ name: String) -> String {
+        var k = normal(short(name))
+        if k.hasPrefix("the ") { k = String(k.dropFirst(4)) }
+        return k
+    }
+
     /// The series in the library, the ones with the most issues first.
     static func profile(from titles: [String]) -> [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
         var order: [String] = []
         for t in titles {
-            let s = split(t).name
+            let s = short(split(t).name)
             if s.count < 3 { continue }
             if counts[s] == nil { order.append(s) }
             counts[s, default: 0] += 1

@@ -1,24 +1,15 @@
 import SwiftUI
 
-/// New comic releases, week by week, most popular first. Pick one to open its listing, or to search your Home
-/// website for it.
+/// Discover: what to read next. For You (suggestions from your library), New (this week and last), Upcoming (the next
+/// four weeks). Search covers every comic, old and new. Pick any comic for the full story and a way to find it.
 enum DiscoverTab: String, CaseIterable, Identifiable {
-    case forYou, current, next, previous
+    case forYou, new, upcoming
     var id: String { return rawValue }
     var label: String {
         switch self {
         case .forYou: return "For You"
-        case .current: return "This Week"
-        case .next: return "Next Week"
-        case .previous: return "Last Week"
-        }
-    }
-    var week: ReleaseWeek? {
-        switch self {
-        case .forYou: return nil
-        case .current: return .current
-        case .next: return .next
-        case .previous: return .previous
+        case .new: return "New"
+        case .upcoming: return "Upcoming"
         }
     }
 }
@@ -33,13 +24,16 @@ struct DiscoverView: View {
     @State private var topInset: CGFloat = 0
     @State private var landscape = false
     @State private var tab: DiscoverTab = .forYou
+    @State private var newWeek: ReleaseWeek = .current
     @State private var search = ""
     @State private var publisher: String?
     @State private var sort: DiscoverSort = .popular
     @State private var selected: DiscoverComic?
+    @State private var expanded = Set<ReleaseWeek>()
 
     private var searching: Bool { return search.trimmingCharacters(in: .whitespaces).count >= 2 }
-    private var weekList: [DiscoverComic] { return tab.week.flatMap { model.weeks[$0] } ?? [] }
+    private var weekList: [DiscoverComic] { return model.weeks[newWeek] ?? [] }
+    private let grid = [GridItem(.adaptive(minimum: 104, maximum: 160), spacing: 14, alignment: .top)]
 
     private var publishers: [String] {
         let counts = Dictionary(grouping: weekList.filter { !$0.publisher.isEmpty }, by: { $0.publisher }).mapValues { $0.count }
@@ -69,7 +63,6 @@ struct DiscoverView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 10)
-                    if tab != .forYou, !publishers.isEmpty { chips }
                 }
                 content
             }
@@ -77,9 +70,15 @@ struct DiscoverView: View {
         .readSafeTop($topInset)
         .readLandscape($landscape)
         .task(id: tab) {
+            switch tab {
+            case .forYou: await model.prefetch(libraryTitles: library.comics.map { $0.title })
+            case .new: await model.load(newWeek)
+            case .upcoming: await model.loadUpcoming()
+            }
+        }
+        .task(id: newWeek) {
             publisher = nil
-            if let w = tab.week { await model.load(w) }
-            else { await model.prefetch(libraryTitles: library.comics.map { $0.title }) }
+            if tab == .new { await model.load(newWeek) }
         }
         .task(id: search) {
             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -90,7 +89,7 @@ struct DiscoverView: View {
             DetailSheet(comic: comic,
                         onFind: { selected = nil; onFind(comic) },
                         onOpen: { url in selected = nil; onOpen(url) })
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
         }
     }
 
@@ -117,38 +116,12 @@ struct DiscoverView: View {
             if !search.isEmpty {
                 Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.secondary) }
                     .accessibilityLabel("Clear search")
-            } else if tab != .forYou {
-                Menu {
-                    Picker("Sort", selection: $sort) { ForEach(DiscoverSort.allCases) { Text($0.label).tag($0) } }
-                } label: {
-                    Text(sort.label).font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
-                }
             }
         }
         .padding(10)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal, 20)
         .padding(.bottom, 10)
-    }
-
-    private var chips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("All", on: publisher == nil) { publisher = nil }
-                ForEach(publishers, id: \.self) { p in chip(p, on: publisher == p) { publisher = p } }
-            }
-            .padding(.horizontal, 20)
-        }
-        .padding(.bottom, 8)
-    }
-
-    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text).font(.footnote.weight(.semibold))
-                .foregroundStyle(on ? Theme.onAccent : Color.white)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(on ? Theme.accent : Theme.card2, in: Capsule())
-        }
     }
 
     // MARK: Content
@@ -160,38 +133,136 @@ struct DiscoverView: View {
             } else if model.searchResults.isEmpty {
                 Spacer(); Text("No comics found").foregroundStyle(Theme.secondary); Spacer()
             } else {
-                list(model.searchResults)
+                gridScroll(model.searchResults)
             }
-        } else if let w = tab.week {
-            weekContent(w)
         } else {
-            forYouContent
+            switch tab {
+            case .forYou: forYouContent
+            case .new: newContent
+            case .upcoming: upcomingContent
+            }
         }
     }
 
-    @ViewBuilder private func weekContent(_ w: ReleaseWeek) -> some View {
-        if model.loadingWeeks.contains(w) && model.weeks[w] == nil {
-            Spacer(); ProgressView().tint(Theme.accent); Spacer()
-        } else if model.failedWeeks.contains(w) {
-            failure { Task { await model.load(w, force: true) } }
-        } else if visibleWeek.isEmpty {
-            Spacer(); Text("Nothing here yet").foregroundStyle(Theme.secondary); Spacer()
-        } else {
-            list(visibleWeek) { await model.load(w, force: true) }
+    // MARK: New
+
+    private var newContent: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Picker("Week", selection: $newWeek) {
+                    Text("This Week").tag(ReleaseWeek.current)
+                    Text("Last Week").tag(ReleaseWeek.previous)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 250)
+                Spacer(minLength: 0)
+                Menu {
+                    Picker("Sort", selection: $sort) { ForEach(DiscoverSort.allCases) { Text($0.label).tag($0) } }
+                } label: {
+                    Label(sort.label, systemImage: "arrow.up.arrow.down").font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 10)
+            if !publishers.isEmpty { chips }
+            if model.loadingWeeks.contains(newWeek) && model.weeks[newWeek] == nil {
+                Spacer(); ProgressView().tint(Theme.accent); Spacer()
+            } else if model.failedWeeks.contains(newWeek) {
+                failure { Task { await model.load(newWeek, force: true) } }
+            } else if visibleWeek.isEmpty {
+                Spacer(); Text("Nothing here yet").foregroundStyle(Theme.secondary); Spacer()
+            } else {
+                gridScroll(visibleWeek) { await model.load(newWeek, force: true) }
+            }
         }
     }
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("All", on: publisher == nil) { publisher = nil }
+                ForEach(publishers, id: \.self) { p in chip(p, on: publisher == p) { publisher = p } }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.bottom, 10)
+    }
+
+    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.footnote.weight(.semibold))
+                .foregroundStyle(on ? Theme.onAccent : Color.white)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(on ? Theme.accent : Theme.card2, in: Capsule())
+        }
+    }
+
+    // MARK: Upcoming
+
+    private var upcomingContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 30) {
+                ForEach(ReleaseWeek.upcoming) { w in upcomingSection(w) }
+                attribution
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+            .padding(.bottom, 28)
+        }
+        .ignoresSafeArea(.container, edges: .horizontal)
+        .refreshable { for w in ReleaseWeek.upcoming { await model.load(w, force: true) } }
+    }
+
+    @ViewBuilder private func upcomingSection(_ w: ReleaseWeek) -> some View {
+        let all = (model.weeks[w] ?? []).sorted { $0.pulls != $1.pulls ? $0.pulls > $1.pulls : $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        let shown = expanded.contains(w) ? all : Array(all.prefix(6))
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(w.label, subtitle: DiscoverView.dayText(DiscoverModel.releaseDate(w)))
+            if all.isEmpty {
+                if model.failedWeeks.contains(w) {
+                    Text("Couldn't load this week").font(.footnote).foregroundStyle(Theme.secondary)
+                } else if model.loadingWeeks.contains(w) || model.weeks[w] == nil {
+                    skeletonRow
+                } else {
+                    Text("Nothing announced yet").font(.footnote).foregroundStyle(Theme.secondary)
+                }
+            } else {
+                LazyVGrid(columns: grid, spacing: 18) {
+                    ForEach(shown) { c in card(c) }
+                }
+                if all.count > 6 {
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { if expanded.contains(w) { expanded.remove(w) } else { expanded.insert(w) } } } label: {
+                        Text(expanded.contains(w) ? "Show Fewer" : "Show All \(all.count)")
+                            .font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent)
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            .background(Theme.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    static func dayText(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: date)
+    }
+
+    // MARK: For You
 
     private var forYouContent: some View {
         let nothingYet = model.forYouSections.isEmpty && model.weeks[.current] == nil && model.weeks[.next] == nil
         return ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                if model.forYouSections.isEmpty && library.comics.isEmpty {
-                    Text("Add a few comics to your library and this page will suggest more like them.")
-                        .font(.subheadline).foregroundStyle(Theme.secondary)
+            VStack(alignment: .leading, spacing: 28) {
+                if library.comics.isEmpty {
+                    emptyLibrary
                 }
-                ForEach(model.forYouSections) { sec in shelf(sec.title, sec.comics) }
-                shelf("Popular This Week", Array((model.weeks[.current] ?? []).sorted { $0.pulls > $1.pulls }.prefix(20)))
-                shelf("Coming Next Week", Array((model.weeks[.next] ?? []).sorted { $0.pulls > $1.pulls }.prefix(20)))
+                ForEach(model.forYouSections) { sec in shelf(sec) }
+                if library.comics.isEmpty {
+                    shelf(ForYouSection(title: "Trending This Week", subtitle: "What readers are pulling most",
+                                        comics: Array((model.weeks[.current] ?? []).sorted { $0.pulls > $1.pulls }.prefix(12))))
+                }
                 if nothingYet {
                     if model.failedWeeks.isEmpty {
                         skeletonShelf(); skeletonShelf()
@@ -199,8 +270,7 @@ struct DiscoverView: View {
                         failure { Task { await model.load(.current, force: true); await model.load(.next, force: true) } }
                     }
                 }
-                Text("Data from League of Comic Geeks (leagueofcomicgeeks.com).")
-                    .font(.caption2).foregroundStyle(Theme.secondary)
+                attribution
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
@@ -214,25 +284,32 @@ struct DiscoverView: View {
         }
     }
 
-    @ViewBuilder private func shelf(_ title: String, _ items: [DiscoverComic]) -> some View {
-        if !items.isEmpty {
+    private var emptyLibrary: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles").font(.title3).foregroundStyle(Theme.accent)
+            Text("Add a few comics to your library and this page will suggest more like them.")
+                .font(.subheadline).foregroundStyle(Theme.secondary)
+        }
+        .padding(14)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder private func shelf(_ sec: ForYouSection) -> some View {
+        if !sec.comics.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 2).fill(Theme.accent).frame(width: 4, height: 18)
-                    Text(title).font(.system(size: 19, weight: .heavy, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                }
+                sectionHeader(sec.title, subtitle: sec.subtitle)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
-                        ForEach(items) { c in
+                        ForEach(sec.comics) { c in
                             Button { selected = c } label: {
                                 VStack(alignment: .leading, spacing: 7) {
-                                    CoverThumb(url: c.cover, width: 118)
+                                    CoverThumb(url: c.cover, width: 122)
                                     Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
                                         .multilineTextAlignment(.leading)
-                                        .frame(width: 118, alignment: .leading)
+                                        .frame(width: 122, alignment: .leading)
                                     if !c.publisher.isEmpty {
                                         Text(c.publisher).font(.caption2).foregroundStyle(Theme.secondary).lineLimit(1)
-                                            .frame(width: 118, alignment: .leading)
+                                            .frame(width: 122, alignment: .leading)
                                     }
                                 }
                             }
@@ -246,22 +323,73 @@ struct DiscoverView: View {
         }
     }
 
+    private func sectionHeader(_ title: String, subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2).fill(Theme.accent).frame(width: 4, height: 18)
+                Text(title).font(.system(size: 19, weight: .heavy, design: .rounded)).foregroundStyle(.white).lineLimit(1)
+            }
+            if let subtitle = subtitle, !subtitle.isEmpty {
+                Text(subtitle).font(.footnote).foregroundStyle(Theme.secondary).padding(.leading, 12)
+            }
+        }
+    }
+
+    // MARK: Grid and cards
+
+    private func card(_ c: DiscoverComic) -> some View {
+        Button { selected = c } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                CoverCard(url: c.cover)
+                Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if !c.publisher.isEmpty {
+                    Text(c.publisher).font(.caption2).foregroundStyle(Theme.secondary).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func gridScroll(_ items: [DiscoverComic], refresh: (() async -> Void)? = nil) -> some View {
+        ScrollView {
+            LazyVGrid(columns: grid, spacing: 18) {
+                ForEach(items) { c in card(c) }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+            attribution.padding(.vertical, 18).padding(.horizontal, 20)
+        }
+        .ignoresSafeArea(.container, edges: .horizontal)
+        .refreshable { if let r = refresh { await r() } }
+    }
+
+    private var attribution: some View {
+        Text("Data from League of Comic Geeks (leagueofcomicgeeks.com).")
+            .font(.caption2).foregroundStyle(Theme.secondary)
+    }
+
     /// Grey placeholders in the shape of a shelf, shown only the very first time, before anything has loaded.
     private func skeletonShelf() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             RoundedRectangle(cornerRadius: 4).fill(Theme.card2).frame(width: 150, height: 18)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(0..<5, id: \.self) { _ in
-                        VStack(alignment: .leading, spacing: 7) {
-                            RoundedRectangle(cornerRadius: 8).fill(Theme.card).frame(width: 118, height: 177)
-                            RoundedRectangle(cornerRadius: 3).fill(Theme.card).frame(width: 90, height: 10)
-                        }
+            skeletonRow
+        }
+    }
+
+    private var skeletonRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ForEach(0..<5, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: 7) {
+                        RoundedRectangle(cornerRadius: 8).fill(Theme.card).frame(width: 122, height: 183)
+                        RoundedRectangle(cornerRadius: 3).fill(Theme.card).frame(width: 90, height: 10)
                     }
                 }
             }
-            .disabled(true)
         }
+        .disabled(true)
     }
 
     private func failure(_ retry: @escaping () -> Void) -> some View {
@@ -278,38 +406,35 @@ struct DiscoverView: View {
         .multilineTextAlignment(.center)
         .padding(30)
     }
+}
 
-    private func list(_ items: [DiscoverComic], refresh: (() async -> Void)? = nil) -> some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                ForEach(items) { comic in
-                    Button { selected = comic } label: { row(comic) }.buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-            Text("Data from League of Comic Geeks (leagueofcomicgeeks.com).")
-                .font(.caption2).foregroundStyle(Theme.secondary)
-                .padding(.vertical, 18)
-                .padding(.horizontal, 20)
-        }
-        .ignoresSafeArea(.container, edges: .horizontal)
-        .refreshable { if let r = refresh { await r() } }
+/// A cover that fills whatever width it is given (2:3 shape).
+private struct CoverCard: View {
+    let url: URL?
+    @State private var image: UIImage?
+
+    init(url: URL?) {
+        self.url = url
+        _image = State(initialValue: DiscoverCovers.shared.cached(url))
     }
 
-    private func row(_ c: DiscoverComic) -> some View {
-        HStack(spacing: 12) {
-            CoverThumb(url: c.cover)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(c.title).font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
-                if !c.publisher.isEmpty { Text(c.publisher).font(.caption).foregroundStyle(Theme.accent) }
-                if c.pulls > 0 { Text("\(c.pulls.formatted()) pulls").font(.caption).foregroundStyle(Theme.secondary) }
+    var body: some View {
+        Theme.card2
+            .aspectRatio(2.0 / 3.0, contentMode: .fit)
+            .overlay {
+                if let image = image {
+                    Image(uiImage: image).resizable().scaledToFill().transition(.opacity)
+                } else {
+                    Image(systemName: "book.closed").foregroundStyle(Theme.secondary)
+                }
             }
-            Spacer(minLength: 4)
-            if !c.price.isEmpty { Text(c.price).font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary) }
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.secondary)
-        }
-        .padding(10)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+            .animation(.easeOut(duration: 0.18), value: image != nil)
+            .task(id: url) {
+                guard image == nil, let u = url else { return }
+                image = await DiscoverCovers.shared.load(u)
+            }
     }
 }
 
@@ -345,46 +470,98 @@ private struct CoverThumb: View {
     }
 }
 
+/// Everything about one comic in one clean page: cover, facts, the story blurb, who made it, a note on the series, and the
+/// two ways to go find it.
 private struct DetailSheet: View {
     let comic: DiscoverComic
     var onFind: () -> Void
     var onOpen: (URL) -> Void
+    @State private var detail: ComicDetail?
+    @State private var loading = true
+
+    private var releaseText: String? {
+        guard let day = comic.released else { return nil }
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
+        guard let d = f.date(from: day) else { return nil }
+        let out = DateFormatter(); out.dateStyle = .long
+        return out.string(from: d)
+    }
 
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .top, spacing: 14) {
-                        CoverThumb(url: comic.cover, width: 90)
-                        VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 22) {
+                    HStack(alignment: .top, spacing: 16) {
+                        CoverThumb(url: comic.cover, width: 112)
+                        VStack(alignment: .leading, spacing: 8) {
                             Text(comic.title).font(.title3.weight(.bold)).foregroundStyle(.white)
-                            Text(comic.publisher).font(.subheadline).foregroundStyle(Theme.accent)
-                            HStack(spacing: 10) {
-                                if !comic.price.isEmpty { Text(comic.price).font(.footnote.weight(.semibold)).foregroundStyle(Theme.secondary) }
-                                if comic.pulls > 0 { Text("\(comic.pulls.formatted()) pulls").font(.footnote).foregroundStyle(Theme.secondary) }
+                            if !comic.publisher.isEmpty { Text(comic.publisher).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent) }
+                            if let r = releaseText { fact("calendar", r) }
+                            if comic.pulls > 0 { fact("person.2", "\(comic.pulls.formatted()) readers follow this") }
+                            if let rating = comic.rating, rating > 0 { fact("star", "\(rating)% community rating") }
+                        }
+                    }
+
+                    VStack(spacing: 10) {
+                        Button { onFind() } label: {
+                            Label("Find on My Home Website", systemImage: "magnifyingglass").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(YellowButtonStyle(compact: false))
+                        if let url = comic.listingURL, url.scheme?.hasPrefix("http") == true {
+                            Button { onOpen(url) } label: {
+                                Label("Open Listing in Browser", systemImage: "globe").frame(maxWidth: .infinity)
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 12)
+                            .background(Theme.card2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    }
+
+                    if let about = detail?.about ?? (comic.summary.isEmpty ? nil : comic.summary) {
+                        block("About This Comic") {
+                            Text(about).font(.subheadline).lineSpacing(3).foregroundStyle(Color(white: 0.88))
+                        }
+                    }
+                    if let people = detail?.creators, !people.isEmpty {
+                        block("Creators") {
+                            Text(people.joined(separator: " · ")).font(.subheadline).foregroundStyle(Color(white: 0.88))
+                        }
+                    }
+                    if let series = detail?.seriesAbout {
+                        block("About the Series") {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(series).font(.subheadline).lineSpacing(3).foregroundStyle(Color(white: 0.88))
+                                if let src = detail?.seriesSource { Text(src).font(.caption).foregroundStyle(Theme.secondary) }
                             }
                         }
                     }
-                    if !comic.summary.isEmpty {
-                        Text(comic.summary).font(.subheadline).foregroundStyle(Color(white: 0.85))
-                    }
-                    Button { onFind() } label: {
-                        Label("Find on My Home Website", systemImage: "magnifyingglass").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(YellowButtonStyle(compact: false))
-                    if let url = comic.listingURL, url.scheme?.hasPrefix("http") == true {
-                        Button { onOpen(url) } label: {
-                            Label("Open Listing in Browser", systemImage: "globe").frame(maxWidth: .infinity)
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.vertical, 12)
-                        .background(Theme.card2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    if loading {
+                        HStack(spacing: 8) { ProgressView().tint(Theme.accent); Text("Loading more…").font(.footnote).foregroundStyle(Theme.secondary) }
                     }
                 }
                 .padding(20)
             }
         }
+        .task {
+            detail = await DiscoverModel.shared.detail(for: comic)
+            loading = false
+        }
+    }
+
+    private func fact(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.caption).foregroundStyle(Theme.secondary).frame(width: 16)
+            Text(text).font(.footnote).foregroundStyle(Theme.secondary)
+        }
+    }
+
+    private func block<Content: View>(_ title: String, @ViewBuilder _ body: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.caption.weight(.bold)).foregroundStyle(Theme.secondary)
+            body()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -43,7 +43,7 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.secondary)
                     }
 
-                    Section(header: Text("Discover"), footer: Text("A browsable comic catalogue from League of Comic Geeks: search, new releases, and suggestions based on your library, with a button to search your Home website for any of them. Its button sits at the end of the shelf row on the library.")) {
+                    Section(header: Text("Discover"), footer: Text("Suggestions from your library, plus new and upcoming comics.")) {
                         Toggle("Show Discover", isOn: $settings.showDiscover)
                     }
 
