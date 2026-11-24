@@ -120,10 +120,14 @@ final class ReaderUITests: XCTestCase {
 
     /// Vertical scrolling: scroll, pinch, drag while zoomed, double-tap, edge tap.
     func testVerticalScroll() {
-        app.terminate()
-        app.launchArguments = ["-verticalScroll", "YES"]
-        app.launch()
         openComic()
+        at(0.5, 0.5).tap(); settle(0.6)
+        let more = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'more' OR label CONTAINS[c] 'ellipsis'")).firstMatch
+        if more.waitForExistence(timeout: 3) { more.tap(); settle(0.6) }
+        shot("29-menu")
+        let toggle = app.buttons["Vertical Scrolling"].firstMatch
+        if toggle.waitForExistence(timeout: 3) { toggle.tap() } else { at(0.5, 0.5).tap() }
+        settle(1.5)
         let a = shot("30-vertical-open")
         at(0.5, 0.7).press(forDuration: 0.05, thenDragTo: at(0.5, 0.2)); settle(1.0)
         let b = shot("31-scrolled")

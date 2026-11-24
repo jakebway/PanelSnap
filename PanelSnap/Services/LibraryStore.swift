@@ -404,6 +404,14 @@ final class LibraryStore: ObservableObject {
         save()
     }
 
+    /// Reading choices from the reader's menu, kept for this comic only.
+    func setReading(id: UUID, vertical: Bool? = nil, snap: Bool? = nil) {
+        guard let i = comics.firstIndex(where: { $0.id == id }) else { return }
+        if let v = vertical { comics[i].verticalScroll = v }
+        if let s = snap { comics[i].snapPanels = s }
+        save()
+    }
+
     func setManga(id: UUID, _ value: Bool) {
         guard let i = comics.firstIndex(where: { $0.id == id }) else { return }
         comics[i].isManga = value

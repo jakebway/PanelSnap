@@ -43,6 +43,8 @@ struct ComicEntry: Identifiable, Codable, Hashable {
     var finished: Bool
     var isManga: Bool
     var shelf: String? = nil      // name of the shelf this comic sits on, if any
+    var verticalScroll: Bool? = nil    // this comic is read as one vertical scroll (nil = no, the usual page mode)
+    var snapPanels: Bool? = nil        // this comic's own Snap Panel to Panel choice (nil = follow Settings)
     var optimized: Bool? = nil    // true once stored as HEIC pages at screen size
 
     var progress: Double {
