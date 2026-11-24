@@ -187,7 +187,7 @@ final class DiscoverModel: ObservableObject {
     }
 
     /// The date of a release week's Wednesday, for headings.
-    static func releaseDate(_ week: ReleaseWeek) -> Date {
+    nonisolated static func releaseDate(_ week: ReleaseWeek) -> Date {
         let cal = Calendar(identifier: .gregorian)
         let day = cal.date(byAdding: .day, value: week.dayOffset, to: Date()) ?? Date()
         let weekday = cal.component(.weekday, from: day)

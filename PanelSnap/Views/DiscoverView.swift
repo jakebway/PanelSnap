@@ -485,12 +485,6 @@ private struct DetailSheet: View {
     @State private var detail: ComicDetail?
     @State private var loading = true
 
-    private var getComicsURL: URL? {
-        var c = URLComponents(string: "https://getcomics.org/")
-        c?.queryItems = [URLQueryItem(name: "s", value: comic.searchTerm)]
-        return c?.url
-    }
-
     private var releaseText: String? {
         guard let day = comic.released else { return nil }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
@@ -520,13 +514,6 @@ private struct DetailSheet: View {
                             Label("Find on My Home Website", systemImage: "magnifyingglass").frame(maxWidth: .infinity)
                         }
                         .buttonStyle(YellowButtonStyle(compact: false))
-                        Button { if let u = getComicsURL { onOpen(u) } } label: {
-                            Label("Search GetComics", systemImage: "arrow.down.circle").frame(maxWidth: .infinity)
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.vertical, 12)
-                        .background(Theme.card2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         if let url = comic.listingURL, url.scheme?.hasPrefix("http") == true {
                             Button { onOpen(url) } label: {
                                 Label("Open Listing in Browser", systemImage: "globe").frame(maxWidth: .infinity)

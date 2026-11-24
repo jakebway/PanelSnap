@@ -50,7 +50,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         didSet { UserDefaults.standard.set(try? JSONEncoder().encode(bookmarks), forKey: "browserBookmarks") }
     }
     /// The page the browser opens on and the house button returns to. Empty means none is set.
-    @Published var homeURL: String = UserDefaults.standard.string(forKey: "browserHome") ?? "" {
+    @Published var homeURL: String = UserDefaults.standard.string(forKey: "browserHome") ?? "https://getcomics.org" {
         didSet { UserDefaults.standard.set(homeURL, forKey: "browserHome") }
     }
 
