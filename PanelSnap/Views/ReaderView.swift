@@ -109,6 +109,7 @@ struct ReaderView: View {
     }
     @State private var hideTask: Task<Void, Never>?
     @State private var started = false
+    @State private var scrollTarget: Int?
 
     private let haptic = UIImpactFeedbackGenerator(style: .light)
 
@@ -170,6 +171,9 @@ struct ReaderView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { syncSlider() } }
         .onChange(of: model.pageIndex) { _, _ in resetZoom() }
         .onChange(of: model.panelIndex) { _, _ in if !zoom.converting { resetZoom() } }
+        .onChange(of: settings.verticalScroll) { _, on in
+            if on { hideChrome() } else { model.reloadCurrent() }
+        }
         .onChange(of: settings.snapToPanels) { _, _ in
             model.updateSettings(snap: settings.snapToPanels, pageFirst: false)
         }
@@ -188,7 +192,12 @@ struct ReaderView: View {
         ZStack {
             Color.black
 
-            if let img = model.image {
+            if settings.verticalScroll {
+                VerticalReader(model: model, size: size, scrollTarget: $scrollTarget, onTap: {
+                    chromeVisible.toggle()
+                    if chromeVisible { scheduleHide() }
+                })
+            } else if let img = model.image {
                 ZoomedContent(zoom: zoom) {
                     PanelCanvas(
                         image: img,
@@ -204,7 +213,7 @@ struct ReaderView: View {
                 }
             }
 
-            if model.isLoading && model.image == nil {
+            if !settings.verticalScroll && model.isLoading && model.image == nil {
                 ProgressView().tint(.white).scaleEffect(1.3)
             }
 
@@ -216,7 +225,8 @@ struct ReaderView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
-            // Gesture layer
+            // Gesture layer (page mode only; the vertical scroller handles its own touches)
+            if !settings.verticalScroll {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(
@@ -244,6 +254,7 @@ struct ReaderView: View {
                              model.step(forward: model.rtl ? !swipedLeft : swipedLeft)
                          })
                 .allowsHitTesting(false)
+            }
 
             // Chrome
             VStack(spacing: 0) {
@@ -473,9 +484,12 @@ struct ReaderView: View {
     /// Everything you might want while reading, in one place.
     private var readerMenu: some View {
         Menu {
-            Toggle(isOn: $settings.snapToPanels) { Label("Snap Panel to Panel", systemImage: "rectangle.split.2x2") }
+            Toggle(isOn: $settings.verticalScroll) { Label("Vertical Scrolling", systemImage: "arrow.up.and.down.text.horizontal") }
+            if !settings.verticalScroll {
+                Toggle(isOn: $settings.snapToPanels) { Label("Snap Panel to Panel", systemImage: "rectangle.split.2x2") }
+            }
             Divider()
-            if !model.panels.isEmpty {
+            if !model.panels.isEmpty && !settings.verticalScroll {
                 Button { model.toggleOverview() } label: {
                     Label(model.panelIndex < 0 ? "Zoom to first panel" : "Show whole page", systemImage: "viewfinder")
                 }
@@ -494,7 +508,7 @@ struct ReaderView: View {
 
     private var positionText: String {
         var s = "Page \(model.pageIndex + 1) of \(model.pageCount)"
-        if model.panelIndex >= 0 && !model.panels.isEmpty {
+        if !settings.verticalScroll && model.panelIndex >= 0 && !model.panels.isEmpty {
             s += "  ·  Panel \(model.panelIndex + 1)/\(model.panels.count)"
         }
         return s
@@ -503,12 +517,14 @@ struct ReaderView: View {
     private var bottomBar: some View {
         VStack(spacing: 4) {
             HStack(spacing: 12) {
-                Button(action: { model.toggleOverview() }) {
-                    Image(systemName: model.panelIndex < 0 ? "viewfinder" : "rectangle.expand.vertical")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(.ultraThinMaterial, in: Circle())
+                if !settings.verticalScroll {
+                    Button(action: { model.toggleOverview() }) {
+                        Image(systemName: model.panelIndex < 0 ? "viewfinder" : "rectangle.expand.vertical")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
                 }
                 if model.pageCount > 1 {
                     PageScrubber(
@@ -519,7 +535,9 @@ struct ReaderView: View {
                             scrubbing = active
                             if active { hideTask?.cancel() } else { scheduleHide() }
                         },
-                        onJump: { page in model.jump(toPage: page) }
+                        onJump: { page in
+                            if settings.verticalScroll { scrollTarget = page; model.setVisiblePage(page) } else { model.jump(toPage: page) }
+                        }
                     )
                 } else {
                     Spacer()

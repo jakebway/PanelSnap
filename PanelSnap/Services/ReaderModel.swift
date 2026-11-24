@@ -298,6 +298,30 @@ final class ReaderModel: ObservableObject {
     private let latestThumb = Latest()
     private let thumbQueue = DispatchQueue(label: "panelsnap.thumbs", qos: .userInitiated)
 
+    /// Vertical mode: a page decoded at screen width (tall pages get extra pixels so they stay sharp).
+    func verticalImage(page: Int, width: CGFloat) async -> UIImage? {
+        let src = source
+        let scale = UIScreen.main.scale
+        return await Task.detached(priority: .userInitiated) { () -> UIImage? in
+            guard let probe = src.pageImage(at: page, maxPixel: 1200) else { return nil }
+            let ratio = CGFloat(probe.height) / max(CGFloat(probe.width), 1)
+            // Longest side needed so the width comes out at the screen's pixel width.
+            let need = min(max(width * scale * max(ratio, 1), 1200), 4200)
+            if need <= 1200 { return UIImage(cgImage: probe) }
+            guard let cg = src.pageImage(at: page, maxPixel: need) else { return UIImage(cgImage: probe) }
+            return UIImage(cgImage: cg)
+        }.value
+    }
+
+    /// Vertical mode: the page at the top of the screen is the current page.
+    func setVisiblePage(_ p: Int) {
+        let page = max(0, min(p, pageCount - 1))
+        if page != pageIndex { pageIndex = page; panelIndex = -1 }
+    }
+
+    /// Back from vertical mode: show the current page again.
+    func reloadCurrent() { load(page: pageIndex, target: .first) }
+
     func jump(toPage page: Int) {
         let p = max(0, min(page, pageCount - 1))
         if p == pageIndex { return }

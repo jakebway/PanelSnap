@@ -8,6 +8,7 @@ final class AppSettings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     @Published var snapToPanels: Bool { didSet { defaults.set(snapToPanels, forKey: "snapToPanels") } }
+    @Published var verticalScroll: Bool { didSet { defaults.set(verticalScroll, forKey: "verticalScroll") } }
     @Published var compressDownloads: Bool { didSet { defaults.set(compressDownloads, forKey: "compressDownloads") } }
     @Published var onlineLookup: Bool { didSet { defaults.set(onlineLookup, forKey: "onlineLookup") } }
     @Published var showDiscover: Bool { didSet { defaults.set(showDiscover, forKey: "showDiscover") } }
@@ -30,6 +31,7 @@ final class AppSettings: ObservableObject {
             "compressDownloads": true
         ])
         compressDownloads = d.bool(forKey: "compressDownloads")
+        verticalScroll = d.bool(forKey: "verticalScroll")
         snapToPanels = d.bool(forKey: "snapToPanels")
         onlineLookup = d.bool(forKey: "onlineLookup")
         spoilerShield = d.bool(forKey: "spoilerShield")
