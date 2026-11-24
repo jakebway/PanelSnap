@@ -1,300 +1,36 @@
-    t =   173.33s         Checking existence of `StaticText (First Match)`
-    t =   173.76s         Capturing element debug description
-    t =   174.37s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   174.38s         Checking existence of `StaticText (First Match)`
-    t =   175.11s         Capturing element debug description
-    t =   175.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   175.31s         Checking existence of `StaticText (First Match)`
-    t =   176.18s         Capturing element debug description
-    t =   176.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   176.38s         Checking existence of `StaticText (First Match)`
-    t =   177.27s         Capturing element debug description
-    t =   177.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   177.31s         Checking existence of `StaticText (First Match)`
-    t =   179.15s         Capturing element debug description
-    t =   179.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   179.33s         Checking existence of `StaticText (First Match)`
-    t =   180.36s         Capturing element debug description
-    t =   181.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   181.30s         Checking existence of `StaticText (First Match)`
-    t =   181.90s         Capturing element debug description
-    t =   182.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   182.31s         Checking existence of `StaticText (First Match)`
-    t =   182.79s         Capturing element debug description
-    t =   183.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   183.31s         Checking existence of `StaticText (First Match)`
-    t =   183.77s         Capturing element debug description
-    t =   184.39s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   184.39s         Checking existence of `StaticText (First Match)`
-    t =   184.89s         Capturing element debug description
-    t =   185.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   185.31s         Checking existence of `StaticText (First Match)`
-    t =   185.85s         Capturing element debug description
-    t =   186.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   186.31s         Checking existence of `StaticText (First Match)`
-    t =   186.72s         Capturing element debug description
-    t =   187.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   187.33s         Checking existence of `StaticText (First Match)`
-    t =   187.62s         Capturing element debug description
-    t =   188.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   188.34s         Checking existence of `StaticText (First Match)`
-    t =   188.59s         Capturing element debug description
-    t =   189.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   189.31s         Checking existence of `StaticText (First Match)`
-    t =   189.64s         Capturing element debug description
-    t =   190.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   190.33s         Checking existence of `StaticText (First Match)`
-    t =   190.87s         Capturing element debug description
-    t =   191.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   191.38s         Checking existence of `StaticText (First Match)`
-    t =   191.93s         Capturing element debug description
-    t =   192.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   192.33s         Checking existence of `StaticText (First Match)`
-    t =   192.85s         Capturing element debug description
-    t =   193.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   193.31s         Checking existence of `StaticText (First Match)`
-    t =   193.74s         Capturing element debug description
-    t =   194.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   194.33s         Checking existence of `StaticText (First Match)`
-    t =   194.80s         Capturing element debug description
-    t =   195.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   195.31s         Checking existence of `StaticText (First Match)`
-    t =   195.85s         Capturing element debug description
-    t =   196.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   196.34s         Checking existence of `StaticText (First Match)`
-    t =   196.73s         Capturing element debug description
-    t =   197.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   197.38s         Checking existence of `StaticText (First Match)`
-    t =   197.73s         Capturing element debug description
-    t =   198.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   198.33s         Checking existence of `StaticText (First Match)`
-    t =   198.62s         Capturing element debug description
-    t =   199.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   199.33s         Checking existence of `StaticText (First Match)`
-    t =   199.57s         Capturing element debug description
-    t =   200.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   200.30s         Checking existence of `StaticText (First Match)`
-    t =   200.51s         Capturing element debug description
-    t =   201.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   201.34s         Checking existence of `StaticText (First Match)`
-    t =   201.56s         Capturing element debug description
-    t =   202.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   202.30s         Checking existence of `StaticText (First Match)`
-    t =   202.61s         Capturing element debug description
-    t =   203.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   203.31s         Checking existence of `StaticText (First Match)`
-    t =   203.59s         Capturing element debug description
-    t =   204.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   204.31s         Checking existence of `StaticText (First Match)`
-    t =   204.61s         Capturing element debug description
-    t =   205.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   205.33s         Checking existence of `StaticText (First Match)`
-    t =   205.66s         Capturing element debug description
-    t =   206.39s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   206.39s         Checking existence of `StaticText (First Match)`
-    t =   206.63s         Capturing element debug description
-    t =   207.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   207.34s         Checking existence of `StaticText (First Match)`
-    t =   207.69s         Capturing element debug description
-    t =   208.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   208.31s         Checking existence of `StaticText (First Match)`
-    t =   208.79s         Capturing element debug description
-    t =   209.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   209.31s         Checking existence of `StaticText (First Match)`
-    t =   209.74s         Capturing element debug description
-    t =   210.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   210.34s         Checking existence of `StaticText (First Match)`
-    t =   210.64s         Capturing element debug description
-    t =   211.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   211.34s         Checking existence of `StaticText (First Match)`
-    t =   211.71s         Capturing element debug description
-    t =   212.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   212.31s         Checking existence of `StaticText (First Match)`
-    t =   212.62s         Capturing element debug description
-    t =   213.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   213.33s         Checking existence of `StaticText (First Match)`
-    t =   213.75s         Capturing element debug description
-    t =   214.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   214.38s         Checking existence of `StaticText (First Match)`
-    t =   214.65s         Capturing element debug description
-    t =   215.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   215.30s         Checking existence of `StaticText (First Match)`
-    t =   215.68s         Capturing element debug description
-    t =   216.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   216.31s         Checking existence of `StaticText (First Match)`
-    t =   216.60s         Capturing element debug description
-    t =   217.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   217.31s         Checking existence of `StaticText (First Match)`
-    t =   217.74s         Capturing element debug description
-    t =   218.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   218.38s         Checking existence of `StaticText (First Match)`
-    t =   218.76s         Capturing element debug description
-    t =   219.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   219.38s         Checking existence of `StaticText (First Match)`
-    t =   219.71s         Capturing element debug description
-    t =   220.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   220.34s         Checking existence of `StaticText (First Match)`
-    t =   220.79s         Capturing element debug description
-    t =   221.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   221.31s         Checking existence of `StaticText (First Match)`
-    t =   221.94s         Capturing element debug description
-    t =   222.35s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   222.35s         Checking existence of `StaticText (First Match)`
-    t =   222.97s         Capturing element debug description
-    t =   223.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   223.30s         Checking existence of `StaticText (First Match)`
-    t =   224.57s         Capturing element debug description
-    t =   225.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   225.31s         Checking existence of `StaticText (First Match)`
-    t =   232.90s         Capturing element debug description
-    t =   233.32s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   233.32s         Checking existence of `StaticText (First Match)`
-    t =   234.06s         Capturing element debug description
-    t =   234.36s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   234.36s         Checking existence of `StaticText (First Match)`
-    t =   235.25s         Capturing element debug description
-    t =   235.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   235.34s         Checking existence of `StaticText (First Match)`
-    t =   235.73s         Capturing element debug description
-    t =   236.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   236.38s         Checking existence of `StaticText (First Match)`
-    t =   237.09s         Capturing element debug description
-    t =   237.39s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   237.39s         Checking existence of `StaticText (First Match)`
-    t =   237.72s         Capturing element debug description
-    t =   238.34s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   238.34s         Checking existence of `StaticText (First Match)`
-    t =   238.65s         Capturing element debug description
-    t =   239.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   239.38s         Checking existence of `StaticText (First Match)`
-    t =   239.68s         Capturing element debug description
-    t =   240.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   240.30s         Checking existence of `StaticText (First Match)`
-    t =   240.56s         Capturing element debug description
-    t =   241.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   241.30s         Checking existence of `StaticText (First Match)`
-    t =   241.53s         Capturing element debug description
-    t =   242.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   242.38s         Checking existence of `StaticText (First Match)`
-    t =   242.80s         Capturing element debug description
-    t =   243.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   243.33s         Checking existence of `StaticText (First Match)`
-    t =   243.78s         Capturing element debug description
-    t =   244.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   244.30s         Checking existence of `StaticText (First Match)`
-    t =   244.60s         Capturing element debug description
-    t =   245.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   245.31s         Checking existence of `StaticText (First Match)`
-    t =   245.81s         Capturing element debug description
-    t =   246.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   246.31s         Checking existence of `StaticText (First Match)`
-    t =   246.53s         Capturing element debug description
-    t =   247.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   247.38s         Checking existence of `StaticText (First Match)`
-    t =   247.64s         Capturing element debug description
-    t =   248.38s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   248.38s         Checking existence of `StaticText (First Match)`
-    t =   248.69s         Capturing element debug description
-    t =   249.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   249.33s         Checking existence of `StaticText (First Match)`
-    t =   249.64s         Capturing element debug description
-    t =   250.31s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   250.31s         Checking existence of `StaticText (First Match)`
-    t =   250.58s         Capturing element debug description
-    t =   251.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   251.30s         Checking existence of `StaticText (First Match)`
-    t =   251.60s         Capturing element debug description
-    t =   252.33s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   252.33s         Checking existence of `StaticText (First Match)`
-    t =   252.58s         Capturing element debug description
-    t =   253.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   253.30s         Checking existence of `StaticText (First Match)`
-    t =   253.65s         Capturing element debug description
-    t =   254.30s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =   254.30s         Checking existence of `StaticText (First Match)`
-    t =   254.61s         Capturing element debug description
-    t =   254.61s     Checking existence of `StaticText (First Match)`
-    t =   255.05s Collecting debug information to assist test failure triage
-    t =   255.05s     Requesting snapshot of accessibility hierarchy for app with pid 14251
-    t =   256.77s Added attachment named '45-ask-answer'
-UITEST: ask answered: false
-    t =   256.78s Waiting 3.0s for "Done" Button to exist
-    t =   257.81s     Checking `Expect predicate `existsNoRetry == 1` for object "Done" Button`
-    t =   257.81s         Checking existence of `"Done" Button`
-    t =   257.95s Tap "Done" Button
-    t =   257.96s     Wait for com.jakebway.panelsnap to idle
-    t =   257.96s     Find the "Done" Button
-    t =   258.39s     Check for interrupting elements affecting "Done" Button
-    t =   258.78s     Synthesize event
-    t =   259.35s     Wait for com.jakebway.panelsnap to idle
-    t =   260.80s Waiting 1.0s for "page-scrubber" Any to exist
-    t =   261.80s     Checking `Expect predicate `existsNoRetry == 1` for object "page-scrubber" Any`
-    t =   261.81s         Checking existence of `"page-scrubber" Any`
-    t =   261.89s         Capturing element debug description
-    t =   261.89s     Checking existence of `"page-scrubber" Any`
-    t =   261.96s Collecting debug information to assist test failure triage
-    t =   261.96s     Requesting snapshot of accessibility hierarchy for app with pid 14251
-    t =   262.00s Tap Window (First Match)[0.50, 0.50]
-    t =   262.00s     Wait for com.jakebway.panelsnap to idle
-    t =   262.01s     Find the Window (First Match)
-    t =   262.03s     Check for interrupting elements affecting Window
-    t =   262.07s     Synthesize event
-    t =   262.07s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
-    t =   262.10s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
-    t =   262.14s         Find the Window at {{0.0, 0.0}, {420.0, 912.0}}
-    t =   262.44s     Wait for com.jakebway.panelsnap to idle
-    t =   262.45s Waiting 4.0s for "page-scrubber" Any to exist
-    t =   263.48s     Checking `Expect predicate `existsNoRetry == 1` for object "page-scrubber" Any`
-    t =   263.48s         Checking existence of `"page-scrubber" Any`
-    t =   263.56s Checking existence of `"page-scrubber" Any`
-    t =   263.62s Press "page-scrubber" Any[0.05, 0.50] for 0.2 seconds, then drag to "page-scrubber" Any[0.85, 0.50] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds 
-    t =   263.62s     Wait for com.jakebway.panelsnap to idle
-    t =   263.62s     Find the "page-scrubber" Any
-    t =   263.66s     Check for interrupting elements affecting "page-scrubber" Other
-    t =   263.71s     Synthesize event
-    t =   263.72s         Find the "page-scrubber" Other
-    t =   263.77s         Find the "page-scrubber" Other
-    t =   263.83s         Find the "page-scrubber" Other
-    t =   263.89s         Find the "page-scrubber" Other
-    t =   263.96s         Find the "page-scrubber" Other
-    t =   264.93s     Wait for com.jakebway.panelsnap to idle
-    t =   267.13s Added attachment named '43-jumped'
-    t =   267.14s Waiting 1.0s for "page-scrubber" Any to exist
-    t =   268.14s     Checking `Expect predicate `existsNoRetry == 1` for object "page-scrubber" Any`
-    t =   268.14s         Checking existence of `"page-scrubber" Any`
-    t =   268.25s     Checking existence of `"page-scrubber" Any`
-    t =   268.40s Waiting 4.0s for "companion-button" Button to exist
-    t =   269.44s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-button" Button`
-    t =   269.44s         Checking existence of `"companion-button" Button`
-    t =   269.48s Tap "companion-button" Button
-    t =   269.48s     Wait for com.jakebway.panelsnap to idle
-    t =   269.48s     Find the "companion-button" Button
-    t =   269.53s     Check for interrupting elements affecting "companion-button" Button
-    t =   269.57s     Synthesize event
-    t =   269.90s     Wait for com.jakebway.panelsnap to idle
-    t =   271.15s Waiting 150.0s for "companion-issue-banner" Any to exist
-    t =   272.19s     Checking `Expect predicate `existsNoRetry == 1` for object "companion-issue-banner" Any`
-    t =   272.20s         Checking existence of `"companion-issue-banner" Any`
-    t =   274.41s Added attachment named '41-companion'
-    t =   274.41s Checking existence of `"companion-issue-banner" Any`
-    t =   274.53s Find the "companion-issue-banner" Any
-UITEST: banner after jumping: Following your place: you're in issue #3
-    t =   282.92s Added attachment named '44-companion-issue3'
-    t =   282.94s Tear Down
-Test Case '-[PanelSnapUITests.ReaderUITests testOmnibusCompanion]' passed (283.927 seconds).
-Test Suite 'ReaderUITests' passed at 2026-11-22 19:47:08.857.
-	 Executed 1 test, with 0 failures (0 unexpected) in 283.927 (283.931) seconds
-Test Suite 'PanelSnapUITests.xctest' passed at 2026-11-22 19:47:08.858.
-	 Executed 1 test, with 0 failures (0 unexpected) in 283.927 (283.933) seconds
-Test Suite 'Selected tests' passed at 2026-11-22 19:47:08.858.
-	 Executed 1 test, with 0 failures (0 unexpected) in 283.927 (283.936) seconds
-2026-11-22 19:48:05.149 xcodebuild[11915:40106] [MT] IDETestOperationsObserverDebug: 372.584 elapsed -- Testing started completed.
-2026-11-22 19:48:05.149 xcodebuild[11915:40106] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
-2026-11-22 19:48:05.149 xcodebuild[11915:40106] [MT] IDETestOperationsObserverDebug: 372.584 sec, +372.584 sec -- end
+Command line invocation:
+    /Applications/Xcode_27.1.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project PanelSnap.xcodeproj -scheme PanelSnap -destination id=C898E3E4-5033-4085-B886-963EE2D0C478 -derivedDataPath build-ui "-only-testing:PanelSnapUITests/ReaderUITests/testVerticalScroll" -resultBundlePath ui.xcresult
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  SevenZip: https://github.com/mtgto/SevenZip.swift @ 0.5.0
+  Unrar: https://github.com/mtgto/Unrar.swift @ 0.5.4
+  ZIPFoundation: https://github.com/weichsel/ZIPFoundation @ 0.9.20
+
+Writing result bundle at path:
+	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
+
+2026-11-24 02:15:33.115 xcodebuild[14579:45982] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-24 02:15:33.116 xcodebuild[14579:45982] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-24 02:15:46.709674+0000 PanelSnapUITests-Runner[14997:47819] [Default] Running tests...
+2026-11-24 02:17:30.943 xcodebuild[14579:45982] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-24 02:17:31.502 xcodebuild[14579:45982] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-24 02:17:32.583 xcodebuild[14579:45982] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-24 02:17:32.583 xcodebuild[14579:45982] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-24 02:17:37.837 xcodebuild[14579:45982] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-24 02:17:37.838 xcodebuild[14579:45982] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-24 02:20:29.366 xcodebuild[14579:45982] [MT] IDETestOperationsObserverDebug: 304.872 elapsed -- Testing started completed.
+2026-11-24 02:20:29.367 xcodebuild[14579:45982] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-24 02:20:29.367 xcodebuild[14579:45982] [MT] IDETestOperationsObserverDebug: 304.872 sec, +304.872 sec -- end
 
 Test session results, code coverage, and logs:
 	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
 
-** TEST EXECUTE SUCCEEDED **
+Testing failed:
+	PanelSnapUITests-Runner (14997) encountered an error (Early unexpected exit, operation never finished bootstrapping - no restart will be attempted. (Underlying Error: The test runner crashed while preparing to run tests: PanelSnapUITests-Runner at -[XCTWaiter(StallHandling) handleStalledWait:]))
+
+** TEST EXECUTE FAILED **
 
 Testing started
