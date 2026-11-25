@@ -298,6 +298,10 @@ struct LibraryView: View {
         } message: {
             Text("The files will be removed from PanelSnap.")
         }
+        .onChange(of: library.shelves) { _, names in
+            // A shelf that dissolved (down to one comic) closes if it was open.
+            if let open = shelf, !names.contains(open) { withAnimation(.snappy) { shelf = nil } }
+        }
         .task(id: library.comics.count) {
             if settings.showDiscover { await DiscoverModel.shared.keepFresh(libraryTitles: TitleTools.byRecency(library.comics)) }
         }
@@ -930,8 +934,7 @@ struct CoverView: View {
                     .foregroundStyle(Theme.secondary)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: onShelf ? 3 : 10, style: .continuous))
-        .overlay { if onShelf { RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(Color.black.opacity(0.55), lineWidth: 1) } }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .shadow(color: .black.opacity(onShelf ? 0.35 : 0.22), radius: onShelf ? 4 : 7, x: onShelf ? 2 : 0, y: onShelf ? -1 : 4)
         .task(id: entry.id) {
             let url = library.coverURL(for: entry)
@@ -961,7 +964,7 @@ struct ComicCell: View {
                 }
                 .overlay {
                     if organizing && selected {
-                        RoundedRectangle(cornerRadius: ledge ? 3 : 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: 3)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: 3)
                     }
                 }
                 .overlay(alignment: .topLeading) {

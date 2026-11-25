@@ -451,7 +451,9 @@ final class LibraryStore: ObservableObject {
             try? fm.removeItem(at: PanelCache.fileURL(for: entry.id))
             try? fm.removeItem(at: CompanionCache.fileURL(for: entry.id))
         }
+        let before = shelfCounts()
         comics.removeAll(where: { ids.contains($0.id) })
+        dissolveSmallShelves(was: before)
         save()
     }
 
@@ -499,8 +501,30 @@ final class LibraryStore: ObservableObject {
     }
 
     func move(_ ids: Set<UUID>, toShelf name: String?) {
+        let before = shelfCounts()
         for i in comics.indices where ids.contains(comics[i].id) { comics[i].shelf = name }
+        dissolveSmallShelves(was: before)
         save()
+    }
+
+    private func shelfCounts() -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for c in comics { if let s = c.shelf { counts[s, default: 0] += 1 } }
+        return counts
+    }
+
+    /// Like a Home Screen folder: a shelf that is down to one comic stops existing, and the comic goes back to the library.
+    private func dissolveSmallShelves(was before: [String: Int]) {
+        var changed = false
+        for (name, was) in before where was >= 2 {
+            let members = comics.indices.filter { comics[$0].shelf == name }
+            if members.count == 1 {
+                comics[members[0]].shelf = nil
+                shelves.removeAll { $0 == name }
+                changed = true
+            }
+        }
+        if changed { saveShelves() }
     }
 
     /// Makes the stored order match `ids` (used the first time someone drags a comic while another sort is active).
