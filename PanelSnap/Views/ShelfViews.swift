@@ -136,7 +136,6 @@ struct ShelfFolderCell: View {
             ShelfThumbnail(comics: comics)
                 .scaleEffect(highlighted ? 1.07 : 1)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: highlighted)
-            Color.clear.frame(height: 0)          // room for the plank under the cover
             Text(name)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
@@ -146,7 +145,6 @@ struct ShelfFolderCell: View {
                 .font(.caption)
                 .foregroundStyle(Theme.secondary)
         }
-        .background(alignment: .top) { ShelfBackdrop() }
         .contentShape(Rectangle())
     }
 }

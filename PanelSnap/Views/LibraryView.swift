@@ -320,7 +320,7 @@ struct LibraryView: View {
     // MARK: Organising
 
     private func cell(_ entry: ComicEntry) -> some View {
-        ComicCell(entry: entry, organizing: organizing, selected: selection.contains(entry.id))
+        ComicCell(entry: entry, organizing: organizing, selected: selection.contains(entry.id), ledge: shelf != nil)
             .onTapGesture {
                 draggingID = nil
                 dragActive = false
@@ -938,12 +938,17 @@ struct ComicCell: View {
     let entry: ComicEntry
     var organizing = false
     var selected = false
+    var ledge = false          // the plank: only inside a shelf
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Color.clear
                 .aspectRatio(2.0 / 3.0, contentMode: .fit)          // always exactly cover-shaped, so every plank lines up
-                .overlay { CoverView(entry: entry) }
+                .overlay {
+                    GeometryReader { g in
+                        CoverView(entry: entry).frame(width: g.size.width, height: g.size.height).clipped()
+                    }
+                }
                 .overlay {
                     if organizing && selected {
                         RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: 3)
@@ -972,7 +977,7 @@ struct ComicCell: View {
                             .padding(8)
                     }
                 }
-            Color.clear.frame(height: 0)          // room for the plank under the cover
+            if ledge { Color.clear.frame(height: 0) }          // room for the plank under the cover
             Text(entry.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
@@ -982,7 +987,7 @@ struct ComicCell: View {
                 .font(.caption)
                 .foregroundStyle(Theme.secondary)
         }
-        .background(alignment: .top) { ShelfBackdrop() }
+        .background(alignment: .top) { if ledge { ShelfBackdrop() } }
         .contentShape(Rectangle())
     }
 }
