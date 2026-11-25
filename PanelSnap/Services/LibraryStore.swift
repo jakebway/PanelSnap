@@ -477,6 +477,17 @@ final class LibraryStore: ObservableObject {
         return n
     }
 
+    /// Drag and drop: put shelf `name` where `target` is.
+    func moveShelf(_ name: String, onto target: String) {
+        guard name != target,
+              let from = shelves.firstIndex(of: name),
+              let to = shelves.firstIndex(of: target) else { return }
+        let item = shelves.remove(at: from)
+        let dest = shelves.firstIndex(of: target) ?? to
+        shelves.insert(item, at: from < to ? dest + 1 : dest)
+        saveShelves()
+    }
+
     func moveShelves(from offsets: IndexSet, to destination: Int) {
         shelves.move(fromOffsets: offsets, toOffset: destination)
         saveShelves()

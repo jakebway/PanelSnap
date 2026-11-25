@@ -205,6 +205,8 @@ final class DragState: ObservableObject {
     private var loop: Task<Void, Never>?
     private var dragged: UUID?
     private var canStack = false
+    private var shelfDragged: String?                  // set while a shelf (not a comic) is being dragged
+    private var reorderShelf: ((String, String) -> Void)?
     private var reorder: ((UUID, UUID) -> Void)?
     private var openShelf: ((String) -> Void)?
 
@@ -221,6 +223,7 @@ final class DragState: ObservableObject {
 
     func track(_ p: CGPoint, dragged: UUID, canStack: Bool, first: UUID?, last: UUID?,
                reorder: @escaping (UUID, UUID) -> Void, openShelf: @escaping (String) -> Void) {
+        shelfDragged = nil
         self.dragged = dragged
         self.canStack = canStack
         self.reorder = reorder
@@ -254,11 +257,37 @@ final class DragState: ObservableObject {
         }
     }
 
+    /// A shelf being dragged: resting on another shelf slides them past each other.
+    func trackShelf(_ p: CGPoint, dragged name: String, reorder: @escaping (String, String) -> Void) {
+        shelfDragged = name
+        reorderShelf = reorder
+        var t: DragTarget? = nil
+        if case .shelf(let other)? = hit(p)?.0, other != name { t = .shelf(other) }
+        if t != target {
+            target = t
+            since = Date()
+            if focus != nil { focus = nil }
+        }
+        if target != nil && loop == nil {
+            loop = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                    guard let self = self else { return }
+                    self.evaluate()
+                }
+            }
+        }
+    }
+
     private func evaluate() {
         guard let t = target else { loop?.cancel(); loop = nil; return }
         let el = Date().timeIntervalSince(since)
         switch t {
         case .shelf(let name):
+            if let sd = shelfDragged {
+                if el > 0.3 { target = nil; reorderShelf?(sd, name) }
+                return
+            }
             if el > 0.6 {
                 target = nil
                 if focus != nil { focus = nil }
@@ -334,6 +363,8 @@ final class DragState: ObservableObject {
 struct GridDropDelegate: DropDelegate {
     @Binding var dragging: UUID?
     @Binding var active: Bool
+    var draggingShelf: Binding<String?> = .constant(nil)
+    var reorderShelf: (String, String) -> Void = { _, _ in }
     let state: DragState
     let canStack: Bool
     let first: () -> UUID?
@@ -344,9 +375,14 @@ struct GridDropDelegate: DropDelegate {
     var openShelf: (String) -> Void = { _ in }
     var intoShelf: (UUID, String) -> Void = { _, _ in }
 
-    func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
+    func validateDrop(info: DropInfo) -> Bool { return dragging != nil || draggingShelf.wrappedValue != nil }
 
     private func update(_ info: DropInfo) {
+        if let sh = draggingShelf.wrappedValue {
+            active = true
+            state.trackShelf(info.location, dragged: sh, reorder: reorderShelf)
+            return
+        }
         guard let d = dragging else { return }
         active = true
         enter?(d)
@@ -361,6 +397,12 @@ struct GridDropDelegate: DropDelegate {
     func dropExited(info: DropInfo) { state.stop() }
 
     func performDrop(info: DropInfo) -> Bool {
+        if draggingShelf.wrappedValue != nil {
+            state.stop()
+            draggingShelf.wrappedValue = nil
+            active = false
+            return true
+        }
         let p = info.location
         let d = dragging
         let stackOnto = state.stackCandidate(at: p)

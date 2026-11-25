@@ -26,6 +26,7 @@ struct LibraryView: View {
     @State private var panelDrag = DragState()          // the same, for the open shelf
     @State private var panelCell: CGSize = .zero        // size of one cover cell in the open shelf, for placing the planks
     @State private var showDeleteShelf = false
+    @State private var draggingShelf: String?          // a shelf being picked up and moved
     @State private var draggingID: UUID?
     @State private var showShelfManager = false
     @State private var dragActive = false          // the dragged cover has really started moving (not just a long press for the menu)
@@ -188,7 +189,10 @@ struct LibraryView: View {
                         // One handler for the whole grid: rest on a cover's edge to slide the others aside, on its middle to
                         // make a shelf, over a shelf to open it; let go past the last comic for the end, above the first for the start.
                         .onDrop(of: [.text], delegate: GridDropDelegate(
-                            dragging: $draggingID, active: $dragActive, state: dragState,
+                            dragging: $draggingID, active: $dragActive,
+                            draggingShelf: $draggingShelf,
+                            reorderShelf: { name, target in withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { library.moveShelf(name, onto: target) } },
+                            state: dragState,
                             canStack: search.trimmingCharacters(in: .whitespaces).isEmpty,
                             first: { visible.first?.id }, last: { visible.last?.id },
                             reorder: { dragged, target in reorder(dragged, onto: target) },
@@ -361,7 +365,9 @@ struct LibraryView: View {
             .contextMenu {
                 if !organizing { menu(for: entry) }
             }
-            .modifier(ReorderModifier(id: entry.id, dragging: $draggingID, active: $dragActive,
+            .modifier(ReorderModifier(id: entry.id,
+                                      dragging: Binding(get: { draggingID }, set: { draggingID = $0; if $0 != nil { draggingShelf = nil } }),
+                                      active: $dragActive,
                                       state: inPanel ? panelDrag : dragState, space: inPanel ? "panelspace" : "libscroll"))
     }
 
@@ -433,8 +439,15 @@ struct LibraryView: View {
     }
 
     private func folderCell(_ name: String) -> some View {
-        FolderCellHost(name: name, comics: library.comics.filter { $0.shelf == name }, state: dragState)
+        FolderCellHost(name: name, comics: library.comics.filter { $0.shelf == name },
+                       lifted: draggingShelf == name && dragActive, state: dragState)
+            .onDrag {
+                draggingShelf = name
+                draggingID = nil
+                return NSItemProvider(object: ("shelf:" + name) as NSString)
+            }
             .onTapGesture {
+                draggingShelf = nil
                 draggingID = nil
                 dragActive = false
                 withAnimation(.snappy) { shelf = name }
@@ -910,9 +923,11 @@ private struct CellSizeKey: PreferenceKey {
 private struct FolderCellHost: View {
     let name: String
     let comics: [ComicEntry]
+    var lifted = false
     @ObservedObject var state: DragState
     var body: some View {
         ShelfFolderCell(name: name, comics: comics, highlighted: state.focus == .shelf(name))
+            .opacity(lifted ? 0.35 : 1)
     }
 }
 
