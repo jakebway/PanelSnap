@@ -24,19 +24,34 @@ struct ShelfLedge: View {
     }
 }
 
-/// A plain thin plank for the tiny bookcase thumbnail.
+/// The same plank as `ShelfLedge`, shrunk for the tiny bookcase thumbnail (same wood, same inked edges).
 struct MiniLedge: View {
     var body: some View {
-        Rectangle()
-            .fill(LinearGradient(colors: [Color(red: 0.50, green: 0.33, blue: 0.18), Color(red: 0.30, green: 0.19, blue: 0.10)],
-                                 startPoint: .top, endPoint: .bottom))
-            .frame(height: 4)
-            .overlay(alignment: .bottom) { Rectangle().fill(Color.black.opacity(0.8)).frame(height: 1) }
-            .shadow(color: .black.opacity(0.6), radius: 2, y: 2)
+        VStack(spacing: 0) {
+            Rectangle().fill(Color(red: 0.55, green: 0.36, blue: 0.20)).frame(height: 2)
+            Rectangle().fill(Color.black.opacity(0.85)).frame(height: 0.75)
+            Rectangle().fill(Color(red: 0.26, green: 0.16, blue: 0.09)).frame(height: 3)
+        }
+        .overlay(alignment: .top) { Rectangle().fill(Color.black.opacity(0.9)).frame(height: 0.75) }
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.black.opacity(0.9)).frame(height: 0.75) }
+        .shadow(color: .black, radius: 0, x: 0, y: 1.5)
     }
 }
 
-/// Behind a cover-sized cell: a faint back wall and a plank that runs the whole width of the screen (every cell in
+/// Soft contact shadow where a cover's bottom edge meets the plank.
+struct ContactShadow: View {
+    var body: some View {
+        Ellipse()
+            .fill(RadialGradient(colors: [Color.black.opacity(0.55), Color.black.opacity(0)], center: .center, startRadius: 0, endRadius: 60))
+            .scaleEffect(x: 1, y: 0.35)
+            .allowsHitTesting(false)
+    }
+}
+
+/// Height reserved under a cover for the plank (plank 17.5 + hard shadow 3).
+let shelfLedgeRoom: CGFloat = 22
+
+/// Behind a cover-sized cell: a plank that runs the whole width of the screen (every cell in
 /// the row draws the same plank), with the cover standing on it.
 struct ShelfBackdrop: View {
     var body: some View {
@@ -46,7 +61,7 @@ struct ShelfBackdrop: View {
                 ShelfLedge()
                     .frame(width: 4000)
                     .frame(width: g.size.width)
-                    .offset(y: h - 3)
+                    .offset(y: h)
             }
         }
         .allowsHitTesting(false)
@@ -65,8 +80,9 @@ struct MiniCover: View {
             Rectangle().fill(Theme.card2)
             if let img = image { Image(uiImage: img).resizable().scaledToFill() }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-        .shadow(color: .black.opacity(0.4), radius: 1.5, y: 1)
+        .clipShape(RoundedRectangle(cornerRadius: 1.5, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 1.5, style: .continuous).strokeBorder(Color.black.opacity(0.6), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.45), radius: 1, x: 1, y: 0)
         .task(id: entry.id) {
             let url = library.coverURL(for: entry)
             if let hit = CoverCache.shared.cached(url) { image = hit } else { image = await CoverCache.shared.load(url) }
@@ -91,8 +107,9 @@ struct ShelfThumbnail: View {
                     let bookH = bookW * 1.5
                     ZStack {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.08)], startPoint: .top, endPoint: .bottom))
-                        RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.09), lineWidth: 1)
+                            .fill(LinearGradient(colors: [Color(red: 0.22, green: 0.14, blue: 0.09), Color(red: 0.12, green: 0.08, blue: 0.05)], startPoint: .top, endPoint: .bottom))
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(red: 0.55, green: 0.36, blue: 0.20).opacity(0.9), lineWidth: 3)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.black.opacity(0.9), lineWidth: 1)
                         VStack(spacing: 0) {
                             Spacer(minLength: 0)
                             row(0, bookW: bookW, bookH: bookH, gap: gap, width: innerW)
@@ -118,7 +135,7 @@ struct ShelfThumbnail: View {
                 }
             }
             .frame(width: width, alignment: .center)
-            .padding(.bottom, 3)
+            .padding(.bottom, 6.5)
             MiniLedge().frame(width: width + 8)
         }
         .frame(width: width + 8, height: bookH + 8, alignment: .bottom)

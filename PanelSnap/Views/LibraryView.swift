@@ -906,6 +906,7 @@ private struct ShelfDropDelegate: DropDelegate {
 struct CoverView: View {
     @EnvironmentObject var library: LibraryStore
     let entry: ComicEntry
+    var onShelf = false        // standing on a plank: crisp comic corners, shadow falls back onto the wall
     @State private var image: UIImage?
 
     var body: some View {
@@ -921,8 +922,9 @@ struct CoverView: View {
                     .foregroundStyle(Theme.secondary)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .shadow(color: .black.opacity(0.22), radius: 7, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: onShelf ? 3 : 10, style: .continuous))
+        .overlay { if onShelf { RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(Color.black.opacity(0.55), lineWidth: 1) } }
+        .shadow(color: .black.opacity(onShelf ? 0.35 : 0.22), radius: onShelf ? 4 : 7, x: onShelf ? 2 : 0, y: onShelf ? -1 : 4)
         .task(id: entry.id) {
             let url = library.coverURL(for: entry)
             if let hit = CoverCache.shared.cached(url) {
@@ -946,12 +948,12 @@ struct ComicCell: View {
                 .aspectRatio(2.0 / 3.0, contentMode: .fit)          // always exactly cover-shaped, so every plank lines up
                 .overlay {
                     GeometryReader { g in
-                        CoverView(entry: entry).frame(width: g.size.width, height: g.size.height).clipped()
+                        CoverView(entry: entry, onShelf: ledge).frame(width: g.size.width, height: g.size.height)
                     }
                 }
                 .overlay {
                     if organizing && selected {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: 3)
+                        RoundedRectangle(cornerRadius: ledge ? 3 : 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: 3)
                     }
                 }
                 .overlay(alignment: .topLeading) {
@@ -977,7 +979,10 @@ struct ComicCell: View {
                             .padding(8)
                     }
                 }
-            if ledge { Color.clear.frame(height: 0) }          // room for the plank under the cover
+                .background(alignment: .bottom) {
+                    if ledge { ContactShadow().frame(height: 10).padding(.horizontal, 4).offset(y: 4) }
+                }
+            if ledge { Color.clear.frame(height: shelfLedgeRoom - 8) }   // room for the plank so titles sit below it
             Text(entry.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
