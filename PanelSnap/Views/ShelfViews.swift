@@ -3,32 +3,54 @@ import UIKit
 
 // MARK: - The wooden shelf behind the comics
 
-/// A plank: a lit top edge, a wooden front and a soft shadow under it.
+/// A comic-book plank: inked outline, a lit top surface, a darker front and a hard offset shadow.
 struct ShelfLedge: View {
-    var thickness: CGFloat = 8
     var body: some View {
-        Rectangle()
-            .fill(LinearGradient(colors: [Color(red: 0.25, green: 0.17, blue: 0.11), Color(red: 0.14, green: 0.10, blue: 0.07)],
-                                 startPoint: .top, endPoint: .bottom))
-            .frame(height: thickness)
-            .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1) }
-            .shadow(color: .black.opacity(0.55), radius: thickness * 0.8, y: thickness * 0.6)
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(LinearGradient(colors: [Color(red: 0.55, green: 0.36, blue: 0.20), Color(red: 0.43, green: 0.27, blue: 0.15)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(height: 5)
+            Rectangle().fill(Color.black.opacity(0.85)).frame(height: 1.5)
+            Rectangle()
+                .fill(LinearGradient(colors: [Color(red: 0.30, green: 0.18, blue: 0.10), Color(red: 0.20, green: 0.12, blue: 0.07)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(height: 9)
+                .overlay(alignment: .top) { Rectangle().fill(Color(red: 1, green: 0.8, blue: 0.4).opacity(0.18)).frame(height: 1.5) }
+        }
+        .overlay(alignment: .top) { Rectangle().fill(Color.black.opacity(0.9)).frame(height: 2) }
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.black.opacity(0.9)).frame(height: 2) }
+        .shadow(color: .black, radius: 0, x: 0, y: 3)       // the hard, inked drop shadow
     }
 }
 
-/// Behind a cover-sized cell: a faint back wall and the plank the cover stands on. Neighbouring cells' planks meet.
+/// A plain thin plank for the tiny bookcase thumbnail.
+struct MiniLedge: View {
+    var body: some View {
+        Rectangle()
+            .fill(LinearGradient(colors: [Color(red: 0.50, green: 0.33, blue: 0.18), Color(red: 0.30, green: 0.19, blue: 0.10)],
+                                 startPoint: .top, endPoint: .bottom))
+            .frame(height: 4)
+            .overlay(alignment: .bottom) { Rectangle().fill(Color.black.opacity(0.8)).frame(height: 1) }
+            .shadow(color: .black.opacity(0.6), radius: 2, y: 2)
+    }
+}
+
+/// Behind a cover-sized cell: a faint back wall and a plank that runs the whole width of the screen (every cell in
+/// the row draws the same plank), with the cover standing on it.
 struct ShelfBackdrop: View {
     var body: some View {
         GeometryReader { g in
             let h = g.size.width * 1.5
             ZStack(alignment: .top) {
-                LinearGradient(colors: [Color.white.opacity(0), Color.white.opacity(0.05)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [Theme.red.opacity(0), Theme.red.opacity(0.07)], startPoint: .top, endPoint: .bottom)
                     .frame(height: h + 22)
                     .padding(.horizontal, -8)
                     .offset(y: -14)
                 ShelfLedge()
-                    .padding(.horizontal, -8)
-                    .offset(y: h - 2)
+                    .frame(width: 4000)
+                    .frame(width: g.size.width)
+                    .offset(y: h - 3)
             }
         }
         .allowsHitTesting(false)
@@ -96,7 +118,7 @@ struct ShelfThumbnail: View {
             }
             .frame(width: width, alignment: .leading)
             .padding(.bottom, 3)
-            ShelfLedge(thickness: 4).frame(width: width + 8)
+            MiniLedge().frame(width: width + 8)
         }
         .frame(width: width + 8, height: rowH, alignment: .bottom)
     }
@@ -113,6 +135,7 @@ struct ShelfFolderCell: View {
             ShelfThumbnail(comics: comics)
                 .scaleEffect(highlighted ? 1.07 : 1)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: highlighted)
+            Color.clear.frame(height: 0)          // room for the plank under the cover
             Text(name)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)

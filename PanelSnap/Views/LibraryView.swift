@@ -971,6 +971,7 @@ struct ComicCell: View {
                             .padding(8)
                     }
                 }
+            Color.clear.frame(height: 0)          // room for the plank under the cover
             Text(entry.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
