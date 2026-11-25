@@ -61,6 +61,14 @@ struct LibraryView: View {
         return out
     }
 
+    /// Shelves and loose comics in the order they are laid out. Shelves can sit anywhere among the comics ("My Order");
+    /// with another sort they stay together at the top.
+    private var topItems: [DragTarget] {
+        if !search.trimmingCharacters(in: .whitespaces).isEmpty { return visible.map { DragTarget.comic($0.id) } }
+        if settings.librarySort == .custom { return library.topLevel() }
+        return library.shelves.map { DragTarget.shelf($0) } + visible.map { DragTarget.comic($0.id) }
+    }
+
     private var visible: [ComicEntry] {
         var list = library.comics
         let q = search.trimmingCharacters(in: .whitespaces)
@@ -169,11 +177,12 @@ struct LibraryView: View {
                                         .padding(.top, 30)
                                 } else {
                                     LazyVGrid(columns: columns, spacing: 22) {
-                                        ForEach(folders, id: \.self) { name in
-                                            folderCell(name)
-                                        }
-                                        ForEach(items) { entry in
-                                            cell(entry)
+                                        let byID = Dictionary(uniqueKeysWithValues: library.comics.map { ($0.id, $0) })
+                                        ForEach(topItems, id: \.self) { item in
+                                            switch item {
+                                            case .shelf(let name): folderCell(name)
+                                            case .comic(let id): if let entry = byID[id] { cell(entry) }
+                                            }
                                         }
                                     }
                                 }
@@ -191,11 +200,10 @@ struct LibraryView: View {
                         .onDrop(of: [.text], delegate: GridDropDelegate(
                             dragging: $draggingID, active: $dragActive,
                             draggingShelf: $draggingShelf,
-                            reorderShelf: { name, target in withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { library.moveShelf(name, onto: target) } },
                             state: dragState,
                             canStack: search.trimmingCharacters(in: .whitespaces).isEmpty,
-                            first: { visible.first?.id }, last: { visible.last?.id },
-                            reorder: { dragged, target in reorder(dragged, onto: target) },
+                            first: { topItems.first }, last: { topItems.last },
+                            reorder: { dragged, target in reorderTop(dragged, onto: target) },
                             stack: { dragged, target in stack(dragged, onto: target) },
                             openShelf: { name in withAnimation(.snappy) { shelf = name } },
                             intoShelf: { id, name in withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([id], toShelf: name) } }))
@@ -371,6 +379,19 @@ struct LibraryView: View {
                                       state: inPanel ? panelDrag : dragState, space: inPanel ? "panelspace" : "libscroll"))
     }
 
+    /// Moves a shelf or a loose comic to where another one is, in the library.
+    private func reorderTop(_ dragged: DragTarget, onto target: DragTarget) {
+        if settings.librarySort != .custom {
+            // Freeze what is on screen as "my order", then move the item within it.
+            library.applyOrder(sorted(library.comics, by: settings.librarySort).map { $0.id })
+            library.resetOrder()
+            settings.librarySort = .custom
+        }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            library.moveItem(dragged, onto: target)
+        }
+    }
+
     private func reorder(_ dragged: UUID, onto target: UUID) {
         if settings.librarySort != .custom {
             // Freeze what is on screen as "my order", then move the comic within it.
@@ -429,6 +450,7 @@ struct LibraryView: View {
             n += 1
         }
         guard let made = library.addShelf(name) else { return }
+        library.placeShelf(made, at: .comic(target))        // it takes the place of the comic it was made on
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([dragged, target], toShelf: made) }
         withAnimation(.snappy) { shelf = made }
     }
@@ -546,11 +568,13 @@ struct LibraryView: View {
             .onPreferenceChange(DragFramesKey.self) { panelDrag.frames = $0 }
             .onDrop(of: [.text], delegate: GridDropDelegate(
                 dragging: $draggingID, active: $dragActive, state: panelDrag, canStack: false,
-                first: { items.first?.id }, last: { items.last?.id },
+                first: { items.first.map { DragTarget.comic($0.id) } }, last: { items.last.map { DragTarget.comic($0.id) } },
                 enter: { id in
                     if library.comics.first(where: { $0.id == id })?.shelf != name { library.move([id], toShelf: name) }
                 },
-                reorder: { dragged, target in reorder(dragged, onto: target) },
+                reorder: { dragged, target in
+                    if case .comic(let a) = dragged, case .comic(let b) = target { reorder(a, onto: b) }
+                },
                 stack: { _, _ in }))
             .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))

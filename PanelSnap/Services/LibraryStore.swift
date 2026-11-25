@@ -37,6 +37,76 @@ final class LibraryStore: ObservableObject {
         UserDefaults.standard.set(shelves, forKey: "shelves")
     }
 
+    // MARK: where shelves and loose comics sit among each other ("My Order")
+
+    /// Keys like "c:<uuid>" and "s:<name>", in the order they are laid out. Anything missing is added by `topLevel()`.
+    private var order: [String] = UserDefaults.standard.stringArray(forKey: "libraryOrder") ?? []
+
+    private func key(_ t: DragTarget) -> String {
+        switch t {
+        case .comic(let id): return "c:" + id.uuidString
+        case .shelf(let name): return "s:" + name
+        }
+    }
+
+    private func target(_ key: String) -> DragTarget? {
+        if key.hasPrefix("c:"), let id = UUID(uuidString: String(key.dropFirst(2))) { return .comic(id) }
+        if key.hasPrefix("s:") { return .shelf(String(key.dropFirst(2))) }
+        return nil
+    }
+
+    private func saveOrder(_ list: [DragTarget]) {
+        order = list.map { key($0) }
+        UserDefaults.standard.set(order, forKey: "libraryOrder")
+        objectWillChange.send()
+    }
+
+    /// The shelves and loose comics as laid out in "My Order": what was placed, then anything new (new shelves up top, new comics last).
+    func topLevel() -> [DragTarget] {
+        let loose = comics.filter { $0.shelf == nil }.map { $0.id }
+        let looseSet = Set(loose)
+        let shelfSet = Set(shelves)
+        var seen = Set<String>()
+        var out: [DragTarget] = []
+        for k in order {
+            guard let t = target(k), !seen.contains(k) else { continue }
+            switch t {
+            case .comic(let id): if !looseSet.contains(id) { continue }
+            case .shelf(let name): if !shelfSet.contains(name) { continue }
+            }
+            seen.insert(k)
+            out.append(t)
+        }
+        let newShelves = shelves.filter { !seen.contains("s:" + $0) }.map { DragTarget.shelf($0) }
+        let newComics = loose.filter { !seen.contains("c:" + $0.uuidString) }.map { DragTarget.comic($0) }
+        return newShelves + out + newComics
+    }
+
+    /// Forgets the layout (used when the sort changes to "My Order" from another sort).
+    func resetOrder() {
+        order = []
+        UserDefaults.standard.removeObject(forKey: "libraryOrder")
+    }
+
+    /// Drag and drop: put a shelf or a loose comic where `target` is.
+    func moveItem(_ dragged: DragTarget, onto target: DragTarget) {
+        guard dragged != target else { return }
+        var list = topLevel()
+        guard let from = list.firstIndex(of: dragged), let to = list.firstIndex(of: target) else { return }
+        let item = list.remove(at: from)
+        let dest = list.firstIndex(of: target) ?? to
+        list.insert(item, at: from < to ? dest + 1 : dest)
+        saveOrder(list)
+    }
+
+    /// A new shelf takes the place of the comic it was made on.
+    func placeShelf(_ name: String, at target: DragTarget) {
+        var list = topLevel()
+        list.removeAll { $0 == .shelf(name) }
+        if let i = list.firstIndex(of: target) { list.insert(.shelf(name), at: i) } else { list.append(.shelf(name)) }
+        saveOrder(list)
+    }
+
     /// Writes the library right now (used when the app goes to the background).
     func flush() {
         saveWork?.cancel()
@@ -497,7 +567,9 @@ final class LibraryStore: ObservableObject {
         let n = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !n.isEmpty, let i = shelves.firstIndex(of: old) else { return }
         if n != old, shelves.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) { return }
+        var layout = topLevel()
         shelves[i] = n
+        if let k = layout.firstIndex(of: .shelf(old)) { layout[k] = .shelf(n); saveOrder(layout) }
         for j in comics.indices where comics[j].shelf == old { comics[j].shelf = n }
         saveShelves()
         save()
@@ -530,8 +602,18 @@ final class LibraryStore: ObservableObject {
         for (name, was) in before where was >= 2 {
             let members = comics.indices.filter { comics[$0].shelf == name }
             if members.count == 1 {
+                let id = comics[members[0]].id
                 comics[members[0]].shelf = nil
-                shelves.removeAll { $0 == name }
+                // The comic takes the shelf's place.
+                var list = topLevel()
+                if let i = list.firstIndex(of: .shelf(name)) {
+                    list.removeAll { $0 == .comic(id) }
+                    if let j = list.firstIndex(of: .shelf(name)) { list[j] = .comic(id) } else { list.insert(.comic(id), at: min(i, list.count)) }
+                    shelves.removeAll { $0 == name }
+                    saveOrder(list.filter { $0 != .shelf(name) })
+                } else {
+                    shelves.removeAll { $0 == name }
+                }
                 changed = true
             }
         }

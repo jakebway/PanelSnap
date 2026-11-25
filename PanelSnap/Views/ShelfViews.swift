@@ -192,9 +192,9 @@ extension View {
     }
 }
 
-/// Follows a dragged comic across a grid and decides what resting on something means, like the Home Screen:
-/// on the edge of a cover it slides the covers apart, in the middle of one it makes a shelf, over a shelf it opens it.
-/// One of these watches the finger for the whole grid, so covers sliding around underneath can't confuse it.
+/// Follows a dragged comic (or shelf) across a grid and decides what resting on something means, like the Home Screen:
+/// on the edge of a cover it slides the others apart, in the middle of a comic it makes a shelf, in the middle of a shelf
+/// it opens it. One of these watches the finger for the whole grid, so covers sliding around underneath can't confuse it.
 final class DragState: ObservableObject {
     @Published var focus: DragTarget?          // a cover ready to become a shelf, or the shelf being hovered
     var frames: [DragTarget: CGRect] = [:]
@@ -203,11 +203,9 @@ final class DragState: ObservableObject {
     private var zone: DragZone = .edge
     private var since = Date()
     private var loop: Task<Void, Never>?
-    private var dragged: UUID?
+    private var dragged: DragTarget?
     private var canStack = false
-    private var shelfDragged: String?                  // set while a shelf (not a comic) is being dragged
-    private var reorderShelf: ((String, String) -> Void)?
-    private var reorder: ((UUID, UUID) -> Void)?
+    private var reorder: ((DragTarget, DragTarget) -> Void)?
     private var openShelf: ((String) -> Void)?
 
     /// What is under this point (covers are 2:3, with a caption underneath that counts as the edge).
@@ -221,48 +219,24 @@ final class DragState: ObservableObject {
         return nil
     }
 
-    func track(_ p: CGPoint, dragged: UUID, canStack: Bool, first: UUID?, last: UUID?,
-               reorder: @escaping (UUID, UUID) -> Void, openShelf: @escaping (String) -> Void) {
-        shelfDragged = nil
+    func track(_ p: CGPoint, dragged: DragTarget, canStack: Bool, first: DragTarget?, last: DragTarget?,
+               reorder: @escaping (DragTarget, DragTarget) -> Void, openShelf: @escaping (String) -> Void) {
         self.dragged = dragged
         self.canStack = canStack
         self.reorder = reorder
         self.openShelf = openShelf
         var t = hit(p)?.0
         var z = hit(p)?.1 ?? .edge
+        if t == dragged { t = nil }
         if t == nil {
-            // Held in the empty space past the last comic (or before the first): slide it there, so its greyed-out place shows.
+            // Held in the empty space past the last item (or before the first): slide it there, so its greyed-out place shows.
             let e = pastEnds(p, first: first, last: last)
-            if e > 0, let l = last, l != dragged { t = .comic(l) }
-            else if e < 0, let f = first, f != dragged { t = .comic(f) }
+            if e > 0, let l = last, l != dragged { t = l }
+            else if e < 0, let f = first, f != dragged { t = f }
         }
-        if t == .comic(dragged) { t = nil }
-        if !canStack { z = .edge }
+        if case .shelf = dragged { z = .edge }      // a shelf being moved just slides past whatever it rests on
+        if case .comic = dragged, case .comic(_)? = t, !canStack { z = .edge }
         if z != zone { zone = z; since = Date() }
-        if t != target {
-            target = t
-            since = Date()
-            var f: DragTarget? = nil
-            if case .shelf = t { f = t }
-            if focus != f { focus = f }
-        }
-        if target != nil && loop == nil {
-            loop = Task { @MainActor [weak self] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 60_000_000)
-                    guard let self = self else { return }
-                    self.evaluate()
-                }
-            }
-        }
-    }
-
-    /// A shelf being dragged: resting on another shelf slides them past each other.
-    func trackShelf(_ p: CGPoint, dragged name: String, reorder: @escaping (String, String) -> Void) {
-        shelfDragged = name
-        reorderShelf = reorder
-        var t: DragTarget? = nil
-        if case .shelf(let other)? = hit(p)?.0, other != name { t = .shelf(other) }
         if t != target {
             target = t
             since = Date()
@@ -280,52 +254,53 @@ final class DragState: ObservableObject {
     }
 
     private func evaluate() {
-        guard let t = target else { loop?.cancel(); loop = nil; return }
+        guard let t = target, let d = dragged else { loop?.cancel(); loop = nil; return }
         let el = Date().timeIntervalSince(since)
-        switch t {
-        case .shelf(let name):
-            if let sd = shelfDragged {
-                if el > 0.3 { target = nil; reorderShelf?(sd, name) }
-                return
-            }
-            if el > 0.6 {
-                target = nil
-                if focus != nil { focus = nil }
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                openShelf?(name)
-            }
-        case .comic(let id):
-            guard let d = dragged else { return }
+        func setFocus(_ f: DragTarget?) { if focus != f { focus = f } }
+        switch (d, t) {
+        case (.shelf, _):
+            if el > 0.3 { target = nil; reorder?(d, t) }
+        case (.comic, .shelf(let name)):
             if zone == .middle {
+                setFocus(t)
+                if el > 0.6 {
+                    target = nil
+                    setFocus(nil)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    openShelf?(name)
+                }
+            } else {
+                setFocus(nil)
+                if el > 0.3 { target = nil; reorder?(d, t) }
+            }
+        case (.comic, .comic):
+            if zone == .middle && canStack {
                 if el > 0.6 && focus != t {
                     focus = t
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
             } else {
-                if focus != nil { focus = nil }
-                if el > 0.3 {
-                    target = nil
-                    reorder?(d, id)
-                }
+                setFocus(nil)
+                if el > 0.3 { target = nil; reorder?(d, t) }
             }
         }
     }
 
-    /// The cover the dragged comic is resting on the middle of, long enough to make a shelf (at the moment of letting go).
+    /// The comic the dragged one is resting on the middle of, long enough to make a shelf (at the moment of letting go).
     func stackCandidate(at p: CGPoint) -> UUID? {
         if case .comic(let id)? = focus { return id }
-        if let (t, z) = hit(p), z == .middle, canStack, case .comic(let id) = t, id != dragged,
+        if let (t, z) = hit(p), z == .middle, canStack, case .comic(let id) = t, t != dragged,
            target == t, Date().timeIntervalSince(since) > 0.5 { return id }
         return nil
     }
 
-    /// Whether the finger is below the last cover (or above the first): `+1` for the end, `-1` for the start.
-    func pastEnds(_ p: CGPoint, first: UUID?, last: UUID?) -> Int {
+    /// Whether the finger is below the last item (or above the first): `+1` for the end, `-1` for the start.
+    func pastEnds(_ p: CGPoint, first: DragTarget?, last: DragTarget?) -> Int {
         if hit(p) != nil { return 0 }
-        // Below the last row, or in the empty space to the right of the last comic: the end.
-        if let l = last, let f = frames[.comic(l)], p.y > f.maxY || (p.y > f.minY - 11 && p.x > f.maxX) { return 1 }
-        // Above the first row, or just to the left of the first comic: the start.
-        if let fi = first, let f = frames[.comic(fi)], p.y < f.minY || (p.y < f.maxY + 11 && p.x < f.minX) { return -1 }
+        // Below the last row, or in the empty space to the right of the last item: the end.
+        if let l = last, let f = frames[l], p.y > f.maxY || (p.y > f.minY - 11 && p.x > f.maxX) { return 1 }
+        // Above the first row, or just to the left of the first item: the start.
+        if let fi = first, let f = frames[fi], p.y < f.minY || (p.y < f.maxY + 11 && p.x < f.minX) { return -1 }
         return 0
     }
 
@@ -364,28 +339,28 @@ struct GridDropDelegate: DropDelegate {
     @Binding var dragging: UUID?
     @Binding var active: Bool
     var draggingShelf: Binding<String?> = .constant(nil)
-    var reorderShelf: (String, String) -> Void = { _, _ in }
     let state: DragState
     let canStack: Bool
-    let first: () -> UUID?
-    let last: () -> UUID?
+    let first: () -> DragTarget?
+    let last: () -> DragTarget?
     var enter: ((UUID) -> Void)? = nil                 // an open shelf takes the comic in as soon as it is over it
-    let reorder: (UUID, UUID) -> Void
+    let reorder: (DragTarget, DragTarget) -> Void
     let stack: (UUID, UUID) -> Void
     var openShelf: (String) -> Void = { _ in }
     var intoShelf: (UUID, String) -> Void = { _, _ in }
 
-    func validateDrop(info: DropInfo) -> Bool { return dragging != nil || draggingShelf.wrappedValue != nil }
+    private var current: DragTarget? {
+        if let s = draggingShelf.wrappedValue { return .shelf(s) }
+        if let c = dragging { return .comic(c) }
+        return nil
+    }
+
+    func validateDrop(info: DropInfo) -> Bool { return current != nil }
 
     private func update(_ info: DropInfo) {
-        if let sh = draggingShelf.wrappedValue {
-            active = true
-            state.trackShelf(info.location, dragged: sh, reorder: reorderShelf)
-            return
-        }
-        guard let d = dragging else { return }
+        guard let d = current else { return }
         active = true
-        enter?(d)
+        if case .comic(let id) = d { enter?(id) }
         state.track(info.location, dragged: d, canStack: canStack, first: first(), last: last(), reorder: reorder, openShelf: openShelf)
     }
 
@@ -397,30 +372,28 @@ struct GridDropDelegate: DropDelegate {
     func dropExited(info: DropInfo) { state.stop() }
 
     func performDrop(info: DropInfo) -> Bool {
-        if draggingShelf.wrappedValue != nil {
-            state.stop()
-            draggingShelf.wrappedValue = nil
-            active = false
-            return true
-        }
         let p = info.location
-        let d = dragging
+        let d = current
         let stackOnto = state.stackCandidate(at: p)
         let hit = state.hit(p)
         let ends = state.pastEnds(p, first: first(), last: last())
         state.stop()
         dragging = nil
+        draggingShelf.wrappedValue = nil
         active = false
-        guard let id = d else { return false }
-        if let other = stackOnto, other != id {
-            stack(id, other)
-        } else if let (t, _) = hit, case .shelf(let name) = t {
-            intoShelf(id, name)
-        } else if ends > 0, let l = last(), l != id {
-            reorder(id, l)
-        } else if ends < 0, let f = first(), f != id {
-            reorder(id, f)
+        guard let item = d else { return false }
+        if case .comic(let id) = item {
+            if let other = stackOnto, other != id {
+                stack(id, other)
+                return true
+            }
+            if let (t, _) = hit, case .shelf(let name) = t {
+                intoShelf(id, name)
+                return true
+            }
         }
+        if ends > 0, let l = last(), l != item { reorder(item, l) }
+        else if ends < 0, let f = first(), f != item { reorder(item, f) }
         return true
     }
 }
