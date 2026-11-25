@@ -43,10 +43,6 @@ struct ShelfBackdrop: View {
         GeometryReader { g in
             let h = g.size.width * 1.5
             ZStack(alignment: .top) {
-                LinearGradient(colors: [Theme.red.opacity(0), Theme.red.opacity(0.07)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: h + 22)
-                    .padding(.horizontal, -8)
-                    .offset(y: -14)
                 ShelfLedge()
                     .frame(width: 4000)
                     .frame(width: g.size.width)
@@ -78,49 +74,54 @@ struct MiniCover: View {
     }
 }
 
-/// A small bookcase with the shelf's comics standing on two planks.
+/// A small bookcase with the shelf's comics standing on two planks. Always exactly cover-shaped (2:3).
 struct ShelfThumbnail: View {
     let comics: [ComicEntry]
     private let heights: [CGFloat] = [1.0, 0.9, 0.96, 0.88, 1.0, 0.93]
 
     var body: some View {
-        GeometryReader { g in
-            let w = g.size.width, h = g.size.height
-            let innerW = w * 0.84
-            let gap = w * 0.02
-            let bookW = (innerW - gap * 2) / 3
-            let rowH = h * 0.43
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.08)], startPoint: .top, endPoint: .bottom))
-                RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.09), lineWidth: 1)
-                VStack(spacing: h * 0.05) {
-                    row(0, bookW: bookW, gap: gap, rowH: rowH, width: innerW)
-                    row(1, bookW: bookW, gap: gap, rowH: rowH, width: innerW)
+        Color.clear
+            .aspectRatio(2.0 / 3.0, contentMode: .fit)
+            .overlay {
+                GeometryReader { g in
+                    let w = g.size.width
+                    let innerW = w * 0.9
+                    let gap = w * 0.025
+                    let bookW = (innerW - gap * 2) / 3
+                    let bookH = bookW * 1.5
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.08)], startPoint: .top, endPoint: .bottom))
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.09), lineWidth: 1)
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            row(0, bookW: bookW, bookH: bookH, gap: gap, width: innerW)
+                            Spacer(minLength: 0)
+                            row(1, bookW: bookW, bookH: bookH, gap: gap, width: innerW)
+                            Spacer(minLength: 0)
+                        }
+                    }
                 }
             }
-        }
-        .aspectRatio(2.0 / 3.0, contentMode: .fit)
-        .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+            .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
     }
 
-    private func row(_ r: Int, bookW: CGFloat, gap: CGFloat, rowH: CGFloat, width: CGFloat) -> some View {
+    private func row(_ r: Int, bookW: CGFloat, bookH: CGFloat, gap: CGFloat, width: CGFloat) -> some View {
         let slice = Array(comics.dropFirst(r * 3).prefix(3))
         return ZStack(alignment: .bottom) {
             HStack(alignment: .bottom, spacing: gap) {
                 ForEach(Array(slice.enumerated()), id: \.element.id) { i, c in
                     let scale = heights[(r * 3 + i) % heights.count]
-                    let bh = min(bookW * 1.5 * scale, rowH * 0.8)
                     MiniCover(entry: c)
-                        .frame(width: bh / 1.5, height: bh)
+                        .frame(width: bookW * scale, height: bookH * scale)
                         .rotationEffect(.degrees(slice.count == 3 && i == 2 && r == 0 ? -5 : 0), anchor: .bottomLeading)
                 }
             }
-            .frame(width: width, alignment: .leading)
+            .frame(width: width, alignment: .center)
             .padding(.bottom, 3)
             MiniLedge().frame(width: width + 8)
         }
-        .frame(width: width + 8, height: rowH, alignment: .bottom)
+        .frame(width: width + 8, height: bookH + 8, alignment: .bottom)
     }
 }
 

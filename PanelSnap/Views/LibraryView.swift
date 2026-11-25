@@ -941,8 +941,9 @@ struct ComicCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CoverView(entry: entry)
-                .aspectRatio(2.0 / 3.0, contentMode: .fit)
+            Color.clear
+                .aspectRatio(2.0 / 3.0, contentMode: .fit)          // always exactly cover-shaped, so every plank lines up
+                .overlay { CoverView(entry: entry) }
                 .overlay {
                     if organizing && selected {
                         RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: 3)
