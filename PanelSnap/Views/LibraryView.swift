@@ -409,7 +409,16 @@ struct LibraryView: View {
     private func stack(_ dragged: UUID, onto target: UUID) {
         draggingID = nil
         dragActive = false
-        newShelf(moving: [dragged, target])
+        // Like a Home Screen folder: the shelf exists straight away, named "Untitled", and opens so you can organise it.
+        var name = "Untitled Shelf"
+        var n = 2
+        while library.shelves.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+            name = "Untitled Shelf \(n)"
+            n += 1
+        }
+        guard let made = library.addShelf(name) else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([dragged, target], toShelf: made) }
+        withAnimation(.snappy) { shelf = made }
     }
 
     private func endOrganizing() {
