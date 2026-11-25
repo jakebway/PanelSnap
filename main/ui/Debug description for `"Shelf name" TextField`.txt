@@ -1,0 +1,4 @@
+Query chain:
+ →Find: Target Application 'com.jakebway.panelsnap'
+  ↪︎Find: Descendants matching type TextField
+    ↪︎Find: Elements matching predicate '"Shelf name" IN identifiers'
