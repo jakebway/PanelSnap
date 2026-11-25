@@ -175,12 +175,31 @@ final class DragState: ObservableObject {
     private var hover: UUID?
     private var inMiddle = false
     private var timer: Task<Void, Never>?
+    private var hoverSince = Date()
+    private var pendingExit: Task<Void, Never>?
+
+    /// True when the dragged comic has rested on the middle of `id` long enough to make a shelf.
+    func shouldStack(_ id: UUID) -> Bool {
+        return stackTarget == id || (hover == id && inMiddle && Date().timeIntervalSince(hoverSince) > 0.5)
+    }
+
+    /// The system can report a drop target as left and re-entered when the view redraws, so a real exit has to last a moment.
+    func exit(_ id: UUID) {
+        pendingExit?.cancel()
+        pendingExit = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard !Task.isCancelled, let self = self, self.hover == id else { return }
+            self.clear()
+        }
+    }
 
     func over(_ id: UUID, inMiddle: Bool, reorder: @escaping () -> Void) {
+        pendingExit?.cancel()
         self.inMiddle = inMiddle
         if hover == id { return }
         clear()
         hover = id
+        hoverSince = Date()
         timer = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled, let self = self, self.hover == id else { return }
