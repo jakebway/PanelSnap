@@ -24,6 +24,7 @@ struct LibraryView: View {
     @State private var nameRequest: ShelfNameRequest?
     @State private var dragState = DragState()          // a plain object: only the covers it highlights need to redraw
     @State private var panelDrag = DragState()          // the same, for the open shelf
+    @State private var panelCell: CGSize = .zero        // size of one cover cell in the open shelf, for placing the planks
     @State private var showDeleteShelf = false
     @State private var draggingID: UUID?
     @State private var showShelfManager = false
@@ -500,6 +501,21 @@ struct LibraryView: View {
                     } else {
                         LazyVGrid(columns: columns, spacing: 26) {
                             ForEach(items) { entry in cell(entry, inPanel: true) }
+                        }
+                        .onPreferenceChange(CellSizeKey.self) { if $0.width > 0 { panelCell = $0 } }
+                        // The planks belong to the rows, not to the comics, so they stay put while a comic moves between rows.
+                        .background(alignment: .topLeading) {
+                            if panelCell.height > 0 {
+                                ZStack(alignment: .topLeading) {
+                                    ForEach(0..<((items.count + 3) / 4), id: \.self) { row in
+                                        ShelfLedge()
+                                            .frame(width: 4000)
+                                            .offset(x: -2000, y: CGFloat(row) * (panelCell.height + 26) + panelCell.width * 1.5)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .allowsHitTesting(false)
+                            }
                         }
                         .padding(.horizontal, 18)
                         .padding(.top, 10)
@@ -978,13 +994,12 @@ struct ComicCell: View {
             Text(entry.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: ledge)          // inside a shelf every cell is the same height, so the planks sit in fixed rows
                 .multilineTextAlignment(.leading)
             Text("\(entry.format.label) · \(entry.pageCount) pages")
                 .font(.caption)
                 .foregroundStyle(Theme.secondary)
         }
-        .background(alignment: .top) { if ledge { ShelfBackdrop() } }
         .contentShape(Rectangle())
     }
 }
