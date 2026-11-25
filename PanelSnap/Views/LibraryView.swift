@@ -211,6 +211,16 @@ struct LibraryView: View {
                     }
                 }
 
+                // Inside a shelf, dragging a comic to the left or right edge and holding there takes it out.
+                if shelf != nil && dragActive && draggingID != nil {
+                    HStack {
+                        edgeZone(leading: true)
+                        Spacer()
+                        edgeZone(leading: false)
+                    }
+                    .ignoresSafeArea()
+                }
+
                 if let status = library.importStatus {
                     VStack {
                         Spacer()
@@ -415,6 +425,21 @@ struct LibraryView: View {
                     showDeleteShelf = true
                 } label: { Label("Delete Shelf", systemImage: "trash") }
             }
+    }
+
+    private func edgeZone(leading: Bool) -> some View {
+        Rectangle()
+            .fill(LinearGradient(colors: [Theme.accent.opacity(dragState.edgeHot ? 0.55 : 0.18), Theme.accent.opacity(0)],
+                                 startPoint: leading ? .leading : .trailing, endPoint: leading ? .trailing : .leading))
+            .frame(width: 36)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onDrop(of: [.text], delegate: EdgeDropDelegate(dragging: $draggingID, active: $dragActive, state: dragState) { id in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    library.move([id], toShelf: nil)
+                    shelf = nil
+                }
+            })
     }
 
     /// Inside a shelf: a way back (comics dropped on it leave the shelf), the name, and a rename button.

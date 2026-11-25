@@ -197,6 +197,28 @@ final class DragState: ObservableObject {
         }
     }
 
+    // Holding a dragged comic at the screen edge, inside a shelf, takes it out of the shelf.
+    private var edgeTimer: Task<Void, Never>?
+    @Published var edgeHot = false
+
+    func edgeDwell(_ action: @escaping () -> Void) {
+        edgeTimer?.cancel()
+        edgeHot = true
+        edgeTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled, let self = self else { return }
+            self.edgeHot = false
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            action()
+        }
+    }
+
+    func edgeCancel() {
+        edgeTimer?.cancel()
+        edgeTimer = nil
+        edgeHot = false
+    }
+
     func clear() {
         timer?.cancel()
         timer = nil
@@ -323,5 +345,29 @@ struct ShelfNameSheet: View {
         guard canSave else { return }
         onSave(trimmed)
         dismiss()
+    }
+}
+
+/// A strip along the screen edge: a comic held on it inside a shelf leaves the shelf (it drops into the library).
+struct EdgeDropDelegate: DropDelegate {
+    @Binding var dragging: UUID?
+    @Binding var active: Bool
+    let state: DragState
+    let leave: (UUID) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
+    func dropEntered(info: DropInfo) {
+        guard let id = dragging else { return }
+        state.edgeDwell { leave(id) }
+    }
+    func dropExited(info: DropInfo) { state.edgeCancel() }
+    func dropUpdated(info: DropInfo) -> DropProposal? { return DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool {
+        state.edgeCancel()
+        guard let id = dragging else { return false }
+        leave(id)
+        dragging = nil
+        active = false
+        return true
     }
 }
