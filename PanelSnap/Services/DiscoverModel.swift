@@ -245,7 +245,8 @@ final class DiscoverModel: ObservableObject {
         let cal = Calendar(identifier: .gregorian)
         let day = cal.date(byAdding: .day, value: week.dayOffset, to: Date()) ?? Date()
         let weekday = cal.component(.weekday, from: day)
-        return cal.date(byAdding: .day, value: 4 - weekday, to: day) ?? day
+        // Midnight, so that on the Wednesday itself the week counts as out (it used to carry the time of day and read as "later today").
+        return cal.startOfDay(for: cal.date(byAdding: .day, value: 4 - weekday, to: day) ?? day)
     }
 
     /// Searches the whole catalogue, old and new.

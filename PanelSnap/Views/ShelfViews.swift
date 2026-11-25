@@ -219,7 +219,7 @@ final class DragState: ObservableObject {
         return nil
     }
 
-    func track(_ p: CGPoint, dragged: UUID, canStack: Bool,
+    func track(_ p: CGPoint, dragged: UUID, canStack: Bool, first: UUID?, last: UUID?,
                reorder: @escaping (UUID, UUID) -> Void, openShelf: @escaping (String) -> Void) {
         self.dragged = dragged
         self.canStack = canStack
@@ -227,6 +227,12 @@ final class DragState: ObservableObject {
         self.openShelf = openShelf
         var t = hit(p)?.0
         var z = hit(p)?.1 ?? .edge
+        if t == nil {
+            // Held in the empty space past the last comic (or before the first): slide it there, so its greyed-out place shows.
+            let e = pastEnds(p, first: first, last: last)
+            if e > 0, let l = last, l != dragged { t = .comic(l) }
+            else if e < 0, let f = first, f != dragged { t = .comic(f) }
+        }
         if t == .comic(dragged) { t = nil }
         if !canStack { z = .edge }
         if z != zone { zone = z; since = Date() }
@@ -344,7 +350,7 @@ struct GridDropDelegate: DropDelegate {
         guard let d = dragging else { return }
         active = true
         enter?(d)
-        state.track(info.location, dragged: d, canStack: canStack, reorder: reorder, openShelf: openShelf)
+        state.track(info.location, dragged: d, canStack: canStack, first: first(), last: last(), reorder: reorder, openShelf: openShelf)
     }
 
     func dropEntered(info: DropInfo) { update(info) }
