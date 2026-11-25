@@ -21,14 +21,12 @@ struct LibraryView: View {
     @State private var showRename = false
     @State private var renameID: UUID?
     @State private var renameText = ""
-    @State private var showShelfAlert = false
-    @State private var shelfRenaming: String?               // nil = creating a new shelf
-    @State private var shelfMoveIDs = Set<UUID>()           // comics to move into a shelf that is being created
-    @State private var shelfText = ""
+    @State private var nameRequest: ShelfNameRequest?
+    @StateObject private var dragState = DragState()
+    @State private var dropHover: String?             // the shelf (or "" for the library) a dragged comic is hovering over
     @State private var showDeleteShelf = false
     @State private var draggingID: UUID?
     @State private var showShelfManager = false
-    @State private var chipScroll: CGFloat = 0       // how far the shelf chips are scrolled, for the left fade
     @State private var dragActive = false          // the dragged cover has really started moving (not just a long press for the menu)
     @State private var gridFrame: CGRect = .zero    // where the grid is on screen, so a drop past either end can be told apart
     @State private var shelfToDelete = ""
@@ -64,8 +62,10 @@ struct LibraryView: View {
 
     private var visible: [ComicEntry] {
         var list = library.comics
-        if let s = shelf { list = list.filter { $0.shelf == s } }
         let q = search.trimmingCharacters(in: .whitespaces)
+        if let s = shelf { list = list.filter { $0.shelf == s } }
+        else if q.isEmpty { list = list.filter { $0.shelf == nil } }      // comics on a shelf appear inside that shelf
+
         if !q.isEmpty {
             list = list.filter { $0.title.localizedCaseInsensitiveContains(q) }
         }
@@ -78,6 +78,9 @@ struct LibraryView: View {
         let ordered = started.sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
         return Array(ordered.prefix(8))
     }
+
+    /// Shelves appear among the comics, like folders on a Home Screen (not while searching).
+    private var folders: [String] { return shelf == nil && search.trimmingCharacters(in: .whitespaces).isEmpty ? library.shelves : [] }
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)]
 
@@ -101,6 +104,11 @@ struct LibraryView: View {
         Menu {
             Button { addComics() } label: { Label("Files", systemImage: "doc.on.doc") }
             Button { addFolder() } label: { Label("Folder", systemImage: "folder") }
+            Divider()
+            Button { newShelf(moving: []) } label: { Label("New Shelf", systemImage: "books.vertical") }
+            if !library.shelves.isEmpty {
+                Button { showShelfManager = true } label: { Label("Edit & Reorder Shelves", systemImage: "arrow.up.arrow.down") }
+            }
             Button { route = .browser } label: { Label("Browser", systemImage: "globe") }
         } label: {
             CircleIcon(systemName: "plus")
@@ -148,11 +156,11 @@ struct LibraryView: View {
                                 }
                                 .frame(maxWidth: .infinity, minHeight: wideStatus ? 0 : Theme.cameraHeight - 64, alignment: .top)
 
-                                shelfBar
+                                if let s = shelf { shelfHeader(s) }
                                 sortRow
 
                                 let items = visible
-                                if items.isEmpty {
+                                if items.isEmpty && folders.isEmpty {
                                     Text(shelf == nil ? "No comics match your search." : "Nothing on this shelf yet. Press and hold a comic, then choose Move to Shelf, or drag it onto the shelf.")
                                         .font(.subheadline)
                                         .foregroundStyle(Theme.secondary)
@@ -160,6 +168,9 @@ struct LibraryView: View {
                                         .padding(.top, 30)
                                 } else {
                                     LazyVGrid(columns: columns, spacing: 22) {
+                                        ForEach(folders, id: \.self) { name in
+                                            folderCell(name)
+                                        }
                                         ForEach(items) { entry in
                                             cell(entry)
                                         }
@@ -255,14 +266,9 @@ struct LibraryView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
-        .alert(shelfRenaming == nil ? "New Shelf" : "Rename Shelf", isPresented: $showShelfAlert) {
-            TextField("Shelf name", text: $shelfText)
-            Button(shelfRenaming == nil ? "Create" : "Save") { commitShelfName() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            if shelfRenaming == nil && !shelfMoveIDs.isEmpty {
-                Text("The selected comics will be moved to it.")
-            }
+        .sheet(item: $nameRequest) { req in
+            ShelfNameSheet(request: req, existing: library.shelves, preview: previewComics(for: req)) { name in commit(req, name) }
+                .environmentObject(library)
         }
         .confirmationDialog("Delete Shelf?", isPresented: $showDeleteShelf, titleVisibility: .visible) {
             Button("Delete Shelf", role: .destructive) {
@@ -327,9 +333,10 @@ struct LibraryView: View {
             .contextMenu {
                 if !organizing { menu(for: entry) }
             }
-            .modifier(ReorderModifier(id: entry.id, dragging: $draggingID, active: $dragActive) { dragged, target in
-                reorder(dragged, onto: target)
-            })
+            .modifier(ReorderModifier(id: entry.id, dragging: $draggingID, active: $dragActive, state: dragState,
+                                    canStack: shelf == nil && search.trimmingCharacters(in: .whitespaces).isEmpty,
+                                    onOver: { dragged, target in reorder(dragged, onto: target) },
+                                    onStack: { dragged, target in stack(dragged, onto: target) }))
     }
 
     private func reorder(_ dragged: UUID, onto target: UUID) {
@@ -344,25 +351,45 @@ struct LibraryView: View {
     }
 
 
-    private func commitShelfName() {
-        if let old = shelfRenaming {
-            library.renameShelf(old, to: shelfText)
-            if shelf == old { shelf = library.shelves.first(where: { $0.caseInsensitiveCompare(shelfText.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame }) ?? old }
-        } else if let name = library.addShelf(shelfText) {
-            if !shelfMoveIDs.isEmpty {
-                library.move(shelfMoveIDs, toShelf: name)
-                shelfMoveIDs = []
-            } else {
-                shelf = name
-            }
+    private func previewComics(for req: ShelfNameRequest) -> [ComicEntry] {
+        if let old = req.renaming { return library.comics.filter { $0.shelf == old } }
+        return library.comics.filter { req.moving.contains($0.id) }
+    }
+
+    private func commit(_ req: ShelfNameRequest, _ name: String) {
+        if let old = req.renaming {
+            library.renameShelf(old, to: name)
+            if shelf == old { shelf = library.shelves.first(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) ?? old }
+        } else if let made = library.addShelf(name), !req.moving.isEmpty {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move(req.moving, toShelf: made) }
+            if organizing { endOrganizing() }
         }
     }
 
+    /// The naming sheet, with the series of the comics going in as suggestions.
+    private func request(renaming: String?, moving: Set<UUID>) -> ShelfNameRequest {
+        let titles = library.comics.filter { moving.contains($0.id) }.map { $0.title }
+        var suggestions = TitleTools.profile(from: titles).prefix(3).map { $0.name }
+        let series = suggestions.first
+        for generic in ["Favorites", "To Read", "Finished", "Event Crossovers"] { suggestions.append(generic) }
+        var seen = Set<String>()
+        suggestions = suggestions.filter { n in
+            let k = n.lowercased()
+            return !n.isEmpty && !library.shelves.contains { $0.lowercased() == k } && seen.insert(k).inserted
+        }
+        let initial = renaming ?? (series.flatMap { s in library.shelves.contains { $0.lowercased() == s.lowercased() } ? nil : s } ?? "")
+        return ShelfNameRequest(renaming: renaming, moving: moving, initial: initial, suggestions: Array(suggestions.prefix(6)))
+    }
+
     private func newShelf(moving ids: Set<UUID>) {
-        shelfRenaming = nil
-        shelfMoveIDs = ids
-        shelfText = ""
-        showShelfAlert = true
+        nameRequest = request(renaming: nil, moving: ids)
+    }
+
+    /// One comic held over another: both go onto a new shelf, and you name it.
+    private func stack(_ dragged: UUID, onto target: UUID) {
+        draggingID = nil
+        dragActive = false
+        newShelf(moving: [dragged, target])
     }
 
     private func endOrganizing() {
@@ -370,92 +397,61 @@ struct LibraryView: View {
         selection = []
     }
 
-    private func shelfChip(_ title: String, count: Int, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text("\(count)").font(.caption.weight(.bold)).opacity(0.6)
+    private func folderCell(_ name: String) -> some View {
+        ShelfFolderCell(name: name, comics: library.comics.filter { $0.shelf == name }, highlighted: dropHover == name)
+            .onTapGesture {
+                draggingID = nil
+                dragActive = false
+                withAnimation(.snappy) { shelf = name }
             }
-            .foregroundStyle(selected ? Theme.onAccent : Color.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(selected ? Theme.accent : Theme.card2, in: Capsule())
-        }
-        .buttonStyle(.plain)
+            .onDrop(of: [.text], delegate: ShelfDropDelegate(name: name, dragging: $draggingID, active: $dragActive, hover: $dropHover, key: name) { id, name in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([id], toShelf: name) }
+            })
+            .contextMenu {
+                Button { nameRequest = request(renaming: name, moving: []) } label: { Label("Rename Shelf", systemImage: "pencil") }
+                Button { showShelfManager = true } label: { Label("Edit & Reorder Shelves", systemImage: "arrow.up.arrow.down") }
+                Button(role: .destructive) {
+                    shelfToDelete = name
+                    showDeleteShelf = true
+                } label: { Label("Delete Shelf", systemImage: "trash") }
+            }
     }
 
-    private var shelfBar: some View {
-        HStack(spacing: 10) {
-            shelfChips
-            if settings.showDiscover {
-                Button { route = .discover } label: {
+    /// Inside a shelf: a way back (comics dropped on it leave the shelf), the name, and a rename button.
+    private func shelfHeader(_ name: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Button { withAnimation(.snappy) { shelf = nil } } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                        Text("Discover").font(.subheadline.weight(.semibold))
+                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
+                        Text("Library").font(.subheadline.weight(.semibold))
                     }
                     .foregroundStyle(Theme.accent)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Theme.card2, in: Capsule())
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(dropHover == "" ? Theme.accent.opacity(0.35) : Theme.card2, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Discover new comics")
+                .onDrop(of: [.text], delegate: ShelfDropDelegate(name: nil, dragging: $draggingID, active: $dragActive, hover: $dropHover, key: "") { id, name in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([id], toShelf: name) }
+                })
+                Spacer()
             }
-        }
-    }
-
-    private var shelfChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Color.clear.frame(width: 0, height: 0)
-                    .background(GeometryReader { g in
-                        Color.clear.preference(key: ChipScrollKey.self, value: -g.frame(in: .named("chips")).minX)
-                    })
-                shelfChip("All", count: library.comics.count, selected: shelf == nil) { shelf = nil }
-                    .onDrop(of: [.text], delegate: ShelfDropDelegate(name: nil, dragging: $draggingID, active: $dragActive) { id, name in library.move([id], toShelf: name) })
-                ForEach(library.shelves, id: \.self) { name in
-                    shelfChip(name, count: library.comics.filter { $0.shelf == name }.count, selected: shelf == name) { shelf = name }
-                        .onDrop(of: [.text], delegate: ShelfDropDelegate(name: name, dragging: $draggingID, active: $dragActive) { id, name in library.move([id], toShelf: name) })
-                        .contextMenu {
-                            Button {
-                                shelfRenaming = name
-                                shelfText = name
-                                shelfMoveIDs = []
-                                showShelfAlert = true
-                            } label: { Label("Rename Shelf", systemImage: "pencil") }
-                            Button(role: .destructive) {
-                                shelfToDelete = name
-                                showDeleteShelf = true
-                            } label: { Label("Delete Shelf", systemImage: "trash") }
-                        }
-                }
-                Menu {
-                    Button { newShelf(moving: []) } label: { Label("New Shelf", systemImage: "plus") }
-                    if !library.shelves.isEmpty {
-                        Button { showShelfManager = true } label: { Label("Edit & Reorder Shelves", systemImage: "arrow.up.arrow.down") }
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
+            HStack(spacing: 10) {
+                Text(name)
+                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Button { nameRequest = request(renaming: name, moving: []) } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.accent)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 30, height: 30)
                         .background(Theme.card2, in: Circle())
                 }
-                .accessibilityLabel("Shelf options")
-                Color.clear.frame(width: 22, height: 1)          // room so the last chip can scroll clear of the fade
+                .accessibilityLabel("Rename Shelf")
+                Spacer()
             }
-            .padding(.vertical, 2)
         }
-        .coordinateSpace(name: "chips")
-        .onPreferenceChange(ChipScrollKey.self) { chipScroll = $0 }
-        // The chips fade out at the edge instead of being cut off.
-        .mask(
-            HStack(spacing: 0) {
-                LinearGradient(colors: [chipScroll > 4 ? .clear : .black, .black], startPoint: .leading, endPoint: .trailing).frame(width: 18)
-                Rectangle().fill(.black)
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 28)
-            }
-        )
     }
 
     private var sortRow: some View {
@@ -476,6 +472,20 @@ struct LibraryView: View {
                 .foregroundStyle(Theme.secondary)
             }
             Spacer()
+            if settings.showDiscover && !organizing {
+                Button { route = .discover } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                        Text("Discover").font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Theme.card2, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Discover new comics")
+            }
             if organizing {
                 Button(selection.count == visible.count && !selection.isEmpty ? "Select none" : "Select all") {
                     if selection.count == visible.count { selection = [] } else { selection = Set(visible.map { $0.id }) }
@@ -757,40 +767,89 @@ struct LibraryView: View {
     }
 }
 
-/// Lets a cell be picked up with a long press. The other covers slide out of the way as it moves over them,
-/// like rearranging apps on the Home Screen.
+/// Lets a cell be picked up with a long press. The other covers slide out of the way as it moves over their edges,
+/// like rearranging apps on the Home Screen; resting on the middle of one for a moment makes a shelf from the two.
 private struct ReorderModifier: ViewModifier {
     let id: UUID
     @Binding var dragging: UUID?
     @Binding var active: Bool
+    @ObservedObject var state: DragState
+    let canStack: Bool
     let onOver: (UUID, UUID) -> Void
+    let onStack: (UUID, UUID) -> Void
+    @State private var size: CGSize = .zero
 
     func body(content: Content) -> some View {
+        let stacking = state.stackTarget == id
         content
             .opacity(dragging == id && active ? 0.35 : 1)
+            .background(GeometryReader { g in Color.clear.preference(key: CellSizeKey.self, value: g.size) })
+            .onPreferenceChange(CellSizeKey.self) { size = $0 }
+            .overlay {
+                if stacking {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Theme.accent, lineWidth: 3)
+                        .frame(height: size.width * 1.5)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(false)
+                }
+            }
+            .scaleEffect(stacking ? 1.06 : 1)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: stacking)
             .onDrag {
                 dragging = id
                 return NSItemProvider(object: id.uuidString as NSString)
             }
-            .onDrop(of: [.text], delegate: CoverDropDelegate(id: id, dragging: $dragging, active: $active, onOver: onOver))
+            .onDrop(of: [.text], delegate: CoverDropDelegate(id: id, dragging: $dragging, active: $active, state: state,
+                                                            size: size, canStack: canStack, onOver: onOver, onStack: onStack))
     }
+}
+
+private struct CellSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
 }
 
 private struct CoverDropDelegate: DropDelegate {
     let id: UUID
     @Binding var dragging: UUID?
     @Binding var active: Bool
+    let state: DragState
+    let size: CGSize
+    let canStack: Bool
     let onOver: (UUID, UUID) -> Void
+    let onStack: (UUID, UUID) -> Void
 
     func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
-    func dropEntered(info: DropInfo) {
-        active = true          // a real drag is under way (a long press that only opens the menu never gets here)
-        if let d = dragging, d != id { onOver(d, id) }
+
+    /// Middle of the cover: wait to see if this becomes a shelf. Edges: move out of the way.
+    private func handle(_ info: DropInfo) {
+        guard let d = dragging else { return }
+        active = true
+        if d == id { state.clear(); return }
+        let coverH = size.width * 1.5
+        let p = info.location
+        let inMiddle = canStack && size.width > 0
+            && p.x > size.width * 0.22 && p.x < size.width * 0.78
+            && p.y > coverH * 0.2 && p.y < coverH * 0.8
+        if inMiddle { state.begin(id) } else { state.clear(); onOver(d, id) }
     }
-    func dropUpdated(info: DropInfo) -> DropProposal? { return DropProposal(operation: .move) }   // a move, so no green plus
+
+    func dropEntered(info: DropInfo) { handle(info) }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        handle(info)
+        return DropProposal(operation: .move)       // a move, so no green plus
+    }
+    func dropExited(info: DropInfo) { state.clear() }
     func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        active = false
+        let stacked = state.stackTarget == id
+        state.clear()
+        if stacked, let d = dragging, d != id {
+            onStack(d, id)
+        } else {
+            dragging = nil
+            active = false
+        }
         return true
     }
 }
@@ -821,16 +880,21 @@ private struct ListDropDelegate: DropDelegate {
     }
 }
 
-/// A shelf chip takes the comic being dragged (the All chip takes it off any shelf).
+/// A shelf takes the comic being dragged (the Library button takes it off its shelf).
 private struct ShelfDropDelegate: DropDelegate {
     let name: String?
     @Binding var dragging: UUID?
     @Binding var active: Bool
+    @Binding var hover: String?
+    let key: String
     let move: (UUID, String?) -> Void
 
     func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
+    func dropEntered(info: DropInfo) { hover = key }
+    func dropExited(info: DropInfo) { if hover == key { hover = nil } }
     func dropUpdated(info: DropInfo) -> DropProposal? { return DropProposal(operation: .move) }
     func performDrop(info: DropInfo) -> Bool {
+        hover = nil
         guard let id = dragging else { return false }
         move(id, name)
         dragging = nil
@@ -916,15 +980,11 @@ struct ComicCell: View {
                 .font(.caption)
                 .foregroundStyle(Theme.secondary)
         }
+        .background(alignment: .top) { ShelfBackdrop() }
         .contentShape(Rectangle())
     }
 }
 
-
-private struct ChipScrollKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
 
 /// Reorder, rename and delete shelves in one place.
 struct ShelfManagerView: View {
