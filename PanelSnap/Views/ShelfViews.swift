@@ -287,8 +287,10 @@ final class DragState: ObservableObject {
     /// Whether the finger is below the last cover (or above the first): `+1` for the end, `-1` for the start.
     func pastEnds(_ p: CGPoint, first: UUID?, last: UUID?) -> Int {
         if hit(p) != nil { return 0 }
-        if let l = last, let f = frames[.comic(l)], p.y > f.maxY { return 1 }
-        if let fi = first, let f = frames[.comic(fi)], p.y < f.minY { return -1 }
+        // Below the last row, or in the empty space to the right of the last comic: the end.
+        if let l = last, let f = frames[.comic(l)], p.y > f.maxY || (p.y > f.minY - 11 && p.x > f.maxX) { return 1 }
+        // Above the first row, or just to the left of the first comic: the start.
+        if let fi = first, let f = frames[.comic(fi)], p.y < f.minY || (p.y < f.maxY + 11 && p.x < f.minX) { return -1 }
         return 0
     }
 
