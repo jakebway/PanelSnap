@@ -1,101 +1,172 @@
 Command line invocation:
-    /Applications/Xcode_27.1.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project PanelSnap.xcodeproj -scheme PanelSnap -destination id=6258D2C3-165A-44AB-BB24-00C7C434F5C8 -derivedDataPath build-ui "-only-testing:PanelSnapUITests/ReaderUITests/testMakeShelf" -resultBundlePath ui.xcresult
+    /Applications/Xcode_27.1.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project PanelSnap.xcodeproj -scheme PanelSnap -destination id=C898E3E4-5033-4085-B886-963EE2D0C478 -derivedDataPath build-ui "-only-testing:PanelSnapUITests/ReaderUITests/testMakeShelf" -resultBundlePath ui.xcresult
 
 Resolve Package Graph
 
 
 Resolved source packages:
-  SevenZip: https://github.com/mtgto/SevenZip.swift @ 0.5.0
   Unrar: https://github.com/mtgto/Unrar.swift @ 0.5.4
+  SevenZip: https://github.com/mtgto/SevenZip.swift @ 0.5.0
   ZIPFoundation: https://github.com/weichsel/ZIPFoundation @ 0.9.20
 
 Writing result bundle at path:
 	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
 
-2026-11-25 20:26:53.017 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:26:53.017 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-2026-11-25 20:27:04.396243+0000 PanelSnapUITests-Runner[16896:57112] [Default] Running tests...
+2026-11-25 20:47:05.683 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:47:05.683 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-25 20:47:12.956549+0000 PanelSnapUITests-Runner[9951:38052] [Default] Running tests...
+2026-11-25 20:47:19.835 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (AA1A4436-9426-4301-8D39-5E909CAF9C42) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K: SimDeviceType : Apple TV 4K (3rd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f000>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:19.835 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (at 1080p) (B9E4D366-604B-4F2F-8C77-5D95AD648816) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p: SimDeviceType : Apple TV 4K (3rd generation) (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f200>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:19.997 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (AA1A4436-9426-4301-8D39-5E909CAF9C42) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K: SimDeviceType : Apple TV 4K (3rd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f000>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:19.997 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (AA1A4436-9426-4301-8D39-5E909CAF9C42) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K: SimDeviceType : Apple TV 4K (3rd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f000>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:19.997 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (at 1080p) (B9E4D366-604B-4F2F-8C77-5D95AD648816) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p: SimDeviceType : Apple TV 4K (3rd generation) (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f200>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:19.997 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (at 1080p) (B9E4D366-604B-4F2F-8C77-5D95AD648816) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p: SimDeviceType : Apple TV 4K (3rd generation) (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f200>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:20.994 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (AA1A4436-9426-4301-8D39-5E909CAF9C42) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K: SimDeviceType : Apple TV 4K (3rd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f000>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:20.994 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (AA1A4436-9426-4301-8D39-5E909CAF9C42) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K: SimDeviceType : Apple TV 4K (3rd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f000>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:20.994 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (at 1080p) (B9E4D366-604B-4F2F-8C77-5D95AD648816) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p: SimDeviceType : Apple TV 4K (3rd generation) (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f200>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
+2026-11-25 20:47:20.994 xcodebuild[9488:36748] [MT] DVTAssertions: Warning in DVTiOSFrameworks/IDEiOSSupportCore/DVTiPhoneSimulator.m:661
+Details:  SimDevice native architecture is nil. Device: SimDevice : Apple TV 4K (3rd generation) (at 1080p) (B9E4D366-604B-4F2F-8C77-5D95AD648816) : state={ Shutdown } deviceType={ com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p: SimDeviceType : Apple TV 4K (3rd generation) (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p) } runtime={ com.apple.CoreSimulator.SimRuntime.tvOS-27-0: (null) }, supportedArches: (
+)
+Object:   <DVTiPhoneSimulator: 0x7c9668f200>
+Method:   -nativeArchitecture
+Thread:   <_NSMainThread: 0x102a5cdb0>{number = 1, name = main}
+Please file a bug at https://feedbackassistant.apple.com with this warning message and any useful information you can provide.
     t =      nans Interface orientation changed to Portrait
-Test Suite 'Selected tests' started at 2026-11-25 20:27:19.895.
-Test Suite 'PanelSnapUITests.xctest' started at 2026-11-25 20:27:19.897.
-Test Suite 'ReaderUITests' started at 2026-11-25 20:27:19.897.
+Test Suite 'Selected tests' started at 2026-11-25 20:47:33.431.
+Test Suite 'PanelSnapUITests.xctest' started at 2026-11-25 20:47:33.445.
+Test Suite 'ReaderUITests' started at 2026-11-25 20:47:33.446.
 Test Case '-[PanelSnapUITests.ReaderUITests testMakeShelf]' started.
-    t =     0.01s Start Test at 2026-11-25 20:27:19.912
-    t =     1.13s Set Up
-    t =     1.14s     Open com.jakebway.panelsnap
-    t =     1.14s         Launch com.jakebway.panelsnap
-2026-11-25 20:27:22.422 xcodebuild[15839:54202] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
-2026-11-25 20:27:22.422 xcodebuild[15839:54202] [MT] IDELaunchParametersSnapshot: no debugger version
-objc[16896]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.91016.19.OT8h7l/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10a5b8310) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.91016.19.OT8h7l/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10a680398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
-2026-11-25 20:27:22.677 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:27:22.678 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-    t =     9.79s             Setting up automation session
-    t =    15.78s             Wait for com.jakebway.panelsnap to idle
+    t =     0.01s Start Test at 2026-11-25 20:47:33.457
+    t =     1.52s Set Up
+    t =     1.54s     Open com.jakebway.panelsnap
+    t =     1.55s         Launch com.jakebway.panelsnap
+2026-11-25 20:47:37.241 xcodebuild[9488:36748] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-25 20:47:37.242 xcodebuild[9488:36748] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[9951]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.91016.19.4DPRRs/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x106984310) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.91016.19.4DPRRs/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x106a4c398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+2026-11-25 20:47:37.598 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:47:37.598 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+    t =    11.36s             Setting up automation session
+    t =    17.19s             Wait for com.jakebway.panelsnap to idle
 <unknown>:0: warning: -[PanelSnapUITests.ReaderUITests testMakeShelf] : [Internal] Thread running at User-initiated quality-of-service class waiting on a lower QoS thread running at Utility quality-of-service class. Investigate ways to avoid priority inversions
-    t =    23.59s Added attachment named '40-library'
-    t =    23.73s Waiting 8.0s for StaticText (First Match) to exist
-    t =    24.74s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =    24.75s         Checking existence of `StaticText (First Match)`
-    t =    27.11s Waiting 3.0s for StaticText (First Match) to exist
-    t =    28.18s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
-    t =    28.19s         Checking existence of `StaticText (First Match)`
-    t =    29.56s Find the Window (First Match)
-    t =    29.69s Find the StaticText (First Match)
-    t =    30.12s Find the StaticText (First Match)
-    t =    30.41s Press Window (First Match)[0.00, 0.00] -> (68.8, 322.8) for 1.0 seconds, then drag to Window (First Match)[0.00, 0.00] -> (287.8, 322.8) with velocity of 250.00 pixels per second, and then hold for 2.0 seconds 
-    t =    30.41s     Wait for com.jakebway.panelsnap to idle
-    t =    30.43s     Find the Window (First Match)
-    t =    30.65s     Check for interrupting elements affecting Window
-    t =    31.53s         Wait for com.apple.springboard to idle
-    t =    32.13s     Synthesize event
-    t =    32.13s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
-    t =    32.70s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
-    t =    32.78s         Find the Window (First Match)
-    t =    32.90s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
-    t =    33.16s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
-    t =    37.58s     Wait for com.jakebway.panelsnap to idle
-    t =    97.65s App animations complete notification not received, will attempt to continue.
-    t =    99.48s Added attachment named '41-after-hold'
-    t =    99.49s Waiting 4.0s for "Shelf name" TextField to exist
-    t =   100.55s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
-    t =   100.56s         Checking existence of `"Shelf name" TextField`
-    t =   100.71s         Capturing element debug description
-    t =   101.55s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
-    t =   101.55s         Checking existence of `"Shelf name" TextField`
-    t =   101.68s         Capturing element debug description
-    t =   102.52s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
-    t =   102.52s         Checking existence of `"Shelf name" TextField`
-    t =   102.60s         Capturing element debug description
-    t =   103.50s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
-    t =   103.50s         Checking existence of `"Shelf name" TextField`
-    t =   103.59s         Capturing element debug description
-    t =   103.59s     Checking existence of `"Shelf name" TextField`
-    t =   103.70s Collecting debug information to assist test failure triage
-    t =   103.70s     Requesting snapshot of accessibility hierarchy for app with pid 17651
+    t =    24.01s Added attachment named '40-library'
+    t =    24.10s Waiting 8.0s for StaticText (First Match) to exist
+    t =    25.19s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
+    t =    25.20s         Checking existence of `StaticText (First Match)`
+    t =    27.00s Waiting 3.0s for StaticText (First Match) to exist
+    t =    28.03s     Checking `Expect predicate `existsNoRetry == 1` for object StaticText (First Match)`
+    t =    28.03s         Checking existence of `StaticText (First Match)`
+    t =    30.26s         Capturing element debug description
+    t =    30.26s     Checking existence of `StaticText (First Match)`
+    t =    33.16s Find the Window (First Match)
+    t =    33.44s Find the StaticText (First Match)
+    t =    35.32s Find the StaticText (First Match)
+    t =    36.85s Press Window (First Match)[0.00, 0.00] -> (68.8, 322.8) for 0.5 seconds, then drag to Window (First Match)[0.00, 0.00] -> (287.8, 322.8) with velocity of 250.00 pixels per second, and then hold for 2.5 seconds 
+    t =    36.86s     Wait for com.jakebway.panelsnap to idle
+    t =    36.86s     Find the Window (First Match)
+    t =    37.22s     Check for interrupting elements affecting Window
+    t =    37.54s         Wait for com.apple.springboard to idle
+    t =    38.05s     Synthesize event
+    t =    38.05s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
+    t =    38.29s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
+    t =    38.55s         Find the Window (First Match)
+    t =    38.73s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
+    t =    39.04s         Find the Window at {{0.0, 0.0}, {466.0, 678.0}}
+    t =    43.79s     Wait for com.jakebway.panelsnap to idle
+    t =    45.67s Added attachment named '41-after-hold'
+    t =    45.67s Waiting 4.0s for "Shelf name" TextField to exist
+    t =    46.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
+    t =    46.73s         Checking existence of `"Shelf name" TextField`
+    t =    46.93s         Capturing element debug description
+    t =    47.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
+    t =    47.68s         Checking existence of `"Shelf name" TextField`
+    t =    47.74s         Capturing element debug description
+    t =    48.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
+    t =    48.73s         Checking existence of `"Shelf name" TextField`
+    t =    49.04s         Capturing element debug description
+    t =    49.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Shelf name" TextField`
+    t =    49.68s         Checking existence of `"Shelf name" TextField`
+    t =    49.76s         Capturing element debug description
+    t =    49.76s     Checking existence of `"Shelf name" TextField`
+    t =    49.80s Collecting debug information to assist test failure triage
+    t =    49.80s     Requesting snapshot of accessibility hierarchy for app with pid 10735
 /Users/runner/work/PanelSnap/PanelSnap/Tests/UI/ReaderUITests.swift:169: error: -[PanelSnapUITests.ReaderUITests testMakeShelf] : XCTAssertTrue failed - holding a comic on another should open the new-shelf naming sheet
-    t =   104.27s Tear Down
-Test Case '-[PanelSnapUITests.ReaderUITests testMakeShelf]' failed (104.754 seconds).
-Test Suite 'ReaderUITests' failed at 2026-11-25 20:29:04.667.
-	 Executed 1 test, with 1 failure (0 unexpected) in 104.754 (104.770) seconds
-Test Suite 'PanelSnapUITests.xctest' failed at 2026-11-25 20:29:04.677.
-	 Executed 1 test, with 1 failure (0 unexpected) in 104.754 (104.780) seconds
-Test Suite 'Selected tests' failed at 2026-11-25 20:29:04.677.
-	 Executed 1 test, with 1 failure (0 unexpected) in 104.754 (104.782) seconds
-2026-11-25 20:29:05.115 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:29:05.161 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-2026-11-25 20:29:05.167 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:29:05.167 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-2026-11-25 20:29:05.345 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:29:05.346 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-2026-11-25 20:29:06.276 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:29:06.276 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-2026-11-25 20:29:06.276 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:29:06.276 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-2026-11-25 20:29:06.277 xcodebuild[15839:54202] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
-2026-11-25 20:29:06.277 xcodebuild[15839:54202] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
-2026-11-25 20:30:03.556 xcodebuild[15839:54202] [MT] IDETestOperationsObserverDebug: 193.792 elapsed -- Testing started completed.
-2026-11-25 20:30:03.557 xcodebuild[15839:54202] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
-2026-11-25 20:30:03.557 xcodebuild[15839:54202] [MT] IDETestOperationsObserverDebug: 193.792 sec, +193.792 sec -- end
+    t =    50.41s Tear Down
+Test Case '-[PanelSnapUITests.ReaderUITests testMakeShelf]' failed (52.600 seconds).
+Test Suite 'ReaderUITests' failed at 2026-11-25 20:48:26.058.
+	 Executed 1 test, with 1 failure (0 unexpected) in 52.600 (52.612) seconds
+Test Suite 'PanelSnapUITests.xctest' failed at 2026-11-25 20:48:26.059.
+	 Executed 1 test, with 1 failure (0 unexpected) in 52.600 (52.614) seconds
+Test Suite 'Selected tests' failed at 2026-11-25 20:48:26.059.
+	 Executed 1 test, with 1 failure (0 unexpected) in 52.600 (52.629) seconds
+2026-11-25 20:48:27.032 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:48:27.035 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-25 20:48:27.088 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:48:27.088 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-25 20:48:27.118 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:48:27.118 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-25 20:48:27.880 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:48:27.880 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-25 20:48:27.880 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:48:27.880 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-25 20:48:27.881 xcodebuild[9488:36748] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-11-25 20:48:27.881 xcodebuild[9488:36748] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-25 20:49:55.168 xcodebuild[9488:36748] [MT] IDETestOperationsObserverDebug: 171.967 elapsed -- Testing started completed.
+2026-11-25 20:49:55.172 xcodebuild[9488:36748] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-25 20:49:55.172 xcodebuild[9488:36748] [MT] IDETestOperationsObserverDebug: 171.967 sec, +171.967 sec -- end
 
 Test session results, code coverage, and logs:
 	/Users/runner/work/PanelSnap/PanelSnap/ui.xcresult
