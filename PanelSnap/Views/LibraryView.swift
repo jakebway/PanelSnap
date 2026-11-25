@@ -258,6 +258,7 @@ struct LibraryView: View {
             Console.log("app state: \(phase)")
             if phase == .active {
                 Task { await library.scanFolder() }
+                if settings.showDiscover { Task { await DiscoverModel.shared.keepFresh(libraryTitles: TitleTools.byRecency(library.comics)) } }
             } else {
                 library.flush()          // don't lose progress if iOS closes the app
             }
@@ -297,7 +298,22 @@ struct LibraryView: View {
             Text("The files will be removed from PanelSnap.")
         }
         .task(id: library.comics.count) {
-            if settings.showDiscover { await DiscoverModel.shared.prefetch(libraryTitles: TitleTools.byRecency(library.comics)) }
+            if settings.showDiscover { await DiscoverModel.shared.keepFresh(libraryTitles: TitleTools.byRecency(library.comics)) }
+        }
+        // Discover stays current while the app is open: every so often, when you come back to the app, and at midnight.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 20 * 60 * 1_000_000_000)
+                if settings.showDiscover && scenePhase == .active {
+                    await DiscoverModel.shared.keepFresh(libraryTitles: TitleTools.byRecency(library.comics))
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            if settings.showDiscover { Task { await DiscoverModel.shared.keepFresh(libraryTitles: TitleTools.byRecency(library.comics)) } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            if settings.showDiscover { Task { await DiscoverModel.shared.keepFresh(libraryTitles: TitleTools.byRecency(library.comics)) } }
         }
         .sheet(isPresented: $showShelfManager) {
             ShelfManagerView().environmentObject(library)

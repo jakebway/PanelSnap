@@ -73,6 +73,7 @@ struct DiscoverView: View {
         }
         .readSafeTop($topInset)
         .readLandscape($landscape)
+        .onAppear { model.refreshClock() }
         .task(id: tab) {
             switch tab {
             case .forYou: await model.prefetch(libraryTitles: TitleTools.byRecency(library.comics))

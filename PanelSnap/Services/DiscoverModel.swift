@@ -93,6 +93,9 @@ final class DiscoverModel: ObservableObject {
     @Published var searching = false
 
     private var loadedAt: [ReleaseWeek: Date] = [:]
+    private var loadedDay: [ReleaseWeek: String] = [:]        // which Wednesday each list is for
+    @Published private(set) var today = DiscoverModel.dayString(Date())      // changes at midnight, so headings and "Out"/"Coming" update
+    private var keeping = false
     private var inflight: [ReleaseWeek: Task<Void, Never>] = [:]
     private let browser = WebJSONFetcher()
     private var recommendedFor = ""
@@ -119,6 +122,7 @@ final class DiscoverModel: ObservableObject {
             if let list = saved.weeks[w.rawValue], saved.days[w.rawValue] == Self.releaseDay(w) {
                 weeks[w] = list
                 loadedAt[w] = saved.times[w.rawValue]
+                loadedDay[w] = saved.days[w.rawValue]
             }
         }
         forYouSections = saved.sections
@@ -149,8 +153,54 @@ final class DiscoverModel: ObservableObject {
         }
     }
 
+    nonisolated static func dayString(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    /// Looks at the date again. When a new day (or a new Wednesday) has arrived, "This Week" becomes "Last Week" and so on:
+    /// the lists already loaded move to the weeks they belong to, and anything that no longer fits is dropped.
+    func refreshClock() {
+        let now = Self.dayString(Date())
+        if now != today { today = now }
+        var byDay: [String: (list: [DiscoverComic], time: Date?)] = [:]
+        for (w, list) in weeks { if let d = loadedDay[w] { byDay[d] = (list, loadedAt[w]) } }
+        var changed = false
+        for w in ReleaseWeek.allCases {
+            let want = Self.releaseDay(w)
+            if loadedDay[w] == want { continue }
+            changed = true
+            if let hit = byDay[want] {
+                weeks[w] = hit.list
+                loadedAt[w] = hit.time
+                loadedDay[w] = want
+            } else {
+                weeks[w] = nil
+                loadedAt[w] = nil
+                loadedDay[w] = nil
+            }
+        }
+        if changed { save() }
+    }
+
+    /// Keeps Discover current without being asked: checks the date, then loads this week, next week, your suggestions and
+    /// the weeks after. Cheap to call often: anything recent enough is skipped.
+    func keepFresh(libraryTitles: [String]) async {
+        refreshClock()
+        guard !keeping else { return }
+        keeping = true
+        await prefetch(libraryTitles: libraryTitles)
+        await loadUpcoming()
+        keeping = false
+    }
+
     func load(_ week: ReleaseWeek, force: Bool = false) async {
-        if !force, weeks[week] != nil, let t = loadedAt[week], Date().timeIntervalSince(t) < 3600 { return }
+        refreshClock()
+        if !force, weeks[week] != nil, loadedDay[week] == Self.releaseDay(week),
+           let t = loadedAt[week], Date().timeIntervalSince(t) < 3600 { return }
         if let running = inflight[week] { await running.value; return }
         let task = Task { await self.fetchWeek(week) }
         inflight[week] = task
@@ -168,6 +218,7 @@ final class DiscoverModel: ObservableObject {
             for i in list.indices { list[i].released = day }
             weeks[week] = list
             loadedAt[week] = Date()
+            loadedDay[week] = day
             save()
             DiscoverCovers.shared.prefetch(visibleCovers())
         } else if weeks[week] == nil {
