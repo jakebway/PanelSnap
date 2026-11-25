@@ -162,7 +162,7 @@ final class ReaderUITests: XCTestCase {
             return origin.withOffset(CGVector(dx: f.minX + cw / 2, dy: f.minY - 16 - cw * 0.75))
         }
         let from = cover(a), to = cover(b)
-        from.press(forDuration: 0.45, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 2.5)
+        from.press(forDuration: 0.75, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 2.5)
         settle(1.5)
         shot("41-after-hold")
         let field = app.textFields["Shelf name"]
