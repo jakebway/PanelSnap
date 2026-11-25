@@ -155,7 +155,7 @@ final class ReaderUITests: XCTestCase {
         let b = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'Spider'")).firstMatch
         XCTAssertTrue(a.waitForExistence(timeout: 8) && b.waitForExistence(timeout: 3), "both test comics should be in the library")
         let screen = app.windows.firstMatch.frame
-        let cw = (screen.width - 40 - 36) / 4
+        let cw = (screen.width - 40 - 32) / 3
         func cover(_ t: XCUIElement) -> XCUICoordinate {
             let f = t.frame
             let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)

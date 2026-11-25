@@ -81,8 +81,9 @@ struct LibraryView: View {
     /// Shelves appear among the comics, like folders on a Home Screen (not while searching).
     private var folders: [String] { return search.trimmingCharacters(in: .whitespaces).isEmpty ? library.shelves : [] }
 
-    /// Four across, in the library and inside a shelf.
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 4)
+    /// Three across, like the shop, in the library and inside a shelf.
+    private static let perRow = 3
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: LibraryView.perRow)
 
     /// One picker for everything: choose a single comic or as many as you like.
     private func addComics() {
@@ -511,7 +512,7 @@ struct LibraryView: View {
                         .background(alignment: .topLeading) {
                             if panelCell.height > 0 {
                                 ZStack(alignment: .topLeading) {
-                                    ForEach(0..<((items.count + 3) / 4), id: \.self) { row in
+                                    ForEach(0..<((items.count + LibraryView.perRow - 1) / LibraryView.perRow), id: \.self) { row in
                                         ShelfLedge()
                                             .frame(width: 4000)
                                             .offset(x: -2000, y: CGFloat(row) * (panelCell.height + 26) + panelCell.width * 1.5)
