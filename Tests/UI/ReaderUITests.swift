@@ -147,6 +147,28 @@ final class ReaderUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    /// Hold one comic on top of another: the naming sheet for a new shelf should appear.
+    func testMakeShelf() {
+        settle(3.0)
+        shot("40-library")
+        let a = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'UITest'")).firstMatch
+        let b = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'Spider'")).firstMatch
+        XCTAssertTrue(a.waitForExistence(timeout: 8) && b.waitForExistence(timeout: 3), "both test comics should be in the library")
+        let screen = app.windows.firstMatch.frame
+        let cw = (screen.width - 40 - 36) / 4
+        func cover(_ t: XCUIElement) -> XCUICoordinate {
+            let f = t.frame
+            let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+            return origin.withOffset(CGVector(dx: f.minX + cw / 2, dy: f.minY - 16 - cw * 0.75))
+        }
+        let from = cover(a), to = cover(b)
+        from.press(forDuration: 1.0, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 2.0)
+        settle(1.5)
+        shot("41-after-hold")
+        let field = app.textFields["Shelf name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 4), "holding a comic on another should open the new-shelf naming sheet")
+    }
+
     func testPageSwipes() {
         openComic()
         let a = shot("20-start")

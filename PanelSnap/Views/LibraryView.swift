@@ -81,7 +81,8 @@ struct LibraryView: View {
     /// Shelves appear among the comics, like folders on a Home Screen (not while searching).
     private var folders: [String] { return search.trimmingCharacters(in: .whitespaces).isEmpty ? library.shelves : [] }
 
-    private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)]
+    /// Four across, in the library and inside a shelf.
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 4)
 
     /// One picker for everything: choose a single comic or as many as you like.
     private func addComics() {
@@ -341,7 +342,10 @@ struct LibraryView: View {
             }
             .modifier(ReorderModifier(id: entry.id, dragging: $draggingID, active: $dragActive, state: dragState,
                                     canStack: !inPanel && search.trimmingCharacters(in: .whitespaces).isEmpty,
-                                    onOver: { dragged, target in reorder(dragged, onto: target) },
+                                    onOver: { dragged, target in
+                                        if inPanel, let s = shelf { library.move([dragged], toShelf: s) }     // dragged in from the library
+                                        reorder(dragged, onto: target)
+                                    },
                                     onStack: { dragged, target in stack(dragged, onto: target) }))
     }
 
@@ -410,7 +414,8 @@ struct LibraryView: View {
                 dragActive = false
                 withAnimation(.snappy) { shelf = name }
             }
-            .onDrop(of: [.text], delegate: ShelfDropDelegate(name: name, dragging: $draggingID, active: $dragActive, hover: $dropHover, key: name) { id, name in
+            .onDrop(of: [.text], delegate: ShelfDropDelegate(name: name, dragging: $draggingID, active: $dragActive, hover: $dropHover, key: name,
+                                                             state: dragState, onDwell: { withAnimation(.snappy) { shelf = name } }) { id, name in
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([id], toShelf: name) }
             })
             .contextMenu {
@@ -487,6 +492,9 @@ struct LibraryView: View {
                 }
             }
             .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(white: 0.085)))
+            .onDrop(of: [.text], delegate: ShelfDropDelegate(name: name, dragging: $draggingID, active: $dragActive, hover: $dropHover, key: name) { id, name in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([id], toShelf: name) }
+            })
             .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .shadow(color: .black.opacity(0.6), radius: 24, y: 10)
@@ -935,14 +943,23 @@ private struct ShelfDropDelegate: DropDelegate {
     @Binding var active: Bool
     @Binding var hover: String?
     let key: String
+    var state: DragState? = nil           // with onDwell: holding a comic over a shelf opens it (like a Home Screen folder)
+    var onDwell: (() -> Void)? = nil
     let move: (UUID, String?) -> Void
 
     func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
-    func dropEntered(info: DropInfo) { hover = key }
-    func dropExited(info: DropInfo) { if hover == key { hover = nil } }
+    func dropEntered(info: DropInfo) {
+        hover = key
+        if let st = state, let go = onDwell { st.folderDwell(go) }
+    }
+    func dropExited(info: DropInfo) {
+        if hover == key { hover = nil }
+        state?.folderCancel()
+    }
     func dropUpdated(info: DropInfo) -> DropProposal? { return DropProposal(operation: .move) }
     func performDrop(info: DropInfo) -> Bool {
         hover = nil
+        state?.folderCancel()
         guard let id = dragging else { return false }
         move(id, name)
         dragging = nil

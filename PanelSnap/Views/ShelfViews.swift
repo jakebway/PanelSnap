@@ -216,6 +216,24 @@ final class DragState: ObservableObject {
         }
     }
 
+    // Holding a dragged comic over a shelf in the library opens it.
+    private var folderTimer: Task<Void, Never>?
+
+    func folderDwell(_ action: @escaping () -> Void) {
+        folderTimer?.cancel()
+        folderTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            guard !Task.isCancelled, self != nil else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }
+    }
+
+    func folderCancel() {
+        folderTimer?.cancel()
+        folderTimer = nil
+    }
+
     // Holding a dragged comic at the screen edge, inside a shelf, takes it out of the shelf.
     private var edgeTimer: Task<Void, Never>?
     @Published var edgeHot = false
