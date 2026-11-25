@@ -168,21 +168,32 @@ struct ShelfFolderCell: View {
 
 // MARK: - Making a shelf by holding one comic over another
 
-/// Tracks whether the comic being dragged has rested on another one long enough to make a shelf.
+/// Decides what a comic dragged over another one means, after a short rest: on the edge it slides the covers apart,
+/// in the middle it makes a shelf. (Without the rest, crossing an edge on the way to the middle would always win.)
 final class DragState: ObservableObject {
     @Published var stackTarget: UUID?
     private var hover: UUID?
+    private var inMiddle = false
     private var timer: Task<Void, Never>?
 
-    func begin(_ id: UUID) {
+    func over(_ id: UUID, inMiddle: Bool, reorder: @escaping () -> Void) {
+        self.inMiddle = inMiddle
         if hover == id { return }
         clear()
         hover = id
         timer = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 550_000_000)
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled, let self = self, self.hover == id else { return }
-            self.stackTarget = id
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            if !self.inMiddle { reorder(); self.hover = nil; return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled, self.hover == id else { return }
+            if self.inMiddle {
+                self.stackTarget = id
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            } else {
+                reorder()
+                self.hover = nil
+            }
         }
     }
 

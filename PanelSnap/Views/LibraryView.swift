@@ -451,6 +451,24 @@ struct LibraryView: View {
                 .accessibilityLabel("Rename Shelf")
                 Spacer()
             }
+            .frame(minHeight: 44)
+            .overlay {
+                // While a comic is being dragged this becomes a big "take it off the shelf" target.
+                if dragActive && draggingID != nil {
+                    HStack(spacing: 8) {
+                        Image(systemName: "tray.and.arrow.up")
+                        Text("Drop here to take it off this shelf").font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(dropHover == "" ? Theme.accent.opacity(0.35) : Theme.card2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
+                    .onDrop(of: [.text], delegate: ShelfDropDelegate(name: nil, dragging: $draggingID, active: $dragActive, hover: $dropHover, key: "") { id, name in
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([id], toShelf: name) }
+                    })
+                }
+            }
         }
     }
 
@@ -744,6 +762,11 @@ struct LibraryView: View {
         Menu {
             shelfItems(for: [entry.id])
         } label: { Label("Move to Shelf", systemImage: "folder") }
+        if entry.shelf != nil {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { library.move([entry.id], toShelf: nil) }
+            } label: { Label("Remove from Shelf", systemImage: "tray.and.arrow.up") }
+        }
         Button {
             library.markRead(id: entry.id, !entry.finished)
         } label: {
@@ -829,10 +852,11 @@ private struct CoverDropDelegate: DropDelegate {
         if d == id { state.clear(); return }
         let coverH = size.width * 1.5
         let p = info.location
-        let inMiddle = canStack && size.width > 0
+        if !canStack { state.clear(); onOver(d, id); return }          // inside a shelf: just slide the covers apart
+        let inMiddle = size.width > 0
             && p.x > size.width * 0.22 && p.x < size.width * 0.78
             && p.y > coverH * 0.2 && p.y < coverH * 0.8
-        if inMiddle { state.begin(id) } else { state.clear(); onOver(d, id) }
+        state.over(id, inMiddle: inMiddle) { onOver(d, id) }
     }
 
     func dropEntered(info: DropInfo) { handle(info) }
