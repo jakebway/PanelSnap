@@ -166,72 +166,137 @@ struct ShelfFolderCell: View {
     }
 }
 
-// MARK: - Making a shelf by holding one comic over another
+// MARK: - Dragging comics around the grid
 
-/// Decides what a comic dragged over another one means, after a short rest: on the edge it slides the covers apart,
-/// in the middle it makes a shelf. (Without the rest, crossing an edge on the way to the middle would always win.)
+/// Something a dragged comic can be held over.
+enum DragTarget: Hashable {
+    case comic(UUID)
+    case shelf(String)
+}
+
+enum DragZone { case edge, middle }
+
+struct DragFramesKey: PreferenceKey {
+    static var defaultValue: [DragTarget: CGRect] = [:]
+    static func reduce(value: inout [DragTarget: CGRect], nextValue: () -> [DragTarget: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+extension View {
+    /// Reports where this cell is, so one drop handler for the whole grid can tell what the finger is over.
+    func dragFrame(_ target: DragTarget, in space: String) -> some View {
+        background(GeometryReader { g in
+            Color.clear.preference(key: DragFramesKey.self, value: [target: g.frame(in: .named(space))])
+        })
+    }
+}
+
+/// Follows a dragged comic across a grid and decides what resting on something means, like the Home Screen:
+/// on the edge of a cover it slides the covers apart, in the middle of one it makes a shelf, over a shelf it opens it.
+/// One of these watches the finger for the whole grid, so covers sliding around underneath can't confuse it.
 final class DragState: ObservableObject {
-    @Published var stackTarget: UUID?
-    private var hover: UUID?
-    private var inMiddle = false
-    private var timer: Task<Void, Never>?
-    private var hoverSince = Date()
-    private var pendingExit: Task<Void, Never>?
+    @Published var focus: DragTarget?          // a cover ready to become a shelf, or the shelf being hovered
+    var frames: [DragTarget: CGRect] = [:]
 
-    /// True when the dragged comic has rested on the middle of `id` long enough to make a shelf.
-    func shouldStack(_ id: UUID) -> Bool {
-        return stackTarget == id || (hover == id && inMiddle && Date().timeIntervalSince(hoverSince) > 0.5)
-    }
+    private var target: DragTarget?
+    private var zone: DragZone = .edge
+    private var since = Date()
+    private var loop: Task<Void, Never>?
+    private var dragged: UUID?
+    private var canStack = false
+    private var reorder: ((UUID, UUID) -> Void)?
+    private var openShelf: ((String) -> Void)?
 
-    /// The system can report a drop target as left and re-entered when the view redraws, so a real exit has to last a moment.
-    func exit(_ id: UUID) {
-        pendingExit?.cancel()
-        pendingExit = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            guard !Task.isCancelled, let self = self, self.hover == id else { return }
-            self.clear()
+    /// What is under this point (covers are 2:3, with a caption underneath that counts as the edge).
+    func hit(_ p: CGPoint) -> (DragTarget, DragZone)? {
+        for (t, f) in frames {
+            guard f.insetBy(dx: -6, dy: -11).contains(p) else { continue }
+            let h = f.width * 1.5
+            let middle = CGRect(x: f.minX + f.width * 0.22, y: f.minY + h * 0.2, width: f.width * 0.56, height: h * 0.6)
+            return (t, middle.contains(p) ? .middle : .edge)
         }
+        return nil
     }
 
-    func over(_ id: UUID, inMiddle: Bool, reorder: @escaping () -> Void) {
-        pendingExit?.cancel()
-        self.inMiddle = inMiddle
-        if hover == id { return }
-        clear()
-        hover = id
-        hoverSince = Date()
-        timer = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled, let self = self, self.hover == id else { return }
-            if !self.inMiddle { reorder(); self.hover = nil; return }
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled, self.hover == id else { return }
-            if self.inMiddle {
-                self.stackTarget = id
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            } else {
-                reorder()
-                self.hover = nil
+    func track(_ p: CGPoint, dragged: UUID, canStack: Bool,
+               reorder: @escaping (UUID, UUID) -> Void, openShelf: @escaping (String) -> Void) {
+        self.dragged = dragged
+        self.canStack = canStack
+        self.reorder = reorder
+        self.openShelf = openShelf
+        var t = hit(p)?.0
+        var z = hit(p)?.1 ?? .edge
+        if t == .comic(dragged) { t = nil }
+        if !canStack { z = .edge }
+        if z != zone { zone = z; since = Date() }
+        if t != target {
+            target = t
+            since = Date()
+            var f: DragTarget? = nil
+            if case .shelf = t { f = t }
+            if focus != f { focus = f }
+        }
+        if target != nil && loop == nil {
+            loop = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                    guard let self = self else { return }
+                    self.evaluate()
+                }
             }
         }
     }
 
-    // Holding a dragged comic over a shelf in the library opens it.
-    private var folderTimer: Task<Void, Never>?
-
-    func folderDwell(_ action: @escaping () -> Void) {
-        folderTimer?.cancel()
-        folderTimer = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 650_000_000)
-            guard !Task.isCancelled, self != nil else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            action()
+    private func evaluate() {
+        guard let t = target else { loop?.cancel(); loop = nil; return }
+        let el = Date().timeIntervalSince(since)
+        switch t {
+        case .shelf(let name):
+            if el > 0.6 {
+                target = nil
+                if focus != nil { focus = nil }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                openShelf?(name)
+            }
+        case .comic(let id):
+            guard let d = dragged else { return }
+            if zone == .middle {
+                if el > 0.6 && focus != t {
+                    focus = t
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+            } else {
+                if focus != nil { focus = nil }
+                if el > 0.3 {
+                    target = nil
+                    reorder?(d, id)
+                }
+            }
         }
     }
 
-    func folderCancel() {
-        folderTimer?.cancel()
-        folderTimer = nil
+    /// The cover the dragged comic is resting on the middle of, long enough to make a shelf (at the moment of letting go).
+    func stackCandidate(at p: CGPoint) -> UUID? {
+        if case .comic(let id)? = focus { return id }
+        if let (t, z) = hit(p), z == .middle, canStack, case .comic(let id) = t, id != dragged,
+           target == t, Date().timeIntervalSince(since) > 0.5 { return id }
+        return nil
+    }
+
+    /// Whether the finger is below the last cover (or above the first): `+1` for the end, `-1` for the start.
+    func pastEnds(_ p: CGPoint, first: UUID?, last: UUID?) -> Int {
+        if hit(p) != nil { return 0 }
+        if let l = last, let f = frames[.comic(l)], p.y > f.maxY { return 1 }
+        if let fi = first, let f = frames[.comic(fi)], p.y < f.minY { return -1 }
+        return 0
+    }
+
+    func stop() {
+        loop?.cancel()
+        loop = nil
+        target = nil
+        if focus != nil { focus = nil }
     }
 
     // Holding a dragged comic at the screen edge, inside a shelf, takes it out of the shelf.
@@ -255,12 +320,58 @@ final class DragState: ObservableObject {
         edgeTimer = nil
         edgeHot = false
     }
+}
 
-    func clear() {
-        timer?.cancel()
-        timer = nil
-        hover = nil
-        if stackTarget != nil { stackTarget = nil }
+/// One drop handler for a whole grid of covers (the library or an open shelf).
+struct GridDropDelegate: DropDelegate {
+    @Binding var dragging: UUID?
+    @Binding var active: Bool
+    let state: DragState
+    let canStack: Bool
+    let first: () -> UUID?
+    let last: () -> UUID?
+    var enter: ((UUID) -> Void)? = nil                 // an open shelf takes the comic in as soon as it is over it
+    let reorder: (UUID, UUID) -> Void
+    let stack: (UUID, UUID) -> Void
+    var openShelf: (String) -> Void = { _ in }
+    var intoShelf: (UUID, String) -> Void = { _, _ in }
+
+    func validateDrop(info: DropInfo) -> Bool { return dragging != nil }
+
+    private func update(_ info: DropInfo) {
+        guard let d = dragging else { return }
+        active = true
+        enter?(d)
+        state.track(info.location, dragged: d, canStack: canStack, reorder: reorder, openShelf: openShelf)
+    }
+
+    func dropEntered(info: DropInfo) { update(info) }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        update(info)
+        return DropProposal(operation: .move)       // a move, so no green plus
+    }
+    func dropExited(info: DropInfo) { state.stop() }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let p = info.location
+        let d = dragging
+        let stackOnto = state.stackCandidate(at: p)
+        let hit = state.hit(p)
+        let ends = state.pastEnds(p, first: first(), last: last())
+        state.stop()
+        dragging = nil
+        active = false
+        guard let id = d else { return false }
+        if let other = stackOnto, other != id {
+            stack(id, other)
+        } else if let (t, _) = hit, case .shelf(let name) = t {
+            intoShelf(id, name)
+        } else if ends > 0, let l = last(), l != id {
+            reorder(id, l)
+        } else if ends < 0, let f = first(), f != id {
+            reorder(id, f)
+        }
+        return true
     }
 }
 
