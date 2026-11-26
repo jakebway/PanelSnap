@@ -305,6 +305,13 @@ struct ReaderView: View {
             model.step(forward: !model.rtl)
             return
         }
+        if chromeVisible {
+            // The menu and page bar are up: the first tap in the middle only puts them away, straight away.
+            pendingTap?.cancel()
+            lastTap = nil
+            hideChrome()
+            return
+        }
         if let last = lastTap, Date().timeIntervalSince(last.time) < 0.3,
            hypot(point.x - last.point.x, point.y - last.point.y) < 60 {
             pendingTap?.cancel()
