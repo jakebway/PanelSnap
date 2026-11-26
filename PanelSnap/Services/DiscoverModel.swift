@@ -20,6 +20,13 @@ struct DiscoverComic: Identifiable, Hashable, Codable {
 
     /// What to type into a download site's search box: the series name and issue number, without variant wording.
     var searchTerm: String {
+        // "Thor #803 Peach Momoko Variant" -> "Thor 803": nothing after the issue number is part of the search
+        if let r = title.range(of: #"#\s*\d+(\.\d+)?[A-Za-z]?"#, options: .regularExpression) {
+            let head = String(title[..<r.upperBound]).replacingOccurrences(of: "\\(.*?\\)", with: " ", options: .regularExpression)
+            return head.replacingOccurrences(of: "#", with: " ")
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
+        }
         var t = title.replacingOccurrences(of: "\\(.*?\\)", with: " ", options: .regularExpression)
         for marker in [" Cover ", " Variant", " Virgin", " Foil", " 1:", " Facsimile", " Direct Market"] {
             if let r = t.range(of: marker, options: .caseInsensitive) { t = String(t[..<r.lowerBound]) }
@@ -263,30 +270,47 @@ final class DiscoverModel: ObservableObject {
         searching = false
     }
 
-    /// A cover variant, reprint or the like: the same issue under another cover.
+    /// Which issue a listing is, and what follows the issue number ("Thor #803 Peach Momoko Variant" -> thor|803, "Peach Momoko Variant").
+    /// Variant listings are the issue plus the artist's name and wording after the number.
+    static func issueParts(_ title: String) -> (key: String, tail: String)? {
+        guard let r = title.range(of: #"#\s*\d+(\.\d+)?[A-Za-z]?"#, options: .regularExpression) else { return nil }
+        let name = String(title[..<r.lowerBound])
+        let num = String(title[r]).replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces).lowercased()
+        let tail = String(title[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var year = ""
+        if let y = title.range(of: #"\((\d{4})\)"#, options: .regularExpression) { year = String(title[y]) }
+        return (TitleTools.normal(name) + "#" + num + year, tail)
+    }
+
+    /// A cover variant, reprint or the like: wording after the issue number, or variant wording anywhere.
     static func isVariant(_ title: String) -> Bool {
         let l = title.lowercased()
         if l.range(of: #"\([^)]*(cover|variant|virgin|foil|incentive|printing|sketch|reprint|facsimile|retailer|exclusive)[^)]*\)"#, options: .regularExpression) != nil { return true }
-        for m in [" cover ", " variant", " virgin", " foil", " 1:", " facsimile", " direct market", " printing"] where l.contains(m) { return true }
-        return l.hasSuffix(" cover")
+        for m in [" cover", " variant", " virgin", " foil", " 1:", " facsimile", " direct market", " printing"] where l.contains(m) { return true }
+        return false
     }
 
     /// Cover variants of one issue are listed as separate comics, but a download site has one file for the issue:
-    /// keep a single entry per issue (the plain cover when there is one), in the original order.
+    /// keep a single entry per issue (the plain one when there is one), in the original order.
     /// This also folds a title listed twice, where one entry often has no cover.
     static func withoutDuplicates(_ list: [DiscoverComic]) -> [DiscoverComic] {
         func hasCover(_ c: DiscoverComic) -> Bool {
             guard let u = c.cover?.absoluteString.lowercased() else { return false }
             return !u.contains("nocover") && !u.contains("no-cover") && !u.contains("placeholder")
         }
+        // 0: just the issue, 1: something after the number, 2: plainly a variant
+        func rank(_ c: DiscoverComic) -> Int {
+            if let p = issueParts(c.title) { return p.tail.isEmpty ? 0 : (isVariant(c.title) ? 2 : 1) }
+            return isVariant(c.title) ? 2 : 0
+        }
         var best: [String: Int] = [:]
         for (i, c) in list.enumerated() {
-            let k = TitleTools.key(c.searchTerm) + "|" + c.publisher.lowercased()
+            let base = issueParts(c.title)?.key ?? TitleTools.key(c.searchTerm)
+            let k = base + "|" + c.publisher.lowercased()
             if let j = best[k] {
                 let a = list[j], b = c
-                let av = isVariant(a.title), bv = isVariant(b.title)
                 let better: Bool
-                if av != bv { better = av }
+                if rank(a) != rank(b) { better = rank(b) < rank(a) }
                 else if hasCover(b) != hasCover(a) { better = hasCover(b) }
                 else { better = b.pulls > a.pulls }
                 if better { best[k] = i }
