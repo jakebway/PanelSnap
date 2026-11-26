@@ -293,7 +293,7 @@ struct ReaderView: View {
     private func handleTap(at point: CGPoint, size: CGSize) {
         let width = max(size.width, 1)
         let f = point.x / width
-        let edge: CGFloat = model.panelIndex < 0 ? 0.095 : 0.25    // whole page: slim edges so panels near them stay tappable
+        let edge: CGFloat = model.panelIndex < 0 ? 0.10 : 0.25    // whole page: slim edges so panels near them stay tappable
         // The edges stay instant. Only the middle waits a moment, to see whether a second tap is coming.
         if f < edge {
             hideChrome()
@@ -307,8 +307,9 @@ struct ReaderView: View {
         }
         if chromeVisible {
             // The menu and page bar are up: the first tap in the middle only puts them away, straight away.
+            // The tap is still remembered, so a second one right after counts as a double tap (zoom in or out) as usual.
             pendingTap?.cancel()
-            lastTap = nil
+            lastTap = (Date(), point)
             hideChrome()
             return
         }
