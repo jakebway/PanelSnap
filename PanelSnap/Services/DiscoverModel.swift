@@ -120,7 +120,7 @@ final class DiscoverModel: ObservableObject {
         for w in ReleaseWeek.allCases {
             // A list saved for another week would show the wrong releases, so only this week's lists are kept.
             if let list = saved.weeks[w.rawValue], saved.days[w.rawValue] == Self.releaseDay(w) {
-                weeks[w] = list
+                weeks[w] = Self.withoutDuplicates(list)
                 loadedAt[w] = saved.times[w.rawValue]
                 loadedDay[w] = saved.days[w.rawValue]
             }
@@ -213,7 +213,7 @@ final class DiscoverModel: ObservableObject {
         failedWeeks.remove(week)
         let list = await fetch(Self.url(["list": "releases", "list_option": "thumbs", "view": "list",
                                          "date": Self.releaseDay(week), "date_type": "week"]))
-        if var list = list, !list.isEmpty {
+        if var list = list.map({ Self.withoutDuplicates($0) }), !list.isEmpty {
             let day = Self.releaseDay(week)
             for i in list.indices { list[i].released = day }
             weeks[week] = list
@@ -263,7 +263,17 @@ final class DiscoverModel: ObservableObject {
         searching = false
     }
 
-    /// The same title listed twice (one entry often has no cover): keep the better one, in the original order.
+    /// A cover variant, reprint or the like: the same issue under another cover.
+    static func isVariant(_ title: String) -> Bool {
+        let l = title.lowercased()
+        if l.range(of: #"\([^)]*(cover|variant|virgin|foil|incentive|printing|sketch|reprint|facsimile|retailer|exclusive)[^)]*\)"#, options: .regularExpression) != nil { return true }
+        for m in [" cover ", " variant", " virgin", " foil", " 1:", " facsimile", " direct market", " printing"] where l.contains(m) { return true }
+        return l.hasSuffix(" cover")
+    }
+
+    /// Cover variants of one issue are listed as separate comics, but a download site has one file for the issue:
+    /// keep a single entry per issue (the plain cover when there is one), in the original order.
+    /// This also folds a title listed twice, where one entry often has no cover.
     static func withoutDuplicates(_ list: [DiscoverComic]) -> [DiscoverComic] {
         func hasCover(_ c: DiscoverComic) -> Bool {
             guard let u = c.cover?.absoluteString.lowercased() else { return false }
@@ -271,10 +281,14 @@ final class DiscoverModel: ObservableObject {
         }
         var best: [String: Int] = [:]
         for (i, c) in list.enumerated() {
-            let k = TitleTools.key(c.title) + "|" + c.publisher.lowercased()
+            let k = TitleTools.key(c.searchTerm) + "|" + c.publisher.lowercased()
             if let j = best[k] {
                 let a = list[j], b = c
-                let better = (hasCover(b) && !hasCover(a)) || (hasCover(b) == hasCover(a) && b.pulls > a.pulls)
+                let av = isVariant(a.title), bv = isVariant(b.title)
+                let better: Bool
+                if av != bv { better = av }
+                else if hasCover(b) != hasCover(a) { better = hasCover(b) }
+                else { better = b.pulls > a.pulls }
                 if better { best[k] = i }
             } else { best[k] = i }
         }
