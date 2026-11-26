@@ -24,7 +24,6 @@ struct LibraryView: View {
     @State private var nameRequest: ShelfNameRequest?
     @State private var dragState = DragState()          // a plain object: only the covers it highlights need to redraw
     @State private var panelDrag = DragState()          // the same, for the open shelf
-    @State private var panelCell: CGSize = .zero        // size of one cover cell in the open shelf, for placing the planks
     @State private var showDeleteShelf = false
     @State private var draggingShelf: String?          // a shelf being picked up and moved
     @State private var draggingID: UUID?
@@ -539,22 +538,27 @@ struct LibraryView: View {
                             .padding(.top, 40)
                             .padding(.horizontal, 24)
                     } else {
-                        LazyVGrid(columns: columns, spacing: 26) {
-                            ForEach(items) { entry in cell(entry, inPanel: true) }
-                        }
-                        .onPreferenceChange(CellSizeKey.self) { if $0.width > 0 { panelCell = $0 } }
-                        // The planks belong to the rows, not to the comics, so they stay put while a comic moves between rows.
-                        .background(alignment: .topLeading) {
-                            if panelCell.height > 0 {
-                                ZStack(alignment: .topLeading) {
-                                    ForEach(0..<((items.count + LibraryView.perRow - 1) / LibraryView.perRow), id: \.self) { row in
+                        // Rows, each with its own plank, so the planks stay put when a comic moves between rows.
+                        let per = LibraryView.perRow
+                        let rows = stride(from: 0, to: items.count, by: per).map { Array(items[$0..<min($0 + per, items.count)]) }
+                        VStack(spacing: 26) {
+                            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                                HStack(alignment: .top, spacing: 16) {
+                                    ForEach(row) { entry in
+                                        cell(entry, inPanel: true).frame(maxWidth: .infinity)
+                                    }
+                                    ForEach(0..<(per - row.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
+                                }
+                                .background(alignment: .top) {
+                                    GeometryReader { g in
+                                        let cover = (g.size.width - 16 * CGFloat(per - 1)) / CGFloat(per) * 1.5
                                         ShelfLedge()
                                             .frame(width: 4000)
-                                            .offset(x: -2000, y: CGFloat(row) * (panelCell.height + 26) + panelCell.width * 1.5)
+                                            .frame(width: g.size.width)
+                                            .offset(y: cover)
                                     }
+                                    .allowsHitTesting(false)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
-                                .allowsHitTesting(false)
                             }
                         }
                         .padding(.horizontal, 18)
